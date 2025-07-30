@@ -178,8 +178,17 @@ def nl2br_filter(text):
 
 @app.template_filter('extract')
 def extract_filter(dictionary, key):
-    """Extract a value from a dictionary"""
-    return dictionary.get(key)
+    """Extract a value from a dictionary - robust version"""
+    try:
+        if isinstance(dictionary, dict):
+            return dictionary.get(key)
+        elif hasattr(dictionary, '__getitem__'):
+            return dictionary[key]
+        else:
+            # If it's not a dictionary or indexable, return None
+            return None
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return None
 
 # Alternative approach - you can also register filters this way:
 def register_template_filters(app):
