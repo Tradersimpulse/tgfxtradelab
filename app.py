@@ -12,6 +12,7 @@ import boto3
 from botocore.exceptions import NoCredentialsError
 import stripe
 from config import get_config
+import re
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -30,6 +31,12 @@ db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Association table for many-to-many relationship between videos and tags
+video_tags = db.Table('video_tags',
+    db.Column('video_id', db.Integer, db.ForeignKey('videos.id'), primary_key=True),
+    db.Column('tag_id', db.Integer, db.ForeignKey('tags.id'), primary_key=True)
+)
 
 # Models - MySQL Optimized
 class User(UserMixin, db.Model):
@@ -59,6 +66,20 @@ class Category(db.Model):
     
     # Relationships
     videos = db.relationship('Video', backref='category', lazy=True, cascade='all, delete-orphan')
+
+class Tag(db.Model):
+    __tablename__ = 'tags'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    slug = db.Column(db.String(50), unique=True, nullable=False, index=True)  # URL-friendly version
+    description = db.Column(db.Text, nullable=True)
+    color = db.Column(db.String(7), default='#10B981', nullable=False)  # Hex color for the tag
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    videos = db.relationship('Video', secondary=video_tags, lazy='subquery',
+                           backref=db.backref('tags', lazy=True))
 
 class Video(db.Model):
     __tablename__ = 'videos'
@@ -140,10 +161,19 @@ class VideoForm(FlaskForm):
     is_free = BooleanField('Free Video')
     order_index = IntegerField('Order', default=0)
 
+class VideoFormWithTags(VideoForm):
+    tags = StringField('Tags', validators=[Optional()], 
+                      render_kw={"placeholder": "Enter tags separated by commas (e.g., market structure, support resistance)"})
+
 class CategoryForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
     description = TextAreaField('Description')
     order_index = IntegerField('Order', default=0)
+
+class TagForm(FlaskForm):
+    name = StringField('Tag Name', validators=[DataRequired(), Length(min=2, max=50)])
+    description = TextAreaField('Description', validators=[Optional()])
+    color = StringField('Color', validators=[Optional()], default='#10B981')
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -168,6 +198,42 @@ def user_can_access_video(video):
     if current_user.is_authenticated and current_user.has_subscription:
         return True
     return False
+
+def get_or_create_tag(tag_name):
+    """Get existing tag or create new one"""
+    # Clean and create slug
+    slug = re.sub(r'[^a-zA-Z0-9\s-]', '', tag_name.lower())
+    slug = re.sub(r'\s+', '-', slug.strip())
+    
+    tag = Tag.query.filter_by(slug=slug).first()
+    if not tag:
+        tag = Tag(
+            name=tag_name.strip().title(),
+            slug=slug,
+            color='#10B981'  # Default color
+        )
+        db.session.add(tag)
+        db.session.flush()  # Get the ID without committing
+    
+    return tag
+
+def process_video_tags(video, tags_string):
+    """Process comma-separated tags string and associate with video"""
+    if not tags_string:
+        video.tags.clear()
+        return
+    
+    # Clear existing tags
+    video.tags.clear()
+    
+    # Process new tags
+    tag_names = [name.strip() for name in tags_string.split(',') if name.strip()]
+    
+    for tag_name in tag_names:
+        if tag_name:
+            tag = get_or_create_tag(tag_name)
+            video.tags.append(tag)
+
 # Custom Jinja2 filters
 @app.template_filter('nl2br')
 def nl2br_filter(text):
@@ -242,7 +308,37 @@ def logout():
 @app.route('/courses')
 @login_required
 def courses():
+    # Get filter parameters
+    tag_filter = request.args.get('tag')
+    category_filter = request.args.get('category')
+    
+    # Base query
     categories = Category.query.order_by(Category.order_index).all()
+    
+    # Get all tags for the filter dropdown
+    all_tags = Tag.query.order_by(Tag.name).all()
+    
+    # Apply filters if specified
+    filtered_categories = []
+    for category in categories:
+        videos = list(category.videos)
+        
+        # Filter by tag if specified
+        if tag_filter:
+            videos = [v for v in videos if any(tag.slug == tag_filter for tag in v.tags)]
+        
+        # Only include categories that have videos after filtering
+        if videos or not tag_filter:
+            # Create a copy of the category with filtered videos
+            filtered_category = type('obj', (object,), {
+                'id': category.id,
+                'name': category.name,
+                'description': category.description,
+                'order_index': category.order_index,
+                'created_at': category.created_at,
+                'videos': videos
+            })()
+            filtered_categories.append(filtered_category)
     
     # Get user progress and favorites
     user_progress = {p.video_id: p for p in current_user.progress}
@@ -254,7 +350,9 @@ def courses():
     progress_percentage = (completed_videos / total_videos * 100) if total_videos > 0 else 0
     
     return render_template('courses/index.html', 
-                         categories=categories,
+                         categories=filtered_categories,
+                         all_tags=all_tags,
+                         selected_tag=tag_filter,
                          user_progress=user_progress,
                          user_favorites=user_favorites,
                          progress_percentage=progress_percentage,
@@ -303,7 +401,7 @@ def watch_video(video_id):
                          video=video, 
                          progress=progress,
                          is_favorited=is_favorited,
-                         user_progress=user_progress)  # Add this line!
+                         user_progress=user_progress)
 
 @app.route('/api/video/progress', methods=['POST'])
 @login_required
@@ -400,11 +498,15 @@ def admin():
     category_count = Category.query.count()
     subscription_count = User.query.filter_by(has_subscription=True).count()
     
+    # Get recent videos for dashboard
+    recent_videos = Video.query.order_by(Video.created_at.desc()).limit(5).all()
+    
     return render_template('admin/dashboard.html',
                          video_count=video_count,
                          user_count=user_count,
                          category_count=category_count,
-                         subscription_count=subscription_count)
+                         subscription_count=subscription_count,
+                         recent_videos=recent_videos)
 
 @app.route('/admin/videos')
 @login_required
@@ -423,7 +525,7 @@ def admin_add_video():
         flash('Access denied', 'error')
         return redirect(url_for('courses'))
     
-    form = VideoForm()
+    form = VideoFormWithTags()
     form.category_id.choices = [(c.id, c.name) for c in Category.query.all()]
     
     if form.validate_on_submit():
@@ -437,6 +539,11 @@ def admin_add_video():
             order_index=form.order_index.data
         )
         db.session.add(video)
+        db.session.flush()  # Get video ID
+        
+        # Process tags
+        process_video_tags(video, form.tags.data)
+        
         db.session.commit()
         flash('Video added successfully!', 'success')
         return redirect(url_for('admin_videos'))
@@ -451,11 +558,19 @@ def admin_edit_video(video_id):
         return redirect(url_for('courses'))
     
     video = Video.query.get_or_404(video_id)
-    form = VideoForm(obj=video)
+    form = VideoFormWithTags(obj=video)
     form.category_id.choices = [(c.id, c.name) for c in Category.query.all()]
+    
+    # Pre-populate tags field
+    if request.method == 'GET':
+        form.tags.data = ', '.join([tag.name for tag in video.tags])
     
     if form.validate_on_submit():
         form.populate_obj(video)
+        
+        # Process tags
+        process_video_tags(video, form.tags.data)
+        
         db.session.commit()
         flash('Video updated successfully!', 'success')
         return redirect(url_for('admin_videos'))
@@ -492,13 +607,20 @@ def admin_edit_category(category_id):
     category = Category.query.get_or_404(category_id)
     form = CategoryForm(obj=category)
     
+    # Get existing categories for the sidebar
+    existing_categories = Category.query.filter(Category.id != category_id).order_by(Category.order_index).all()
+    
     if form.validate_on_submit():
         form.populate_obj(category)
         db.session.commit()
         flash('Category updated successfully!', 'success')
         return redirect(url_for('admin_categories'))
     
-    return render_template('admin/category_form.html', form=form, category=category, title='Edit Category')
+    return render_template('admin/category_form.html', 
+                         form=form, 
+                         category=category, 
+                         title='Edit Category',
+                         existing_categories=existing_categories)
 
 @app.route('/admin/category/add', methods=['GET', 'POST'])
 @login_required
@@ -508,6 +630,9 @@ def admin_add_category():
         return redirect(url_for('courses'))
     
     form = CategoryForm()
+    
+    # Get existing categories for the sidebar
+    existing_categories = Category.query.order_by(Category.order_index).all()
     
     if form.validate_on_submit():
         category = Category(
@@ -520,7 +645,147 @@ def admin_add_category():
         flash('Category added successfully!', 'success')
         return redirect(url_for('admin_categories'))
     
-    return render_template('admin/category_form.html', form=form, title='Add Category')
+    return render_template('admin/category_form.html', 
+                         form=form, 
+                         title='Add Category',
+                         existing_categories=existing_categories)
+
+# Tag Management Routes
+@app.route('/admin/tags')
+@login_required
+def admin_tags():
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('courses'))
+    
+    tags = Tag.query.order_by(Tag.name).all()
+    
+    # Calculate tag statistics
+    tag_stats = []
+    for tag in tags:
+        video_count = len(tag.videos)
+        tag_stats.append({
+            'tag': tag,
+            'video_count': video_count,
+            'free_videos': len([v for v in tag.videos if v.is_free]),
+            'premium_videos': len([v for v in tag.videos if not v.is_free])
+        })
+    
+    return render_template('admin/tags.html', tags=tags, tag_stats=tag_stats)
+
+@app.route('/admin/tag/add', methods=['GET', 'POST'])
+@login_required
+def admin_add_tag():
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('courses'))
+    
+    form = TagForm()
+    
+    if form.validate_on_submit():
+        slug = re.sub(r'[^a-zA-Z0-9\s-]', '', form.name.data.lower())
+        slug = re.sub(r'\s+', '-', slug.strip())
+        
+        if Tag.query.filter_by(slug=slug).first():
+            flash('A tag with this name already exists', 'error')
+            return render_template('admin/tag_form.html', form=form, title='Add Tag')
+        
+        tag = Tag(
+            name=form.name.data.strip().title(),
+            slug=slug,
+            description=form.description.data,
+            color=form.color.data or '#10B981'
+        )
+        db.session.add(tag)
+        db.session.commit()
+        flash('Tag added successfully!', 'success')
+        return redirect(url_for('admin_tags'))
+    
+    return render_template('admin/tag_form.html', form=form, title='Add Tag')
+
+@app.route('/admin/tag/edit/<int:tag_id>', methods=['GET', 'POST'])
+@login_required
+def admin_edit_tag(tag_id):
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('courses'))
+    
+    tag = Tag.query.get_or_404(tag_id)
+    form = TagForm(obj=tag)
+    
+    if form.validate_on_submit():
+        slug = re.sub(r'[^a-zA-Z0-9\s-]', '', form.name.data.lower())
+        slug = re.sub(r'\s+', '-', slug.strip())
+        
+        existing_tag = Tag.query.filter_by(slug=slug).first()
+        if existing_tag and existing_tag.id != tag.id:
+            flash('A tag with this name already exists', 'error')
+            return render_template('admin/tag_form.html', form=form, tag=tag, title='Edit Tag')
+        
+        tag.name = form.name.data.strip().title()
+        tag.slug = slug
+        tag.description = form.description.data
+        tag.color = form.color.data or '#10B981'
+        
+        db.session.commit()
+        flash('Tag updated successfully!', 'success')
+        return redirect(url_for('admin_tags'))
+    
+    return render_template('admin/tag_form.html', form=form, tag=tag, title='Edit Tag')
+
+# API Routes
+@app.route('/api/admin/tag/<int:tag_id>', methods=['DELETE'])
+@login_required
+def api_delete_tag(tag_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    tag = Tag.query.get_or_404(tag_id)
+    
+    try:
+        db.session.delete(tag)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/categories/reorder', methods=['POST'])
+@login_required
+def api_reorder_categories():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    data = request.get_json()
+    categories = data.get('categories', [])
+    
+    try:
+        for cat_data in categories:
+            category = Category.query.get(cat_data['id'])
+            if category:
+                category.order_index = cat_data['order_index']
+        
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/category/<int:category_id>', methods=['DELETE'])
+@login_required
+def api_delete_category(category_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    category = Category.query.get_or_404(category_id)
+    
+    try:
+        db.session.delete(category)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 # Register API blueprint (if api.py exists)
 try:
