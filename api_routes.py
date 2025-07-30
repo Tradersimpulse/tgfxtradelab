@@ -5,7 +5,7 @@ Handles AJAX requests from the frontend
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
-from app import db, Video, Category, VideoFile, UserProgress, UserFavorite
+from app import db, User, Video, Category, VideoFile, UserProgress, UserFavorite  # Added User import
 from datetime import datetime
 import os
 
@@ -309,9 +309,9 @@ def get_dashboard_stats():
         if current_user.is_admin:
             # Admin stats
             total_videos = Video.query.count()
-            total_users = db.session.query(User).count()
+            total_users = User.query.count()  # Now User is imported
             total_categories = Category.query.count()
-            premium_users = db.session.query(User).filter_by(has_subscription=True).count()
+            premium_users = User.query.filter_by(has_subscription=True).count()  # Now User is imported
             
             return jsonify({
                 'total_videos': total_videos,
