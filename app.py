@@ -194,10 +194,17 @@ def register_template_filters(app):
     
     @app.template_filter('extract')
     def extract_filter(dictionary, key):
-        """Extract a value from a dictionary"""
-        if isinstance(dictionary, dict):
-            return dictionary.get(key)
-        return None
+        """Extract a value from a dictionary - robust version"""
+        try:
+            if isinstance(dictionary, dict):
+                return dictionary.get(key)
+            elif hasattr(dictionary, '__getitem__'):
+                return dictionary[key]
+            else:
+                # If it's not a dictionary or indexable, return None
+                return None
+        except (KeyError, IndexError, TypeError, AttributeError):
+            return None
         
 # Routes
 @app.route('/')
