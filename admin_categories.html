@@ -1,0 +1,566 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Categories - Admin - TGFX Trade Lab{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2" style="font-size: 2rem;">category</span>
+                    Manage Categories
+                </h1>
+                <p class="text-muted mb-0">Organize your course content with categories</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('admin_add_category') }}" class="btn btn-primary">
+                    <span class="material-symbols-outlined me-2">add</span>
+                    Add New Category
+                </a>
+                <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary">
+                    <span class="material-symbols-outlined me-2">arrow_back</span>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Categories Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <span class="material-symbols-outlined text-primary mb-2" style="font-size: 2.5rem;">category</span>
+                <h3 class="text-gradient-primary mb-1">{{ categories|length }}</h3>
+                <p class="text-muted mb-0">Total Categories</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <span class="material-symbols-outlined text-success mb-2" style="font-size: 2.5rem;">video_library</span>
+                <h3 class="text-gradient-primary mb-1">{{ total_videos }}</h3>
+                <p class="text-muted mb-0">Total Videos</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <span class="material-symbols-outlined text-warning mb-2" style="font-size: 2.5rem;">trending_up</span>
+                <h3 class="text-gradient-primary mb-1">{{ "%.1f"|format(avg_videos_per_category) }}</h3>
+                <p class="text-muted mb-0">Avg Videos/Category</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <span class="material-symbols-outlined text-info mb-2" style="font-size: 2.5rem;">folder_open</span>
+                <h3 class="text-gradient-primary mb-1">{{ empty_categories }}</h3>
+                <p class="text-muted mb-0">Empty Categories</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Categories List -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            All Categories
+        </h5>
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-primary" onclick="reorderCategories()">
+                <span class="material-symbols-outlined me-1" style="font-size: 16px;">swap_vert</span>
+                Reorder
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="refreshCategories()">
+                <span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>
+                Refresh
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if categories %}
+        <div id="categoriesList" class="sortable-list">
+            {% for category in categories %}
+            <div class="category-item" data-category-id="{{ category.id }}" data-order="{{ category.order_index }}">
+                <div class="d-flex align-items-center p-3 border border-secondary rounded mb-3">
+                    <!-- Drag Handle -->
+                    <div class="drag-handle me-3">
+                        <span class="material-symbols-outlined text-muted">drag_indicator</span>
+                    </div>
+                    
+                    <!-- Category Icon -->
+                    <div class="category-icon me-3">
+                        <div class="icon-circle">
+                            <span class="material-symbols-outlined">folder</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Category Info -->
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="text-white mb-1">{{ category.name }}</h6>
+                                {% if category.description %}
+                                <p class="text-muted small mb-0">{{ category.description }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-primary">{{ category.videos|length }} videos</span>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex gap-3 text-muted small">
+                                <span>
+                                    <span class="material-symbols-outlined me-1" style="font-size: 14px;">sort</span>
+                                    Order: {{ category.order_index }}
+                                </span>
+                                <span>
+                                    <span class="material-symbols-outlined me-1" style="font-size: 14px;">schedule</span>
+                                    Created: {{ category.created_at.strftime('%m/%d/%Y') }}
+                                </span>
+                                {% if category.videos %}
+                                <span>
+                                    <span class="material-symbols-outlined me-1" style="font-size: 14px;">update</span>
+                                    Last video: {{ category.videos|sort(attribute='created_at', reverse=true)|first.created_at.strftime('%m/%d/%Y') }}
+                                </span>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Action Buttons -->
+                            <div class="d-flex gap-1">
+                                <a href="{{ url_for('category_videos', category_id=category.id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="View Category">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">visibility</span>
+                                </a>
+                                <a href="{{ url_for('admin_edit_category', category_id=category.id) }}" 
+                                   class="btn btn-sm btn-outline-secondary" title="Edit">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
+                                </a>
+                                <button class="btn btn-sm btn-outline-danger" 
+                                        onclick="deleteCategory({{ category.id }}, '{{ category.name }}', {{ category.videos|length }})" 
+                                        title="Delete">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Bulk Actions -->
+        <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+            <div>
+                <button class="btn btn-outline-primary" onclick="saveOrder()">
+                    <span class="material-symbols-outlined me-2">save</span>
+                    Save Order
+                </button>
+            </div>
+            <div>
+                <span class="text-muted">Drag and drop to reorder categories</span>
+            </div>
+        </div>
+        
+        {% else %}
+        <div class="text-center py-5">
+            <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">category</span>
+            <h4 class="text-gradient-primary mb-3">No Categories Yet</h4>
+            <p class="text-muted mb-4">Create your first category to organize your video content.</p>
+            <a href="{{ url_for('admin_add_category') }}" class="btn btn-primary">
+                <span class="material-symbols-outlined me-2">add</span>
+                Create First Category
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Stats -->
+{% if categories %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">analytics</span>
+                    Category Analytics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th class="text-center">Videos</th>
+                                <th class="text-center">Free Videos</th>
+                                <th class="text-center">Premium Videos</th>
+                                <th class="text-center">Total Duration</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for category in categories %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="category-icon-small me-2">
+                                            <span class="material-symbols-outlined">folder</span>
+                                        </div>
+                                        <div>
+                                            <strong>{{ category.name }}</strong>
+                                            {% if category.description %}
+                                            <br><small class="text-muted">{{ category.description[:50] }}{% if category.description|length > 50 %}...{% endif %}</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary">{{ category.videos|length }}</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-success">{{ category.videos|selectattr('is_free')|list|length }}</span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-warning">{{ category.videos|length - category.videos|selectattr('is_free')|list|length }}</span>
+                                </td>
+                                <td class="text-center">
+                                    {% set total_duration = category.videos|sum(attribute='duration')|default(0) %}
+                                    {% if total_duration > 0 %}
+                                    {{ (total_duration // 3600)|int }}h {{ ((total_duration % 3600) // 60)|int }}m
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('category_videos', category_id=category.id) }}" 
+                                           class="btn btn-outline-primary">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">visibility</span>
+                                        </a>
+                                        <a href="{{ url_for('admin_edit_category', category_id=category.id) }}" 
+                                           class="btn btn-outline-secondary">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-danger">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-danger">
+                    <span class="material-symbols-outlined me-2">warning</span>
+                    Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-white">Are you sure you want to delete the category:</p>
+                <p class="text-gradient-primary" id="deleteCategoryName"></p>
+                <div id="categoryWarning" class="alert alert-warning" style="display: none;">
+                    <span class="material-symbols-outlined me-2">warning</span>
+                    <strong>Warning:</strong> This category contains <span id="videoCount"></span> video(s). 
+                    Deleting this category will also remove all videos in it.
+                </div>
+                <p class="text-muted small">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                    <span class="material-symbols-outlined me-2">delete</span>
+                    Delete Category
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+let sortable;
+let originalOrder = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeSortable();
+    
+    // Store original order
+    document.querySelectorAll('.category-item').forEach(item => {
+        originalOrder.push({
+            id: item.dataset.categoryId,
+            order: item.dataset.order
+        });
+    });
+});
+
+function initializeSortable() {
+    const list = document.getElementById('categoriesList');
+    if (list) {
+        sortable = Sortable.create(list, {
+            handle: '.drag-handle',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onUpdate: function (evt) {
+                // Update visual order indicators
+                updateOrderIndicators();
+            }
+        });
+    }
+}
+
+function updateOrderIndicators() {
+    const items = document.querySelectorAll('.category-item');
+    items.forEach((item, index) => {
+        const orderSpan = item.querySelector('[data-order-display]') || 
+                         item.querySelector('span:contains("Order:")');
+        if (orderSpan) {
+            orderSpan.textContent = `Order: ${index + 1}`;
+        }
+    });
+}
+
+function reorderCategories() {
+    showToast('Drag and drop categories to reorder them, then click "Save Order"', 'info');
+}
+
+async function saveOrder() {
+    const items = document.querySelectorAll('.category-item');
+    const newOrder = [];
+    
+    items.forEach((item, index) => {
+        newOrder.push({
+            id: parseInt(item.dataset.categoryId),
+            order_index: index + 1
+        });
+    });
+    
+    try {
+        const response = await fetch('/api/admin/categories/reorder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ categories: newOrder })
+        });
+        
+        if (response.ok) {
+            showToast('Category order saved successfully', 'success');
+            
+            // Update data attributes
+            items.forEach((item, index) => {
+                item.dataset.order = index + 1;
+            });
+            
+            // Update original order
+            originalOrder = [...newOrder];
+        } else {
+            showToast('Error saving category order', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving order:', error);
+        showToast('Error saving category order', 'error');
+    }
+}
+
+function refreshCategories() {
+    location.reload();
+}
+
+function deleteCategory(categoryId, categoryName, videoCount) {
+    document.getElementById('deleteCategoryName').textContent = categoryName;
+    document.getElementById('videoCount').textContent = videoCount;
+    
+    const warningDiv = document.getElementById('categoryWarning');
+    if (videoCount > 0) {
+        warningDiv.style.display = 'block';
+    } else {
+        warningDiv.style.display = 'none';
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+    
+    document.getElementById('confirmDeleteBtn').onclick = async function() {
+        try {
+            const response = await fetch(`/api/admin/category/${categoryId}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                showToast('Category deleted successfully', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                const error = await response.json();
+                showToast(error.message || 'Error deleting category', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting category:', error);
+            showToast('Error deleting category', 'error');
+        }
+        
+        modal.hide();
+    };
+}
+
+// Add smooth animations
+document.addEventListener('DOMContentLoaded', function() {
+    const categoryItems = document.querySelectorAll('.category-item');
+    categoryItems.forEach((item, index) => {
+        item.style.opacity = '0';
+        item.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            item.style.transition = 'all 0.5s ease';
+            item.style.opacity = '1';
+            item.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
+
+<style>
+.category-item {
+    transition: all 0.3s ease;
+}
+
+.category-item:hover {
+    transform: translateY(-2px);
+}
+
+.drag-handle {
+    cursor: grab;
+    padding: 0.5rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.drag-handle:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.category-icon {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-circle {
+    width: 50px;
+    height: 50px;
+    background: var(--gradient-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+}
+
+.category-icon-small {
+    width: 30px;
+    height: 30px;
+    background: var(--gradient-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.9rem;
+}
+
+.sortable-ghost {
+    opacity: 0.5;
+    background: rgba(16, 185, 129, 0.1);
+    border: 2px dashed var(--primary-color);
+}
+
+.sortable-chosen {
+    transform: rotate(2deg);
+}
+
+.sortable-drag {
+    opacity: 0.8;
+    transform: rotate(5deg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.sortable-list {
+    min-height: 100px;
+}
+
+/* Enhanced card styling */
+.card:hover {
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+/* Button hover effects */
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+/* Table improvements */
+.table-dark th {
+    border-color: var(--border-color);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1rem;
+}
+
+.table-dark td {
+    border-color: var(--border-color);
+    padding: 1rem;
+    vertical-align: middle;
+}
+
+/* Badge styling */
+.badge {
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+/* Alert improvements */
+.alert {
+    border-radius: 12px;
+    border: 1px solid;
+}
+
+.alert-warning {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.3);
+    color: var(--warning-color);
+}
+</style>
+{% endblock %}

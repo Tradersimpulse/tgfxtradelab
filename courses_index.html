@@ -1,0 +1,403 @@
+{% extends "base.html" %}
+
+{% block title %}All Courses - TGFX Trade Lab{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <!-- Course Header -->
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1 class="text-gradient-primary mb-2">
+                            <span class="material-symbols-outlined me-2" style="font-size: 2rem;">school</span>
+                            TGFX Trade Lab
+                        </h1>
+                        <p class="text-muted mb-0">Master trading with our comprehensive video course library</p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="d-flex justify-content-end gap-3">
+                            <div class="text-center">
+                                <h3 class="text-gradient-primary mb-0">{{ "%.0f"|format(progress_percentage) }}%</h3>
+                                <small class="text-muted">Complete</small>
+                            </div>
+                            <div class="text-center">
+                                <h3 class="text-gradient-primary mb-0">{{ completed_videos }}</h3>
+                                <small class="text-muted">Completed</small>
+                            </div>
+                            <div class="text-center">
+                                <h3 class="text-gradient-primary mb-0">{{ total_videos }}</h3>
+                                <small class="text-muted">Total Videos</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="mt-3">
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar" role="progressbar" 
+                             style="width: {{ progress_percentage }}%" 
+                             aria-valuenow="{{ progress_percentage }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Main Course Content -->
+    <div class="col-lg-9">
+        {% for category in categories %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="text-gradient-primary mb-0">{{ category.name }}</h4>
+                    {% if category.description %}
+                    <p class="text-muted mb-0 mt-1">{{ category.description }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    {% set category_videos = category.videos|sort(attribute='order_index') %}
+                    {% set completed_in_category = category_videos|selectattr('id', 'in', user_progress.keys())|selectattr('id', 'in', user_progress.keys())|map(attribute='id')|map('extract', user_progress)|selectattr('completed')|list|length %}
+                    <span class="badge bg-success">{{ completed_in_category }}/{{ category_videos|length }} Complete</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for video in category_videos %}
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="video-card">
+                            <!-- Video Thumbnail -->
+                            <div class="position-relative">
+                                {% if video.thumbnail_url %}
+                                <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" class="video-thumbnail">
+                                {% else %}
+                                <div class="video-thumbnail d-flex align-items-center justify-content-center bg-gradient-primary">
+                                    <span class="material-symbols-outlined text-white" style="font-size: 3rem;">play_circle</span>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Video Duration -->
+                                {% if video.duration %}
+                                <span class="video-duration">
+                                    {{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}
+                                </span>
+                                {% endif %}
+                                
+                                <!-- Premium Badge -->
+                                {% if not video.is_free %}
+                                <span class="position-absolute top-0 start-0 m-2">
+                                    <span class="badge bg-warning">
+                                        <span class="material-symbols-outlined me-1" style="font-size: 14px;">workspace_premium</span>
+                                        Premium
+                                    </span>
+                                </span>
+                                {% endif %}
+                                
+                                <!-- Completed Badge -->
+                                {% if video.id in user_progress and user_progress[video.id].completed %}
+                                <span class="position-absolute top-0 end-0 m-2">
+                                    <span class="badge bg-success">
+                                        <span class="material-symbols-outlined" style="font-size: 14px;">check_circle</span>
+                                    </span>
+                                </span>
+                                {% endif %}
+                                
+                                <!-- Favorite Badge -->
+                                {% if video.id in user_favorites %}
+                                <span class="position-absolute" style="top: 8px; right: 45px;">
+                                    <span class="material-symbols-outlined text-danger" style="font-size: 20px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">favorite</span>
+                                </span>
+                                {% endif %}
+                                
+                                <!-- Video Overlay -->
+                                <div class="video-overlay">
+                                    {% if video.is_free or current_user.has_subscription %}
+                                    <a href="{{ url_for('watch_video', video_id=video.id) }}" class="play-button">
+                                        <span class="material-symbols-outlined">play_arrow</span>
+                                    </a>
+                                    {% else %}
+                                    <button class="play-button" onclick="showSubscriptionModal()">
+                                        <span class="material-symbols-outlined">lock</span>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Progress Bar -->
+                                {% if video.id in user_progress %}
+                                {% set progress = user_progress[video.id] %}
+                                {% if video.duration and progress.watched_duration > 0 %}
+                                <div class="position-absolute bottom-0 start-0 end-0">
+                                    <div class="progress" style="height: 4px; border-radius: 0;">
+                                        <div class="progress-bar" 
+                                             style="width: {{ (progress.watched_duration / video.duration * 100)|round(1) }}%"></div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Video Info -->
+                            <div class="p-3">
+                                <h6 class="mb-2 text-white">{{ video.title }}</h6>
+                                {% if video.description %}
+                                <p class="text-muted small mb-2">{{ video.description[:100] }}{% if video.description|length > 100 %}...{% endif %}</p>
+                                {% endif %}
+                                
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex gap-2">
+                                        <!-- Favorite Button -->
+                                        <button class="btn btn-sm btn-outline-secondary" 
+                                                onclick="toggleFavorite({{ video.id }})"
+                                                id="favorite-btn-{{ video.id }}">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">
+                                                {% if video.id in user_favorites %}favorite{% else %}favorite_border{% endif %}
+                                            </span>
+                                        </button>
+                                        
+                                        <!-- Download Files -->
+                                        {% if video.files %}
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                    data-bs-toggle="dropdown">
+                                                <span class="material-symbols-outlined" style="font-size: 16px;">download</span>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                {% for file in video.files %}
+                                                <li>
+                                                    <a class="dropdown-item" href="{{ url_for('download_file', file_id=file.id) }}">
+                                                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">description</span>
+                                                        {{ file.filename }}
+                                                    </a>
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <small class="text-muted">
+                                        {% if video.id in user_progress %}
+                                        Last watched {{ user_progress[video.id].last_watched.strftime('%m/%d') }}
+                                        {% else %}
+                                        Not started
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    {% if not category_videos %}
+                    <div class="col-12">
+                        <div class="text-center py-4">
+                            <span class="material-symbols-outlined text-muted mb-2" style="font-size: 3rem;">video_library</span>
+                            <p class="text-muted">No videos in this category yet.</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        
+        {% if not categories %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">school</span>
+                <h3 class="text-gradient-primary mb-3">No Courses Available</h3>
+                <p class="text-muted">Check back soon for new video courses!</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-3">
+        <!-- Quick Stats -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">analytics</span>
+                    Your Progress
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">Completed Videos</span>
+                    <span class="badge bg-success">{{ completed_videos }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">Favorite Videos</span>
+                    <span class="badge bg-danger">{{ user_favorites|length }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">Subscription</span>
+                    {% if current_user.has_subscription %}
+                    <span class="badge bg-success">Active</span>
+                    {% else %}
+                    <span class="badge bg-warning">Free</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">Overall Progress</span>
+                    <span class="text-success">{{ "%.0f"|format(progress_percentage) }}%</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">bolt</span>
+                    Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('favorites') }}" class="btn btn-outline-primary">
+                        <span class="material-symbols-outlined me-2">favorite</span>
+                        View Favorites
+                    </a>
+                    
+                    {% if not current_user.has_subscription %}
+                    <a href="{{ url_for('subscription') }}" class="btn btn-primary">
+                        <span class="material-symbols-outlined me-2">workspace_premium</span>
+                        Upgrade to Premium
+                    </a>
+                    {% endif %}
+                    
+                    <a href="{{ url_for('donate') }}" class="btn btn-outline-success">
+                        <span class="material-symbols-outlined me-2">volunteer_activism</span>
+                        Support Us
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Learning Tips -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">lightbulb</span>
+                    Learning Tips
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Watch videos in order for best results</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Download and review course materials</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Favorite important videos for quick access</small>
+                    </li>
+                    <li class="mb-0">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Practice what you learn in real markets</small>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Subscription Modal -->
+<div class="modal fade" id="subscriptionModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-primary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-gradient-primary">
+                    <span class="material-symbols-outlined me-2">workspace_premium</span>
+                    Premium Required
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <span class="material-symbols-outlined text-warning mb-3" style="font-size: 4rem;">lock</span>
+                <h4 class="text-white mb-3">Unlock Premium Content</h4>
+                <p class="text-muted mb-4">This video requires an active premium subscription to access.</p>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('subscription') }}" class="btn btn-primary">
+                        <span class="material-symbols-outlined me-2">workspace_premium</span>
+                        Upgrade to Premium
+                    </a>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        Maybe Later
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Toggle favorite functionality
+async function toggleFavorite(videoId) {
+    try {
+        const response = await fetch('/api/video/favorite', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ video_id: videoId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const btn = document.getElementById(`favorite-btn-${videoId}`);
+            const icon = btn.querySelector('.material-symbols-outlined');
+            
+            if (data.is_favorited) {
+                icon.textContent = 'favorite';
+                showToast('Added to favorites', 'success');
+            } else {
+                icon.textContent = 'favorite_border';
+                showToast('Removed from favorites', 'info');
+            }
+        }
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+        showToast('Error updating favorite', 'error');
+    }
+}
+
+// Show subscription modal
+function showSubscriptionModal() {
+    const modal = new bootstrap.Modal(document.getElementById('subscriptionModal'));
+    modal.show();
+}
+
+// Add smooth animations
+document.addEventListener('DOMContentLoaded', function() {
+    // Fade in video cards
+    const videoCards = document.querySelectorAll('.video-card');
+    videoCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 50);
+    });
+});
+</script>
+{% endblock %}

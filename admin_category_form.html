@@ -1,0 +1,543 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - Admin - TGFX Trade Lab{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2" style="font-size: 2rem;">
+                        {% if category %}edit{% else %}add{% endif %}
+                    </span>
+                    {{ title }}
+                </h1>
+                <p class="text-muted mb-0">
+                    {% if category %}Update category information and settings{% else %}Create a new category to organize your videos{% endif %}
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('admin_categories') }}" class="btn btn-outline-secondary">
+                    <span class="material-symbols-outlined me-2">arrow_back</span>
+                    Back to Categories
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Main Form -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">info</span>
+                    Category Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="categoryForm">
+                    {{ form.hidden_tag() }}
+                    
+                    <!-- Name -->
+                    <div class="mb-4">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control", placeholder="Enter category name") }}
+                        {% if form.name.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.name.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="form-text">Choose a clear, descriptive name for your category</div>
+                    </div>
+                    
+                    <!-- Description -->
+                    <div class="mb-4">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows="4", placeholder="Describe what this category covers...") }}
+                        {% if form.description.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.description.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="form-text">Provide a brief description of what videos will be in this category</div>
+                    </div>
+                    
+                    <!-- Order Index -->
+                    <div class="mb-4">
+                        {{ form.order_index.label(class="form-label") }}
+                        <div class="row">
+                            <div class="col-md-6">
+                                {{ form.order_index(class="form-control", placeholder="0") }}
+                                {% if form.order_index.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.order_index.errors %}{{ error }}{% endfor %}
+                                </div>
+                                {% endif %}
+                                <div class="form-text">Lower numbers appear first (0 = first)</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="alert alert-info">
+                                    <span class="material-symbols-outlined me-2">info</span>
+                                    <strong>Current order:</strong> Categories are displayed in ascending order by this number.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Buttons -->
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <span class="material-symbols-outlined me-2">save</span>
+                            {% if category %}Update Category{% else %}Create Category{% endif %}
+                        </button>
+                        <a href="{{ url_for('admin_categories') }}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                        {% if category and category.videos %}
+                        <a href="{{ url_for('category_videos', category_id=category.id) }}" class="btn btn-outline-primary ms-auto">
+                            <span class="material-symbols-outlined me-2">visibility</span>
+                            View Category
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Category Videos (if editing) -->
+        {% if category and category.videos %}
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">video_library</span>
+                    Videos in this Category ({{ category.videos|length }})
+                </h5>
+                <a href="{{ url_for('admin_add_video') }}?category={{ category.id }}" class="btn btn-sm btn-outline-primary">
+                    <span class="material-symbols-outlined me-1" style="font-size: 16px;">add</span>
+                    Add Video
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover">
+                        <thead>
+                            <tr>
+                                <th>Video</th>
+                                <th class="text-center">Type</th>
+                                <th class="text-center">Order</th>
+                                <th class="text-center">Created</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for video in category.videos|sort(attribute='order_index') %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        {% if video.thumbnail_url %}
+                                        <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" 
+                                             class="me-3" style="width: 60px; height: 34px; object-fit: cover; border-radius: 6px;">
+                                        {% else %}
+                                        <div class="bg-gradient-primary me-3 d-flex align-items-center justify-content-center" 
+                                             style="width: 60px; height: 34px; border-radius: 6px;">
+                                            <span class="material-symbols-outlined text-white" style="font-size: 16px;">play_circle</span>
+                                        </div>
+                                        {% endif %}
+                                        <div>
+                                            <strong>{{ video.title[:40] }}{% if video.title|length > 40 %}...{% endif %}</strong>
+                                            {% if video.duration %}
+                                            <br><small class="text-muted">{{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    {% if video.is_free %}
+                                    <span class="badge bg-success">Free</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Premium</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <input type="number" class="form-control form-control-sm" 
+                                           style="width: 70px; margin: 0 auto;" 
+                                           value="{{ video.order_index }}"
+                                           onchange="updateVideoOrder({{ video.id }}, this.value)">
+                                </td>
+                                <td class="text-center">{{ video.created_at.strftime('%m/%d/%Y') }}</td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('watch_video', video_id=video.id) }}" 
+                                           class="btn btn-outline-primary" title="Watch">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">play_arrow</span>
+                                        </a>
+                                        <a href="{{ url_for('admin_edit_video', video_id=video.id) }}" 
+                                           class="btn btn-outline-secondary" title="Edit">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
+                                        </a>
+                                        <button class="btn btn-outline-danger" 
+                                                onclick="removeVideoFromCategory({{ video.id }}, '{{ video.title }}')" 
+                                                title="Remove from category">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">remove</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Preview -->
+        {% if category %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">visibility</span>
+                    Category Preview
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="category-preview">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="category-icon me-3">
+                            <span class="material-symbols-outlined">folder</span>
+                        </div>
+                        <div>
+                            <h6 class="text-white mb-1">{{ category.name }}</h6>
+                            <small class="text-muted">Order: {{ category.order_index }}</small>
+                        </div>
+                    </div>
+                    
+                    {% if category.description %}
+                    <p class="text-muted small mb-3">{{ category.description }}</p>
+                    {% endif %}
+                    
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <h6 class="text-gradient-primary mb-0">{{ category.videos|length }}</h6>
+                            <small class="text-muted">Videos</small>
+                        </div>
+                        <div class="col-4">
+                            <h6 class="text-gradient-primary mb-0">{{ category.videos|selectattr('is_free')|list|length }}</h6>
+                            <small class="text-muted">Free</small>
+                        </div>
+                        <div class="col-4">
+                            <h6 class="text-gradient-primary mb-0">{{ category.videos|length - category.videos|selectattr('is_free')|list|length }}</h6>
+                            <small class="text-muted">Premium</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Category Guidelines -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">tips_and_updates</span>
+                    Category Guidelines
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Use clear, descriptive names</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Keep categories focused on specific topics</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Order categories logically (beginner to advanced)</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Write helpful descriptions for students</small>
+                    </li>
+                    <li class="mb-0">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Aim for 5-15 videos per category</small>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Existing Categories -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">list</span>
+                    Existing Categories
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if existing_categories %}
+                <div class="list-group list-group-flush">
+                    {% for cat in existing_categories[:5] %}
+                    <div class="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong class="text-white">{{ cat.name }}</strong>
+                            <br><small class="text-muted">{{ cat.videos|length }} videos</small>
+                        </div>
+                        <span class="badge bg-secondary">{{ cat.order_index }}</span>
+                    </div>
+                    {% endfor %}
+                    
+                    {% if existing_categories|length > 5 %}
+                    <div class="list-group-item bg-transparent border-secondary text-center">
+                        <small class="text-muted">... and {{ existing_categories|length - 5 }} more</small>
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <p class="text-muted text-center">
+                    {% if category %}
+                    This is your only category.
+                    {% else %}
+                    This will be your first category.
+                    {% endif %}
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Remove Video Modal -->
+<div class="modal fade" id="removeVideoModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-warning">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-warning">
+                    <span class="material-symbols-outlined me-2">warning</span>
+                    Remove Video from Category
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-white">Are you sure you want to remove this video from the category?</p>
+                <p class="text-gradient-primary" id="removeVideoTitle"></p>
+                <div class="alert alert-info">
+                    <span class="material-symbols-outlined me-2">info</span>
+                    This will not delete the video, just remove it from this category. 
+                    You can assign it to another category later.
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" id="confirmRemoveBtn">
+                    <span class="material-symbols-outlined me-2">remove</span>
+                    Remove from Category
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Form submission with loading state
+document.getElementById('categoryForm').addEventListener('submit', function(e) {
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+});
+
+// Auto-suggest order index
+document.addEventListener('DOMContentLoaded', function() {
+    const orderInput = document.querySelector('[name="order_index"]');
+    if (orderInput && !orderInput.value) {
+        // Suggest next order index based on existing categories
+        const existingOrders = {{ existing_categories|map(attribute='order_index')|list|sort if existing_categories else [] }};
+        if (existingOrders.length > 0) {
+            orderInput.value = Math.max(...existingOrders) + 1;
+        } else {
+            orderInput.value = 1;
+        }
+    }
+});
+
+// Live preview updates
+document.querySelector('[name="name"]').addEventListener('input', function() {
+    const previewName = document.querySelector('.category-preview h6');
+    if (previewName) {
+        previewName.textContent = this.value || 'Category Name';
+    }
+});
+
+document.querySelector('[name="description"]').addEventListener('input', function() {
+    const previewDesc = document.querySelector('.category-preview p');
+    if (previewDesc) {
+        previewDesc.textContent = this.value || 'Category description will appear here...';
+    }
+});
+
+document.querySelector('[name="order_index"]').addEventListener('input', function() {
+    const previewOrder = document.querySelector('.category-preview small');
+    if (previewOrder) {
+        previewOrder.textContent = `Order: ${this.value || 0}`;
+    }
+});
+
+{% if category %}
+async function updateVideoOrder(videoId, newOrder) {
+    try {
+        const response = await fetch('/api/admin/video/order', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                video_id: videoId,
+                order_index: parseInt(newOrder)
+            })
+        });
+        
+        if (response.ok) {
+            showToast('Video order updated', 'success');
+        } else {
+            showToast('Error updating order', 'error');
+        }
+    } catch (error) {
+        console.error('Error updating video order:', error);
+        showToast('Error updating order', 'error');
+    }
+}
+
+function removeVideoFromCategory(videoId, videoTitle) {
+    document.getElementById('removeVideoTitle').textContent = videoTitle;
+    
+    const modal = new bootstrap.Modal(document.getElementById('removeVideoModal'));
+    modal.show();
+    
+    document.getElementById('confirmRemoveBtn').onclick = async function() {
+        try {
+            const response = await fetch(`/api/admin/video/${videoId}/remove-from-category`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ category_id: {{ category.id }} })
+            });
+            
+            if (response.ok) {
+                showToast('Video removed from category', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast('Error removing video', 'error');
+            }
+        } catch (error) {
+            console.error('Error removing video:', error);
+            showToast('Error removing video', 'error');
+        }
+        
+        modal.hide();
+    };
+}
+{% endif %}
+
+// Character counter for description
+document.querySelector('[name="description"]').addEventListener('input', function() {
+    const maxLength = 500; // Suggested max length
+    const currentLength = this.value.length;
+    const formText = this.nextElementSibling;
+    
+    if (currentLength > maxLength) {
+        formText.textContent = `Description is getting long (${currentLength} characters). Consider keeping it concise.`;
+        formText.className = 'form-text text-warning';
+    } else {
+        formText.textContent = 'Provide a brief description of what videos will be in this category';
+        formText.className = 'form-text';
+    }
+});
+</script>
+
+<style>
+.category-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--gradient-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+}
+
+.category-preview {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.category-preview:hover {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.list-group-item {
+    padding: 0.75rem 0;
+    border-left: none !important;
+    border-right: none !important;
+}
+
+.list-group-item:first-child {
+    border-top: none !important;
+}
+
+.alert-info {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: var(--primary-color);
+}
+
+/* Form enhancements */
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
+}
+
+/* Table improvements */
+.table-dark th,
+.table-dark td {
+    border-color: var(--border-color);
+    vertical-align: middle;
+}
+
+/* Button hover effects */
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+/* Card animations */
+.card {
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+/* Input number styling */
+input[type="number"].form-control-sm {
+    text-align: center;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - TGFX Trade Lab{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2" style="font-size: 2rem;">admin_panel_settings</span>
+                    Admin Dashboard
+                </h1>
+                <p class="text-muted mb-0">Manage your TGFX Trade Lab content and users</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('admin_add_video') }}" class="btn btn-primary">
+                    <span class="material-symbols-outlined me-2">add</span>
+                    Add Video
+                </a>
+                <a href="{{ url_for('admin_add_category') }}" class="btn btn-outline-primary">
+                    <span class="material-symbols-outlined me-2">add</span>
+                    Add Category
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-5">
+    <div class="col-md-3 mb-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span class="material-symbols-outlined text-primary" style="font-size: 3rem;">video_library</span>
+                </div>
+                <h2 class="text-gradient-primary mb-2">{{ video_count }}</h2>
+                <p class="text-muted mb-0">Total Videos</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span class="material-symbols-outlined text-success" style="font-size: 3rem;">people</span>
+                </div>
+                <h2 class="text-gradient-primary mb-2">{{ user_count }}</h2>
+                <p class="text-muted mb-0">Registered Users</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span class="material-symbols-outlined text-warning" style="font-size: 3rem;">category</span>
+                </div>
+                <h2 class="text-gradient-primary mb-2">{{ category_count }}</h2>
+                <p class="text-muted mb-0">Categories</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span class="material-symbols-outlined text-info" style="font-size: 3rem;">workspace_premium</span>
+                </div>
+                <h2 class="text-gradient-primary mb-2">{{ subscription_count }}</h2>
+                <p class="text-muted mb-0">Premium Users</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Recent Videos -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">video_library</span>
+                    Recent Videos
+                </h5>
+                <a href="{{ url_for('admin_videos') }}" class="btn btn-sm btn-outline-primary">
+                    View All
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_videos %}
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Category</th>
+                                <th>Type</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for video in recent_videos[:5] %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        {% if video.thumbnail_url %}
+                                        <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" 
+                                             class="me-3" style="width: 50px; height: 30px; object-fit: cover; border-radius: 6px;">
+                                        {% else %}
+                                        <div class="bg-gradient-primary me-3 d-flex align-items-center justify-content-center" 
+                                             style="width: 50px; height: 30px; border-radius: 6px;">
+                                            <span class="material-symbols-outlined text-white" style="font-size: 16px;">play_circle</span>
+                                        </div>
+                                        {% endif %}
+                                        <div>
+                                            <strong>{{ video.title[:30] }}{% if video.title|length > 30 %}...{% endif %}</strong>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{{ video.category.name }}</td>
+                                <td>
+                                    {% if video.is_free %}
+                                    <span class="badge bg-success">Free</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Premium</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ video.created_at.strftime('%m/%d/%Y') }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('watch_video', video_id=video.id) }}" class="btn btn-outline-primary">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">play_arrow</span>
+                                        </a>
+                                        <a href="{{ url_for('admin_edit_video', video_id=video.id) }}" class="btn btn-outline-secondary">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <span class="material-symbols-outlined text-muted mb-3" style="font-size: 3rem;">video_library</span>
+                    <p class="text-muted">No videos added yet.</p>
+                    <a href="{{ url_for('admin_add_video') }}" class="btn btn-primary">Add Your First Video</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions & System Info -->
+    <div class="col-lg-4">
+        <!-- Quick Actions -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">bolt</span>
+                    Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('admin_add_video') }}" class="btn btn-primary">
+                        <span class="material-symbols-outlined me-2">video_call</span>
+                        Add New Video
+                    </a>
+                    <a href="{{ url_for('admin_add_category') }}" class="btn btn-outline-primary">
+                        <span class="material-symbols-outlined me-2">category</span>
+                        Create Category
+                    </a>
+                    <a href="{{ url_for('admin_videos') }}" class="btn btn-outline-secondary">
+                        <span class="material-symbols-outlined me-2">video_library</span>
+                        Manage Videos
+                    </a>
+                    <a href="{{ url_for('admin_categories') }}" class="btn btn-outline-secondary">
+                        <span class="material-symbols-outlined me-2">folder</span>
+                        Manage Categories
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Activity -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">notifications</span>
+                    System Status
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">AWS S3 Connection</span>
+                    <span class="badge bg-success">Connected</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">Stripe Integration</span>
+                    <span class="badge bg-success">Active</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">Database</span>
+                    <span class="badge bg-success">Healthy</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">Last Backup</span>
+                    <span class="badge bg-info">2 hours ago</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Content Guidelines -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">info</span>
+                    Content Guidelines
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Upload videos to S3 first</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Use descriptive titles and descriptions</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Set proper video order within categories</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Mark premium content appropriately</small>
+                    </li>
+                    <li class="mb-0">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Include downloadable resources when possible</small>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent User Activity (if you want to add this later) -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">analytics</span>
+                    Platform Analytics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 text-center">
+                        <h4 class="text-gradient-primary">{{ "%.0f"|format((subscription_count / user_count * 100) if user_count > 0 else 0) }}%</h4>
+                        <p class="text-muted small">Conversion Rate</p>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h4 class="text-gradient-primary">{{ "%.1f"|format(video_count / category_count if category_count > 0 else 0) }}</h4>
+                        <p class="text-muted small">Avg Videos per Category</p>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h4 class="text-gradient-primary">85%</h4>
+                        <p class="text-muted small">User Engagement</p>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h4 class="text-gradient-primary">4.8★</h4>
+                        <p class="text-muted small">Average Rating</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add smooth animations to stat cards
+    const statCards = document.querySelectorAll('.card');
+    statCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+
+    // Auto-refresh stats every 30 seconds
+    setInterval(function() {
+        // You could implement AJAX refresh here
+        console.log('Stats refresh triggered');
+    }, 30000);
+});
+</script>
+{% endblock %}

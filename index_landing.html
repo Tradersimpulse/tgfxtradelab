@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TGFX Trade Lab - Master Trading with Expert Video Courses</title>
+    
+    <!-- Meta Description -->
+    <meta name="description" content="Learn trading with TGFX Trade Lab's comprehensive video courses. Master forex, stocks, and crypto trading with expert-led tutorials and downloadable resources.">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Material Icons -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    
+    <style>
+        :root {
+            --primary-color: #10B981;
+            --secondary-color: #059669;
+            --accent-color: #34D399;
+            --success-color: #10B981;
+            --danger-color: #EF4444;
+            --warning-color: #F59E0B;
+            
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --bg-tertiary: #1a1a1a;
+            --bg-card: #141414;
+            
+            --text-primary: #FFFFFF;
+            --text-secondary: #E5E7EB;
+            --text-muted: #D1D5DB;
+            
+            --border-color: rgba(255, 255, 255, 0.08);
+            --gradient-primary: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+        }
+
+        /* Hero Section */
+        .hero-section {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0a0a 0%, #111111 50%, #0a0a0a 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
+            z-index: -1;
+        }
+
+        .navbar {
+            background: rgba(10, 10, 10, 0.9);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-content {
+            padding: 8rem 0 4rem;
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-gradient-text {
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .hero-stats {
+            display: flex;
+            gap: 2rem;
+            margin: 3rem 0;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary-color);
+            display: block;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        /* Buttons */
+        .btn {
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            padding: 0.875rem 2rem;
+            transition: all 0.3s ease;
+            border: none;
+            letter-spacing: 0.025em;
+        }
+
+        .btn-primary {
+            background: var(--gradient-primary);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+            color: white;
+        }
+
+        .btn-outline-secondary {
+            border: 2px solid var(--border-color);
+            color: var(--text-secondary);
+            background: transparent;
+        }
+
+        .btn-outline-secondary:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            border-color: var(--primary-color);
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(16, 185, 129, 0.3);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Features Section */
+        .features-section {
+            padding: 6rem 0;
+            background: var(--bg-secondary);
+        }
+
+        .feature-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--gradient-primary);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2rem;
+            color: white;
+        }
+
+        /* Course Preview */
+        .course-preview {
+            padding: 6rem 0;
+        }
+
+        .video-preview {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .video-preview img {
+            width: 100%;
+            height: auto;
+        }
+
+        .play-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .play-overlay:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .play-button {
+            width: 80px;
+            height: 80px;
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .play-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.5);
+        }
+
+        /* Testimonials */
+        .testimonials-section {
+            padding: 6rem 0;
+            background: var(--bg-primary);
+        }
+
+        .testimonial-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 2rem;
+            height: 100%;
+        }
+
+        .testimonial-rating {
+            color: var(--warning-color);
+            margin-bottom: 1rem;
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+
+        .author-avatar {
+            width: 50px;
+            height: 50px;
+            background: var(--gradient-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 1rem;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 6rem 0;
+            background: var(--bg-secondary);
+            text-align: center;
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+            padding: 3rem 0 1rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            
+            .hero-stats {
+                justify-content: center;
+                gap: 1rem;
+            }
+            
+            .btn {
+                width: 100%;
+                margin-bottom: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">TGFX Trade Lab</a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#features">Features</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#courses">Courses</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#testimonials">Reviews</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-primary ms-2" href="{{ url_for('signup') }}">Get Started</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="hero-background"></div>
+        <div class="container">
+            <div class="row min-vh-100 align-items-center">
+                <div class="col-lg-6">
+                    <div class="hero-content">
+                        <h1 class="hero-title">
+                            Master Trading with 
+                            <span class="hero-gradient-text">Expert-Led</span>
+                            Video Courses
+                        </h1>
+                        <p class="hero-subtitle">
+                            Learn from professional traders with our comprehensive video library. 
+                            Track your progress, access premium content, and join a community of successful traders.
+                        </p>
+                        
+                        <div class="d-flex gap-3 mb-4 flex-wrap">
+                            <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
+                                <span class="material-symbols-outlined me-2">play_circle</span>
+                                Start Learning Free
+                            </a>
+                            <a href="#courses" class="btn btn-outline-secondary btn-lg">
+                                <span class="material-symbols-outlined me-2">visibility</span>
+                                Watch Demo
+                            </a>
+                        </div>
+                        
+                        <div class="hero-stats">
+                            <div class="stat-item">
+                                <span class="stat-number">150+</span>
+                                <span class="stat-label">Video Lessons</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-number">5,000+</span>
+                                <span class="stat-label">Students</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-number">4.8★</span>
+                                <span class="stat-label">Average Rating</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-number">24/7</span>
+                                <span class="stat-label">Access</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="video-preview">
+                        <img src="https://via.placeholder.com/600x400/1a1a1a/10B981?text=Trading+Course+Preview" alt="Course Preview">
+                        <div class="play-overlay">
+                            <button class="play-button" onclick="playPreviewVideo()">
+                                <span class="material-symbols-outlined">play_arrow</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section" id="features">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 text-center mb-5">
+                    <h2 class="hero-gradient-text display-5 fw-bold mb-3">Why Choose TGFX Trade Lab?</h2>
+                    <p class="text-muted lead">Everything you need to become a successful trader</p>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 text-center">
+                        <div class="card-body p-4">
+                            <div class="feature-icon">
+                                <span class="material-symbols-outlined">school</span>
+                            </div>
+                            <h4 class="text-white mb-3">Expert-Led Courses</h4>
+                            <p class="text-muted">Learn from professional traders with years of experience in forex, stocks, and crypto markets.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 text-center">
+                        <div class="card-body p-4">
+                            <div class="feature-icon">
+                                <span class="material-symbols-outlined">trending_up</span>
+                            </div>
+                            <h4 class="text-white mb-3">Progress Tracking</h4>
+                            <p class="text-muted">Monitor your learning journey with detailed progress tracking and completion certificates.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 text-center">
+                        <div class="card-body p-4">
+                            <div class="feature-icon">
+                                <span class="material-symbols-outlined">download</span>
+                            </div>
+                            <h4 class="text-white mb-3">Downloadable Resources</h4>
+                            <p class="text-muted">Access PDFs, spreadsheets, and trading templates to enhance your learning experience.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 text-center">
+                        <div class="card-body p-4">
+                            <div class="feature-icon">
+                                <span class="material-symbols-outlined">devices</span>
+                            </div>
+                            <h4 class="text-white mb-3">Multi-Device Access</h4>
+                            <p class="text-muted">Learn anywhere, anytime on your desktop, tablet, or mobile device with seamless sync.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 text-center">
+                        <div class="card-body p-4">
+                            <div class="feature-icon">
+                                <span class="material-symbols-outlined">groups</span>
+                            </div>
+                            <h4 class="text-white mb-3">Community Support</h4>
+                            <p class="text-muted">Join a community of traders, ask questions, and share your trading experiences.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 text-center">
+                        <div class="card-body p-4">
+                            <div class="feature-icon">
+                                <span class="material-symbols-outlined">workspace_premium</span>
+                            </div>
+                            <h4 class="text-white mb-3">Premium Content</h4>
+                            <p class="text-muted">Unlock advanced strategies and exclusive content with our premium subscription.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Course Preview Section -->
+    <section class="course-preview" id="courses">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6 mb-5 mb-lg-0">
+                    <h2 class="hero-gradient-text display-5 fw-bold mb-4">
+                        Comprehensive Trading Curriculum
+                    </h2>
+                    <p class="text-muted lead mb-4">
+                        From beginner basics to advanced strategies, our structured curriculum 
+                        covers everything you need to know about trading.
+                    </p>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-6">
+                            <div class="d-flex align-items-center">
+                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                <span>Forex Trading</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="d-flex align-items-center">
+                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                <span>Stock Analysis</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="d-flex align-items-center">
+                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                <span>Crypto Trading</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="d-flex align-items-center">
+                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                <span>Risk Management</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="d-flex align-items-center">
+                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                <span>Technical Analysis</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="d-flex align-items-center">
+                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                <span>Psychology</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
+                        <span class="material-symbols-outlined me-2">school</span>
+                        Explore All Courses
+                    </a>
+                </div>
+                <div class="col-lg-6">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="material-symbols-outlined text-primary me-2">play_circle</span>
+                                        <h6 class="text-white mb-0">Beginner Basics</h6>
+                                    </div>
+                                    <p class="text-muted small mb-2">12 lessons • 2.5 hours</p>
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="material-symbols-outlined text-warning me-2">workspace_premium</span>
+                                        <h6 class="text-white mb-0">Advanced Strategies</h6>
+                                    </div>
+                                    <p class="text-muted small mb-2">18 lessons • 4.2 hours</p>
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="material-symbols-outlined text-primary me-2">play_circle</span>
+                                        <h6 class="text-white mb-0">Risk Management</h6>
+                                    </div>
+                                    <p class="text-muted small mb-2">8 lessons • 1.8 hours</p>
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="material-symbols-outlined text-warning me-2">workspace_premium</span>
+                                        <h6 class="text-white mb-0">Market Psychology</h6>
+                                    </div>
+                                    <p class="text-muted small mb-2">15 lessons • 3.5 hours</p>
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section class="testimonials-section" id="testimonials">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 text-center mb-5">
+                    <h2 class="hero-gradient-text display-5 fw-bold mb-3">What Our Students Say</h2>
+                    <p class="text-muted lead">Join thousands of successful traders who learned with us</p>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-lg-4 col-md-6">
+                    <div class="testimonial-card">
+                        <div class="testimonial-rating">
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                        </div>
+                        <p class="text-muted">
+                            "TGFX Trade Lab transformed my trading journey. The courses are comprehensive and easy to follow. I went from a complete beginner to consistently profitable in 6 months."
+                        </p>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">M</div>
+                            <div>
+                                <h6 class="text-white mb-0">Michael Chen</h6>
+                                <small class="text-muted">Full-time Trader</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="testimonial-card">
+                        <div class="testimonial-rating">
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                        </div>
+                        <p class="text-muted">
+                            "The quality of education here is outstanding. The instructors break down complex concepts into digestible lessons. The community support is also amazing!"
+                        </p>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">S</div>
+                            <div>
+                                <h6 class="text-white mb-0">Sarah Johnson</h6>
+                                <small class="text-muted">Investment Advisor</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="testimonial-card">
+                        <div class="testimonial-rating">
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                        </div>
+                        <p class="text-muted">
+                            "I love how I can learn at my own pace. The progress tracking keeps me motivated, and the downloadable resources are incredibly valuable."
+                        </p>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">D</div>
+                            <div>
+                                <h6 class="text-white mb-0">David Rodriguez</h6>
+                                <small class="text-muted">Portfolio Manager</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-8 mx-auto">
+                    <h2 class="hero-gradient-text display-5 fw-bold mb-4">
+                        Ready to Start Your Trading Journey?
+                    </h2>
+                    <p class="text-muted lead mb-5">
+                        Join thousands of students who are already learning and earning with our expert-led courses. 
+                        Start with our free content and upgrade when you're ready.
+                    </p>
+                    
+                    <div class="d-flex gap-3 justify-content-center flex-wrap">
+                        <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
+                            <span class="material-symbols-outlined me-2">person_add</span>
+                            Get Started Free
+                        </a>
+                        <a href="{{ url_for('login') }}" class="btn btn-outline-secondary btn-lg">
+                            <span class="material-symbols-outlined me-2">login</span>
+                            Sign In
+                        </a>
+                    </div>
+                    
+                    <p class="text-muted small mt-4 mb-0">
+                        No credit card required • Free courses available • Cancel anytime
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-4 mb-4">
+                    <h5 class="hero-gradient-text mb-3">TGFX Trade Lab</h5>
+                    <p class="text-muted">
+                        Empowering traders worldwide with comprehensive video courses, 
+                        expert strategies, and community support.
+                    </p>
+                </div>
+                <div class="col-lg-2 col-md-6 mb-4">
+                    <h6 class="text-white mb-3">Platform</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="#" class="text-muted text-decoration-none">Courses</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Premium</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Community</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Mobile App</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-2 col-md-6 mb-4">
+                    <h6 class="text-white mb-3">Support</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="#" class="text-muted text-decoration-none">Help Center</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Contact Us</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">FAQ</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Live Chat</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-2 col-md-6 mb-4">
+                    <h6 class="text-white mb-3">Company</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="#" class="text-muted text-decoration-none">About</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Careers</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Press</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Partners</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-2 col-md-6 mb-4">
+                    <h6 class="text-white mb-3">Legal</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="#" class="text-muted text-decoration-none">Privacy</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Terms</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Cookie Policy</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Disclaimer</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <hr class="my-4" style="border-color: var(--border-color);">
+            
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <p class="text-muted small mb-0">
+                        © 2024 TGFX Trade Lab. All rights reserved.
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <div class="d-flex justify-content-md-end gap-3">
+                        <a href="#" class="text-muted">
+                            <span class="material-symbols-outlined">facebook</span>
+                        </a>
+                        <a href="#" class="text-muted">
+                            <span class="material-symbols-outlined">twitter</span>
+                        </a>
+                        <a href="#" class="text-muted">
+                            <span class="material-symbols-outlined">linkedin</span>
+                        </a>
+                        <a href="#" class="text-muted">
+                            <span class="material-symbols-outlined">youtube</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        function playPreviewVideo() {
+            // In a real implementation, this would open a video modal or redirect to a preview
+            alert('Video preview coming soon! Sign up to access full courses.');
+        }
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Animate elements on scroll
+        const observeElements = document.querySelectorAll('.card, .feature-icon');
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        });
+
+        observeElements.forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'all 0.6s ease';
+            observer.observe(el);
+        });
+
+        // Navbar background on scroll
+        window.addEventListener('scroll', () => {
+            const navbar = document.querySelector('.navbar');
+            if (window.scrollY > 100) {
+                navbar.style.background = 'rgba(10, 10, 10, 0.95)';
+            } else {
+                navbar.style.background = 'rgba(10, 10, 10, 0.9)';
+            }
+        });
+    </script>
+</body>
+</html>
