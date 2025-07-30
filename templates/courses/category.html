@@ -137,31 +137,45 @@
                             <div class="col-md-1 text-center">
                                 <span class="video-number badge bg-primary">{{ loop.index }}</span>
                             </div>
-                            <div class="col-md-2">
+                            <div class="col-md-3">
                                 <div class="video-thumbnail position-relative">
                                     {% if video.thumbnail_url %}
                                     <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" 
-                                         class="img-fluid rounded" style="width: 100%; height: 60px; object-fit: cover;">
+                                         class="img-fluid rounded" style="width: 100%; height: 80px; object-fit: cover;">
                                     {% else %}
                                     <div class="bg-gradient-primary d-flex align-items-center justify-content-center rounded" 
-                                         style="height: 60px;">
+                                         style="height: 80px;">
                                         <span class="material-symbols-outlined text-white">play_circle</span>
                                     </div>
                                     {% endif %}
                                     
                                     <!-- Video Status -->
                                     {% if user_progress.get(video.id) and user_progress[video.id].completed %}
-                                    <span class="position-absolute top-0 end-0 badge bg-success" style="font-size: 10px;">
+                                    <span class="position-absolute top-0 end-0 m-1 badge bg-success" style="font-size: 10px;">
                                         <span class="material-symbols-outlined" style="font-size: 12px;">check</span>
                                     </span>
                                     {% elif user_progress.get(video.id) and user_progress[video.id].watched_duration > 0 %}
-                                    <span class="position-absolute top-0 end-0 badge bg-warning" style="font-size: 10px;">
+                                    <span class="position-absolute top-0 end-0 m-1 badge bg-warning" style="font-size: 10px;">
                                         <span class="material-symbols-outlined" style="font-size: 12px;">play_arrow</span>
                                     </span>
                                     {% endif %}
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-1 text-center">
+                                <!-- Play Button in Center -->
+                                {% if user_can_access_video(video) %}
+                                <a href="{{ url_for('watch_video', video_id=video.id) }}" 
+                                   class="btn btn-success btn-lg rounded-circle play-btn-center">
+                                    <span class="material-symbols-outlined" style="font-size: 24px;">play_arrow</span>
+                                </a>
+                                {% else %}
+                                <a href="{{ url_for('subscription') }}" 
+                                   class="btn btn-warning btn-lg rounded-circle play-btn-center">
+                                    <span class="material-symbols-outlined" style="font-size: 24px;">lock</span>
+                                </a>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-5">
                                 <h6 class="mb-1">{{ video.title }}</h6>
                                 {% if video.description %}
                                 <p class="text-muted small mb-2">{{ video.description[:120] }}{% if video.description|length > 120 %}...{% endif %}</p>
@@ -198,31 +212,17 @@
                                 {% if video.duration %}
                                 <small class="text-muted d-block">{{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}</small>
                                 {% endif %}
-                                <div class="mt-1">
+                                <div class="mt-1 mb-2">
                                     {% if video.is_free %}
                                     <span class="badge bg-success small">Free</span>
                                     {% else %}
                                     <span class="badge bg-warning small">Premium</span>
                                     {% endif %}
                                 </div>
-                            </div>
-                            <div class="col-md-1 text-center">
-                                <div class="btn-group-vertical btn-group-sm">
-                                    {% if user_can_access_video(video) %}
-                                    <a href="{{ url_for('watch_video', video_id=video.id) }}" 
-                                       class="btn btn-primary">
-                                        <span class="material-symbols-outlined" style="font-size: 16px;">play_arrow</span>
-                                    </a>
-                                    {% else %}
-                                    <a href="{{ url_for('subscription') }}" class="btn btn-warning">
-                                        <span class="material-symbols-outlined" style="font-size: 16px;">lock</span>
-                                    </a>
-                                    {% endif %}
-                                    <button class="btn btn-outline-secondary favorite-btn {% if video.id in user_favorites %}btn-outline-danger{% endif %}"
-                                            onclick="toggleFavorite({{ video.id }}, this)">
-                                        <span class="material-symbols-outlined" style="font-size: 16px;">favorite</span>
-                                    </button>
-                                </div>
+                                <button class="btn btn-outline-secondary btn-sm favorite-btn {% if video.id in user_favorites %}btn-outline-danger{% endif %}"
+                                        onclick="toggleFavorite({{ video.id }}, this)">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">favorite</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -365,12 +365,31 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
+.play-btn-center {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.play-btn-center:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
 .video-item {
     transition: all 0.2s ease;
 }
 
 .video-item:hover {
     background-color: rgba(255, 255, 255, 0.02);
+}
+
+.video-item:hover .play-btn-center {
+    transform: scale(1.15);
 }
 
 .video-number {
