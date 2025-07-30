@@ -470,7 +470,35 @@ def admin_categories():
         return redirect(url_for('courses'))
     
     categories = Category.query.order_by(Category.order_index).all()
-    return render_template('admin/categories.html', categories=categories)
+    
+    # Calculate stats that the template expects
+    total_videos = Video.query.count()
+    empty_categories = len([cat for cat in categories if len(cat.videos) == 0])
+    avg_videos_per_category = (total_videos / len(categories)) if categories else 0
+    
+    return render_template('admin/categories.html', 
+                         categories=categories,
+                         total_videos=total_videos,
+                         avg_videos_per_category=avg_videos_per_category,
+                         empty_categories=empty_categories)
+
+@app.route('/admin/category/edit/<int:category_id>', methods=['GET', 'POST'])
+@login_required
+def admin_edit_category(category_id):
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('courses'))
+    
+    category = Category.query.get_or_404(category_id)
+    form = CategoryForm(obj=category)
+    
+    if form.validate_on_submit():
+        form.populate_obj(category)
+        db.session.commit()
+        flash('Category updated successfully!', 'success')
+        return redirect(url_for('admin_categories'))
+    
+    return render_template('admin/category_form.html', form=form, category=category, title='Edit Category')
 
 @app.route('/admin/category/add', methods=['GET', 'POST'])
 @login_required
