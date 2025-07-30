@@ -61,11 +61,13 @@ class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False, index=True)
     description = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.String(500), nullable=True)  # ADD THIS LINE
     order_index = db.Column(db.Integer, default=0, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     
     # Relationships
     videos = db.relationship('Video', backref='category', lazy=True, cascade='all, delete-orphan')
+
 
 class Tag(db.Model):
     __tablename__ = 'tags'
@@ -168,6 +170,7 @@ class VideoFormWithTags(VideoForm):
 class CategoryForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
     description = TextAreaField('Description')
+    image_url = StringField('Category Image URL', validators=[Optional()])  # ADD THIS LINE
     order_index = IntegerField('Order', default=0)
 
 class TagForm(FlaskForm):
