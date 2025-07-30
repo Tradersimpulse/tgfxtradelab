@@ -5,252 +5,106 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
-        <!-- Favorites Header -->
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h1 class="text-gradient-primary mb-2">
-                            <span class="material-symbols-outlined me-2" style="font-size: 2rem;">favorite</span>
-                            My Favorite Videos
-                        </h1>
-                        <p class="text-muted mb-0">
-                            {% if videos %}
-                            You have {{ videos|length }} favorite video{{ 's' if videos|length != 1 else '' }}
-                            {% else %}
-                            Save your favorite videos for easy access
-                            {% endif %}
-                        </p>
-                    </div>
-                    
-                    {% if videos %}
-                    <div class="d-flex gap-2">
-                        <!-- Sort Options -->
-                        <select class="form-select" style="width: auto;" onchange="sortVideos(this.value)">
-                            <option value="recent">Recently Added</option>
-                            <option value="title">Title A-Z</option>
-                            <option value="category">Category</option>
-                            <option value="duration">Duration</option>
-                        </select>
-                        
-                        <!-- View Toggle -->
-                        <div class="btn-group">
-                            <button class="btn btn-outline-secondary active" onclick="toggleView('grid')" id="gridViewBtn">
-                                <span class="material-symbols-outlined">grid_view</span>
-                            </button>
-                            <button class="btn btn-outline-secondary" onclick="toggleView('list')" id="listViewBtn">
-                                <span class="material-symbols-outlined">list</span>
-                            </button>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item">
+                            <a href="{{ url_for('courses') }}" class="text-primary text-decoration-none">
+                                <span class="material-symbols-outlined me-1" style="font-size: 16px;">school</span>
+                                All Courses
+                            </a>
+                        </li>
+                        <li class="breadcrumb-item active text-muted">My Favorites</li>
+                    </ol>
+                </nav>
+                
+                <h1 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2" style="font-size: 2rem;">favorite</span>
+                    My Favorite Videos
+                </h1>
+                <p class="text-muted mb-0">Quick access to your bookmarked content</p>
+            </div>
+            
+            <div class="text-end">
+                <h3 class="text-gradient-primary mb-0">{{ videos|length }}</h3>
+                <small class="text-muted">Favorite{{ 's' if videos|length != 1 else '' }}</small>
             </div>
         </div>
     </div>
 </div>
 
-{% if videos %}
-<!-- Filter Tabs -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <ul class="nav nav-pills justify-content-center" id="categoryTabs">
-                    <li class="nav-item">
-                        <button class="nav-link active" onclick="filterByCategory('all')" id="tab-all">
-                            All Videos ({{ videos|length }})
-                        </button>
-                    </li>
-                    {% set categories = videos|groupby('category.name') %}
-                    {% for category_name, category_videos in categories %}
-                    <li class="nav-item">
-                        <button class="nav-link" onclick="filterByCategory('{{ category_name|lower|replace(' ', '-') }}')" id="tab-{{ category_name|lower|replace(' ', '-') }}">
-                            {{ category_name }} ({{ category_videos|list|length }})
-                        </button>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Videos Display -->
 <div class="row">
     <div class="col-12">
-        <!-- Grid View (Default) -->
-        <div id="gridView">
-            <div class="row g-4" id="videosGrid">
-                {% for video in videos %}
-                <div class="col-lg-4 col-md-6 mb-4 video-item" 
-                     data-category="{{ video.category.name|lower|replace(' ', '-') }}"
-                     data-title="{{ video.title|lower }}"
-                     data-duration="{{ video.duration or 0 }}"
-                     data-created="{{ video.created_at.timestamp() }}">
-                    <div class="video-card">
-                        <div class="position-relative">
-                            {% if video.thumbnail_url %}
-                            <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" class="video-thumbnail">
-                            {% else %}
-                            <div class="video-thumbnail bg-gradient-primary d-flex align-items-center justify-content-center">
-                                <span class="material-symbols-outlined text-white" style="font-size: 3rem;">play_circle</span>
-                            </div>
-                            {% endif %}
-                            
-                            <!-- Video Duration -->
-                            {% if video.duration %}
-                            <span class="video-duration">
-                                {{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}
-                            </span>
-                            {% endif %}
-                            
-                            <!-- Premium Badge -->
-                            {% if not video.is_free %}
-                            <span class="position-absolute top-0 start-0 m-2">
-                                <span class="badge bg-warning">
-                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">workspace_premium</span>
-                                    Premium
-                                </span>
-                            </span>
-                            {% endif %}
-                            
-                            <!-- Completed Badge -->
-                            {% if video.id in user_progress and user_progress[video.id].completed %}
-                            <span class="position-absolute top-0 end-0 m-2">
-                                <span class="badge bg-success">
-                                    <span class="material-symbols-outlined" style="font-size: 12px;">check_circle</span>
-                                </span>
-                            </span>
-                            {% endif %}
-                            
-                            <!-- Favorite Heart -->
-                            <button class="favorite-heart" onclick="toggleFavorite({{ video.id }})">
-                                <span class="material-symbols-outlined">favorite</span>
-                            </button>
-                            
-                            <!-- Video Overlay -->
-                            <div class="video-overlay">
-                                {% if video.is_free or current_user.has_subscription %}
-                                <a href="{{ url_for('watch_video', video_id=video.id) }}" class="play-button">
-                                    <span class="material-symbols-outlined">play_arrow</span>
-                                </a>
-                                {% else %}
-                                <button class="play-button" onclick="showSubscriptionModal()">
-                                    <span class="material-symbols-outlined">lock</span>
-                                </button>
-                                {% endif %}
-                            </div>
-                            
-                            <!-- Progress Bar -->
-                            {% if video.id in user_progress %}
-                            {% set progress = user_progress[video.id] %}
-                            {% if video.duration and progress.watched_duration > 0 %}
-                            <div class="position-absolute bottom-0 start-0 end-0">
-                                <div class="progress" style="height: 4px; border-radius: 0;">
-                                    <div class="progress-bar" 
-                                         style="width: {{ (progress.watched_duration / video.duration * 100)|round(1) }}%"></div>
-                                </div>
-                            </div>
-                            {% endif %}
-                            {% endif %}
-                        </div>
-                        
-                        <!-- Video Info -->
-                        <div class="p-3">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h6 class="text-white mb-0">{{ video.title }}</h6>
-                            </div>
-                            
-                            <p class="text-muted small mb-2">
-                                <span class="material-symbols-outlined me-1" style="font-size: 14px;">category</span>
-                                {{ video.category.name }}
-                            </p>
-                            
-                            {% if video.description %}
-                            <p class="text-muted small mb-3">{{ video.description[:80] }}{% if video.description|length > 80 %}...{% endif %}</p>
-                            {% endif %}
-                            
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="d-flex gap-2">
-                                    {% if video.files %}
-                                    <div class="dropdown">
-                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
-                                                data-bs-toggle="dropdown">
-                                            <span class="material-symbols-outlined" style="font-size: 16px;">download</span>
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            {% for file in video.files %}
-                                            <li>
-                                                <a class="dropdown-item" href="{{ url_for('download_file', file_id=file.id) }}">
-                                                    <span class="material-symbols-outlined me-2" style="font-size: 16px;">description</span>
-                                                    {{ file.filename }}
-                                                </a>
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                    </div>
-                                    {% endif %}
-                                    
-                                    <a href="{{ url_for('category_videos', category_id=video.category.id) }}" 
-                                       class="btn btn-sm btn-outline-primary">
-                                        <span class="material-symbols-outlined" style="font-size: 16px;">list</span>
-                                    </a>
-                                </div>
-                                
-                                <small class="text-muted">
-                                    {% if video.id in user_progress %}
-                                    {% if user_progress[video.id].completed %}
-                                    Completed
-                                    {% else %}
-                                    {{ ((user_progress[video.id].watched_duration / video.duration * 100)|round(0))|int if video.duration else 0 }}% watched
-                                    {% endif %}
-                                    {% else %}
-                                    Not started
-                                    {% endif %}
-                                </small>
-                            </div>
-                        </div>
+        {% if videos %}
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">playlist_play</span>
+                    Your Favorite Videos
+                </h5>
+                <div class="d-flex gap-2">
+                    <!-- View Toggle -->
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary active" onclick="toggleView('list')" id="listViewBtn">
+                            <span class="material-symbols-outlined">list</span>
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="toggleView('grid')" id="gridViewBtn">
+                            <span class="material-symbols-outlined">grid_view</span>
+                        </button>
                     </div>
+                    
+                    <!-- Sort Options -->
+                    <select class="form-select form-select-sm" style="width: auto;" onchange="sortVideos(this.value)">
+                        <option value="newest">Recently Added</option>
+                        <option value="title">Title A-Z</option>
+                        <option value="category">By Category</option>
+                        <option value="duration">Duration</option>
+                    </select>
                 </div>
-                {% endfor %}
             </div>
-        </div>
-        
-        <!-- List View (Hidden by default) -->
-        <div id="listView" style="display: none;">
-            <div class="card">
-                <div class="card-body p-0">
+            <div class="card-body p-0">
+                <!-- List View -->
+                <div id="listView">
                     {% for video in videos %}
-                    <div class="video-list-item border-bottom p-4 video-item"
-                         data-category="{{ video.category.name|lower|replace(' ', '-') }}"
-                         data-title="{{ video.title|lower }}"
-                         data-duration="{{ video.duration or 0 }}"
-                         data-created="{{ video.created_at.timestamp() }}">
-                        <div class="d-flex align-items-center">
+                    <div class="video-item border-bottom" 
+                         data-title="{{ video.title|lower }}" 
+                         data-category="{{ video.category.name|lower }}"
+                         data-duration="{{ video.duration or 0 }}">
+                        <div class="d-flex align-items-center p-4">
                             <!-- Thumbnail -->
                             <div class="me-3 position-relative">
                                 {% if video.thumbnail_url %}
                                 <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" 
-                                     class="video-thumbnail-small">
+                                     class="video-thumbnail">
                                 {% else %}
-                                <div class="video-thumbnail-small bg-gradient-primary d-flex align-items-center justify-content-center">
+                                <div class="video-thumbnail bg-gradient-primary d-flex align-items-center justify-content-center">
                                     <span class="material-symbols-outlined text-white">play_circle</span>
                                 </div>
                                 {% endif %}
                                 
                                 <!-- Play Overlay -->
-                                <div class="video-play-overlay-small">
+                                <div class="video-play-overlay">
                                     {% if video.is_free or current_user.has_subscription %}
-                                    <a href="{{ url_for('watch_video', video_id=video.id) }}" class="play-btn-small">
+                                    <a href="{{ url_for('watch_video', video_id=video.id) }}" class="play-btn">
                                         <span class="material-symbols-outlined">play_arrow</span>
                                     </a>
                                     {% else %}
-                                    <button class="play-btn-small" onclick="showSubscriptionModal()">
+                                    <button class="play-btn" onclick="showSubscriptionModal()">
                                         <span class="material-symbols-outlined">lock</span>
                                     </button>
                                     {% endif %}
                                 </div>
+                                
+                                <!-- Progress Indicator -->
+                                {% if video.id in user_progress %}
+                                {% set progress = user_progress[video.id] %}
+                                {% if video.duration and progress.watched_duration > 0 %}
+                                <div class="video-progress">
+                                    <div class="progress-bar" style="width: {{ (progress.watched_duration / video.duration * 100)|round(1) }}%"></div>
+                                </div>
+                                {% endif %}
+                                {% endif %}
                             </div>
                             
                             <!-- Video Info -->
@@ -258,34 +112,88 @@
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
                                         <h6 class="text-white mb-1">{{ video.title }}</h6>
-                                        <p class="text-muted small mb-1">
-                                            <span class="material-symbols-outlined me-1" style="font-size: 14px;">category</span>
-                                            {{ video.category.name }}
-                                            {% if video.duration %}
-                                            <span class="ms-2">
-                                                <span class="material-symbols-outlined me-1" style="font-size: 14px;">schedule</span>
-                                                {{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}
-                                            </span>
-                                            {% endif %}
-                                        </p>
                                         {% if video.description %}
-                                        <p class="text-muted small mb-0">{{ video.description[:120] }}{% if video.description|length > 120 %}...{% endif %}</p>
+                                        <p class="text-muted small mb-2">{{ video.description[:120] }}{% if video.description|length > 120 %}...{% endif %}</p>
                                         {% endif %}
                                     </div>
                                     
-                                    <!-- Actions -->
+                                    <!-- Status Badges -->
                                     <div class="d-flex gap-2 align-items-center">
+                                        <span class="badge bg-info">{{ video.category.name }}</span>
+                                        
                                         {% if not video.is_free %}
-                                        <span class="badge bg-warning">Premium</span>
+                                        <span class="badge bg-warning">
+                                            <span class="material-symbols-outlined me-1" style="font-size: 12px;">workspace_premium</span>
+                                            Premium
+                                        </span>
                                         {% endif %}
                                         
                                         {% if video.id in user_progress and user_progress[video.id].completed %}
-                                        <span class="badge bg-success">Completed</span>
+                                        <span class="badge bg-success">
+                                            <span class="material-symbols-outlined me-1" style="font-size: 12px;">check_circle</span>
+                                            Completed
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex gap-3 text-muted small">
+                                        {% if video.duration %}
+                                        <span>
+                                            <span class="material-symbols-outlined me-1" style="font-size: 14px;">schedule</span>
+                                            {{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}
+                                        </span>
                                         {% endif %}
                                         
-                                        <button class="btn btn-sm btn-outline-danger" onclick="toggleFavorite({{ video.id }})">
+                                        {% if video.files %}
+                                        <span>
+                                            <span class="material-symbols-outlined me-1" style="font-size: 14px;">attachment</span>
+                                            {{ video.files|length }} files
+                                        </span>
+                                        {% endif %}
+                                        
+                                        {% if video.id in user_progress %}
+                                        <span>
+                                            <span class="material-symbols-outlined me-1" style="font-size: 14px;">visibility</span>
+                                            Last watched {{ user_progress[video.id].last_watched.strftime('%m/%d') }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Action Buttons -->
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-sm btn-danger" 
+                                                onclick="removeFavorite({{ video.id }})" 
+                                                id="fav-btn-{{ video.id }}"
+                                                title="Remove from favorites">
                                             <span class="material-symbols-outlined" style="font-size: 16px;">favorite</span>
                                         </button>
+                                        
+                                        <a href="{{ url_for('category_videos', category_id=video.category.id) }}" 
+                                           class="btn btn-sm btn-outline-secondary"
+                                           title="View category">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">category</span>
+                                        </a>
+                                        
+                                        {% if video.files %}
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" 
+                                                    data-bs-toggle="dropdown">
+                                                <span class="material-symbols-outlined" style="font-size: 16px;">download</span>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                {% for file in video.files %}
+                                                <li>
+                                                    <a class="dropdown-item" href="{{ url_for('download_file', file_id=file.id) }}">
+                                                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">description</span>
+                                                        {{ file.filename }}
+                                                    </a>
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
@@ -293,57 +201,106 @@
                     </div>
                     {% endfor %}
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% else %}
-<!-- Empty State -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <span class="material-symbols-outlined text-muted mb-4" style="font-size: 5rem;">favorite_border</span>
-                <h3 class="text-gradient-primary mb-3">No Favorites Yet</h3>
-                <p class="text-muted mb-4 lead">
-                    Start exploring our courses and save your favorite videos for easy access later.
-                </p>
                 
-                <div class="row justify-content-center mb-4">
-                    <div class="col-md-8">
-                        <div class="d-flex justify-content-center gap-4 text-muted">
-                            <div class="text-center">
-                                <span class="material-symbols-outlined mb-2 d-block" style="font-size: 2rem;">play_circle</span>
-                                <small>Watch videos</small>
-                            </div>
-                            <div class="text-center">
-                                <span class="material-symbols-outlined mb-2 d-block" style="font-size: 2rem;">favorite</span>
-                                <small>Click the heart</small>
-                            </div>
-                            <div class="text-center">
-                                <span class="material-symbols-outlined mb-2 d-block" style="font-size: 2rem;">bookmark</span>
-                                <small>Access here</small>
+                <!-- Grid View (Hidden by default) -->
+                <div id="gridView" style="display: none;">
+                    <div class="row g-4 p-4">
+                        {% for video in videos %}
+                        <div class="col-lg-4 col-md-6">
+                            <div class="video-card">
+                                <div class="position-relative">
+                                    {% if video.thumbnail_url %}
+                                    <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" 
+                                         class="video-thumbnail-grid">
+                                    {% else %}
+                                    <div class="video-thumbnail-grid bg-gradient-primary d-flex align-items-center justify-content-center">
+                                        <span class="material-symbols-outlined text-white" style="font-size: 2rem;">play_circle</span>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <!-- Video Duration -->
+                                    {% if video.duration %}
+                                    <span class="video-duration">
+                                        {{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}
+                                    </span>
+                                    {% endif %}
+                                    
+                                    <!-- Status Badges -->
+                                    <div class="position-absolute top-0 start-0 m-2">
+                                        {% if not video.is_free %}
+                                        <span class="badge bg-warning">Premium</span>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="position-absolute top-0 end-0 m-2">
+                                        {% if video.id in user_progress and user_progress[video.id].completed %}
+                                        <span class="badge bg-success">
+                                            <span class="material-symbols-outlined" style="font-size: 12px;">check_circle</span>
+                                        </span>
+                                        {% endif %}
+                                        <button class="btn btn-sm btn-danger ms-1" 
+                                                onclick="removeFavorite({{ video.id }})"
+                                                title="Remove from favorites">
+                                            <span class="material-symbols-outlined" style="font-size: 12px;">favorite</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Play Overlay -->
+                                    <div class="video-overlay">
+                                        {% if video.is_free or current_user.has_subscription %}
+                                        <a href="{{ url_for('watch_video', video_id=video.id) }}" class="play-button">
+                                            <span class="material-symbols-outlined">play_arrow</span>
+                                        </a>
+                                        {% else %}
+                                        <button class="play-button" onclick="showSubscriptionModal()">
+                                            <span class="material-symbols-outlined">lock</span>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Progress Bar -->
+                                    {% if video.id in user_progress %}
+                                    {% set progress = user_progress[video.id] %}
+                                    {% if video.duration and progress.watched_duration > 0 %}
+                                    <div class="position-absolute bottom-0 start-0 end-0">
+                                        <div class="progress" style="height: 4px; border-radius: 0;">
+                                            <div class="progress-bar" 
+                                                 style="width: {{ (progress.watched_duration / video.duration * 100)|round(1) }}%"></div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="p-3">
+                                    <h6 class="text-white mb-2">{{ video.title }}</h6>
+                                    <p class="text-muted small mb-2">{{ video.category.name }}</p>
+                                    {% if video.description %}
+                                    <p class="text-muted small">{{ video.description[:80] }}{% if video.description|length > 80 %}...{% endif %}</p>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
+                        {% endfor %}
                     </div>
-                </div>
-                
-                <div class="d-flex gap-3 justify-content-center flex-wrap">
-                    <a href="{{ url_for('courses') }}" class="btn btn-primary">
-                        <span class="material-symbols-outlined me-2">explore</span>
-                        Browse All Courses
-                    </a>
-                    <a href="{{ url_for('subscription') }}" class="btn btn-outline-primary">
-                        <span class="material-symbols-outlined me-2">workspace_premium</span>
-                        Explore Premium Content
-                    </a>
                 </div>
             </div>
         </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">favorite_border</span>
+                <h3 class="text-gradient-primary mb-3">No Favorites Yet</h3>
+                <p class="text-muted mb-4">Start adding videos to your favorites by clicking the heart icon on any video.</p>
+                <a href="{{ url_for('courses') }}" class="btn btn-primary">
+                    <span class="material-symbols-outlined me-2">explore</span>
+                    Browse Courses
+                </a>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
-{% endif %}
 
 <!-- Subscription Modal -->
 <div class="modal fade" id="subscriptionModal" tabindex="-1">
@@ -377,80 +334,52 @@
 
 {% block scripts %}
 <script>
-let currentView = 'grid';
-let currentFilter = 'all';
+let currentView = 'list';
 
 function toggleView(view) {
     currentView = view;
     
-    const gridView = document.getElementById('gridView');
     const listView = document.getElementById('listView');
-    const gridBtn = document.getElementById('gridViewBtn');
+    const gridView = document.getElementById('gridView');
     const listBtn = document.getElementById('listViewBtn');
+    const gridBtn = document.getElementById('gridViewBtn');
     
-    if (view === 'list') {
-        gridView.style.display = 'none';
-        listView.style.display = 'block';
-        gridBtn.classList.remove('active');
-        listBtn.classList.add('active');
-    } else {
-        gridView.style.display = 'block';
+    if (view === 'grid') {
         listView.style.display = 'none';
-        gridBtn.classList.add('active');
+        gridView.style.display = 'block';
         listBtn.classList.remove('active');
+        gridBtn.classList.add('active');
+    } else {
+        listView.style.display = 'block';
+        gridView.style.display = 'none';
+        listBtn.classList.add('active');
+        gridBtn.classList.remove('active');
     }
 }
 
 function sortVideos(sortBy) {
     const videoItems = Array.from(document.querySelectorAll('.video-item'));
+    const container = videoItems[0].parentNode;
     
     videoItems.sort((a, b) => {
         switch(sortBy) {
-            case 'recent':
-                return parseFloat(b.dataset.created) - parseFloat(a.dataset.created);
             case 'title':
                 return a.dataset.title.localeCompare(b.dataset.title);
             case 'category':
                 return a.dataset.category.localeCompare(b.dataset.category);
             case 'duration':
                 return parseInt(b.dataset.duration) - parseInt(a.dataset.duration);
+            case 'newest':
             default:
-                return 0;
+                return 0; // Keep original order for newest
         }
     });
     
-    // Re-append sorted items to both views
-    const gridContainer = document.getElementById('videosGrid');
-    const listContainer = document.querySelector('#listView .card-body');
-    
-    videoItems.forEach(item => {
-        if (item.classList.contains('video-list-item')) {
-            listContainer.appendChild(item);
-        } else {
-            gridContainer.appendChild(item);
-        }
-    });
+    // Re-append sorted items
+    videoItems.forEach(item => container.appendChild(item));
 }
 
-function filterByCategory(category) {
-    currentFilter = category;
-    
-    // Update active tab
-    document.querySelectorAll('.nav-link').forEach(tab => tab.classList.remove('active'));
-    document.getElementById(`tab-${category}`).classList.add('active');
-    
-    // Show/hide videos
-    const videoItems = document.querySelectorAll('.video-item');
-    videoItems.forEach(item => {
-        if (category === 'all' || item.dataset.category === category) {
-            item.style.display = '';
-        } else {
-            item.style.display = 'none';
-        }
-    });
-}
-
-async function toggleFavorite(videoId) {
+async function removeFavorite(videoId) {
     try {
         const response = await fetch('/api/video/favorite', {
             method: 'POST',
@@ -462,33 +391,32 @@ async function toggleFavorite(videoId) {
         
         const data = await response.json();
         
-        if (data.success) {
-            if (!data.is_favorited) {
-                // Video was unfavorited, remove it from the page
-                const videoItems = document.querySelectorAll(`[data-video-id="${videoId}"], .video-item`);
-                videoItems.forEach(item => {
-                    if (item.innerHTML.includes(`toggleFavorite(${videoId})`)) {
-                        item.style.transition = 'all 0.3s ease';
-                        item.style.opacity = '0';
-                        item.style.transform = 'translateY(-20px)';
+        if (data.success && !data.is_favorited) {
+            showToast('Removed from favorites', 'info');
+            
+            // Remove the video item from the page
+            setTimeout(() => {
+                const videoItem = document.querySelector(`[data-video-id="${videoId}"]`) || 
+                                 document.querySelector(`#fav-btn-${videoId}`).closest('.video-item, .col-lg-4, .col-md-6');
+                if (videoItem) {
+                    videoItem.style.transition = 'all 0.5s ease';
+                    videoItem.style.opacity = '0';
+                    videoItem.style.transform = 'translateX(-100%)';
+                    
+                    setTimeout(() => {
+                        videoItem.remove();
                         
-                        setTimeout(() => {
-                            item.remove();
-                            
-                            // Check if no videos left
-                            const remainingVideos = document.querySelectorAll('.video-item:not([style*="display: none"])');
-                            if (remainingVideos.length === 0) {
-                                location.reload(); // Reload to show empty state
-                            }
-                        }, 300);
-                    }
-                });
-                
-                showToast('Removed from favorites', 'info');
-            }
+                        // Check if no favorites left
+                        const remainingItems = document.querySelectorAll('.video-item, .video-card').length;
+                        if (remainingItems === 0) {
+                            setTimeout(() => location.reload(), 500);
+                        }
+                    }, 500);
+                }
+            }, 100);
         }
     } catch (error) {
-        console.error('Error toggling favorite:', error);
+        console.error('Error removing favorite:', error);
         showToast('Error updating favorite', 'error');
     }
 }
@@ -501,7 +429,7 @@ function showSubscriptionModal() {
 // Add smooth animations
 document.addEventListener('DOMContentLoaded', function() {
     // Animate video items
-    const videoItems = document.querySelectorAll('.video-item');
+    const videoItems = document.querySelectorAll('.video-item, .video-card');
     videoItems.forEach((item, index) => {
         item.style.opacity = '0';
         item.style.transform = 'translateY(20px)';
@@ -516,6 +444,83 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
+.video-thumbnail {
+    width: 120px;
+    height: 68px;
+    object-fit: cover;
+    border-radius: 8px;
+    position: relative;
+}
+
+.video-thumbnail-grid {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 12px 12px 0 0;
+}
+
+.video-play-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.3s ease;
+    border-radius: 8px;
+}
+
+.video-item:hover .video-play-overlay {
+    opacity: 1;
+}
+
+.play-btn {
+    background: var(--gradient-primary);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.play-btn:hover {
+    transform: scale(1.1);
+    color: white;
+}
+
+.video-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 0 0 8px 8px;
+}
+
+.video-progress .progress-bar {
+    height: 100%;
+    background: var(--gradient-primary);
+    border-radius: 0 0 8px 8px;
+}
+
+.video-item {
+    transition: all 0.3s ease;
+}
+
+.video-item:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
 .video-card {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -531,19 +536,6 @@ document.addEventListener('DOMContentLoaded', function() {
     border-color: rgba(16, 185, 129, 0.3);
 }
 
-.video-thumbnail {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
-}
-
-.video-thumbnail-small {
-    width: 80px;
-    height: 45px;
-    object-fit: cover;
-    border-radius: 8px;
-}
-
 .video-duration {
     position: absolute;
     bottom: 8px;
@@ -554,28 +546,6 @@ document.addEventListener('DOMContentLoaded', function() {
     border-radius: 6px;
     font-size: 0.75rem;
     font-weight: 600;
-}
-
-.favorite-heart {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: rgba(0, 0, 0, 0.7);
-    border: none;
-    border-radius: 50%;
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #EF4444;
-    transition: all 0.2s ease;
-}
-
-.favorite-heart:hover {
-    background: rgba(0, 0, 0, 0.9);
-    transform: scale(1.1);
-    color: #EF4444;
 }
 
 .video-overlay {
@@ -608,81 +578,22 @@ document.addEventListener('DOMContentLoaded', function() {
     color: white;
     font-size: 1.5rem;
     transition: all 0.2s ease;
-    text-decoration: none;
 }
 
 .play-button:hover {
     transform: scale(1.1);
     box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
-    color: white;
 }
 
-.video-play-overlay-small {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: all 0.3s ease;
-    border-radius: 8px;
-}
-
-.video-list-item:hover .video-play-overlay-small {
-    opacity: 1;
-}
-
-.play-btn-small {
-    background: var(--gradient-primary);
-    border: none;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    text-decoration: none;
-    transition: all 0.2s ease;
-}
-
-.play-btn-small:hover {
-    transform: scale(1.1);
-    color: white;
-}
-
-.video-list-item {
-    transition: all 0.3s ease;
-}
-
-.video-list-item:hover {
-    background: rgba(255, 255, 255, 0.02);
-}
-
-.nav-pills .nav-link {
-    border-radius: 50px;
-    padding: 0.5rem 1rem;
-    margin: 0 0.25rem;
-    transition: all 0.2s ease;
+.breadcrumb {
     background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
+    padding: 0;
+    margin-bottom: 1rem;
 }
 
-.nav-pills .nav-link:hover {
-    background: rgba(16, 185, 129, 0.1);
-    border-color: rgba(16, 185, 129, 0.3);
-    color: var(--text-primary);
-}
-
-.nav-pills .nav-link.active {
-    background: var(--gradient-primary);
-    border-color: var(--primary-color);
-    color: white;
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "›";
+    color: var(--text-muted);
 }
 </style>
 {% endblock %}
