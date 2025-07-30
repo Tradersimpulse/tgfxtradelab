@@ -788,6 +788,10 @@ def api_delete_category(category_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@app.context_processor
+def utility_processor():
+    return dict(user_can_access_video=user_can_access_video)
+
 # Register API blueprint (if api.py exists)
 try:
     from api_routes import api
