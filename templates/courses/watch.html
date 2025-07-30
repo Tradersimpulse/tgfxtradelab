@@ -2,357 +2,288 @@
 
 {% block title %}{{ video.title }} - TGFX Trade Lab{% endblock %}
 
-{% block head %}
-<style>
-.video-player-container {
-    position: relative;
-    background: #000;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-.video-player {
-    width: 100%;
-    height: auto;
-    min-height: 400px;
-}
-
-.video-controls {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-    padding: 1rem;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.video-player-container:hover .video-controls {
-    opacity: 1;
-}
-
-.progress-slider {
-    width: 100%;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
-    cursor: pointer;
-    margin-bottom: 1rem;
-}
-
-.progress-fill {
-    height: 100%;
-    background: var(--gradient-primary);
-    border-radius: 3px;
-    transition: width 0.1s ease;
-}
-
-.video-info-section {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    margin-top: 1rem;
-}
-
-.notes-section {
-    background: var(--bg-tertiary);
-    border-radius: 12px;
-    padding: 1rem;
-    margin-top: 1rem;
-}
-
-.notes-textarea {
-    background: transparent;
-    border: none;
-    color: var(--text-primary);
-    resize: vertical;
-    min-height: 120px;
-}
-
-.notes-textarea:focus {
-    outline: none;
-    box-shadow: none;
-}
-
-.chapter-marker {
-    position: absolute;
-    top: 0;
-    width: 2px;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.6);
-    cursor: pointer;
-}
-
-.chapter-tooltip {
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 0.5rem;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity 0.2s;
-    pointer-events: none;
-}
-
-.chapter-marker:hover .chapter-tooltip {
-    opacity: 1;
-}
-</style>
-{% endblock %}
-
 {% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('courses') }}" class="text-primary text-decoration-none">
+                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">school</span>
+                        All Courses
+                    </a>
+                </li>
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('category_videos', category_id=video.category.id) }}" class="text-primary text-decoration-none">
+                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">category</span>
+                        {{ video.category.name }}
+                    </a>
+                </li>
+                <li class="breadcrumb-item active text-muted">{{ video.title }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
 <div class="row">
+    <!-- Video Player Column -->
     <div class="col-lg-8">
         <!-- Video Player -->
-        <div class="video-player-container">
-            <video id="videoPlayer" class="video-player" controls>
-                <source src="{{ video.s3_url }}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-            
-            <!-- Custom Progress Bar with Chapters -->
-            <div class="video-controls">
-                <div class="progress-slider" id="progressSlider">
-                    <div class="progress-fill" id="progressFill"></div>
-                    <!-- Chapter markers would go here if implemented -->
-                </div>
-                
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center gap-3">
-                        <button class="btn btn-sm btn-outline-light" id="playPauseBtn">
-                            <span class="material-symbols-outlined">play_arrow</span>
-                        </button>
-                        <span class="text-white small" id="timeDisplay">00:00 / 00:00</span>
-                    </div>
-                    
-                    <div class="d-flex align-items-center gap-2">
-                        <button class="btn btn-sm btn-outline-light" onclick="changePlaybackSpeed()">
-                            <span id="speedDisplay">1x</span>
-                        </button>
-                        <button class="btn btn-sm btn-outline-light" onclick="toggleFullscreen()">
-                            <span class="material-symbols-outlined">fullscreen</span>
-                        </button>
-                    </div>
+        <div class="card mb-4">
+            <div class="card-body p-0">
+                <div class="video-container">
+                    <video 
+                        id="videoPlayer" 
+                        controls 
+                        class="w-100"
+                        style="max-height: 500px;"
+                        poster="{{ video.thumbnail_url or '' }}"
+                        preload="metadata">
+                        <source src="{{ video.s3_url }}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
                 </div>
             </div>
         </div>
         
         <!-- Video Info -->
-        <div class="video-info-section">
-            <div class="p-4">
+        <div class="card mb-4">
+            <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
+                    <div class="flex-grow-1">
                         <h2 class="text-gradient-primary mb-2">{{ video.title }}</h2>
-                        <p class="text-muted mb-0">
-                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">category</span>
-                            {{ video.category.name }}
+                        <div class="d-flex gap-3 align-items-center mb-3">
+                            <span class="badge bg-info">{{ video.category.name }}</span>
+                            {% if video.is_free %}
+                            <span class="badge bg-success">
+                                <span class="material-symbols-outlined me-1" style="font-size: 12px;">lock_open</span>
+                                Free
+                            </span>
+                            {% else %}
+                            <span class="badge bg-warning">
+                                <span class="material-symbols-outlined me-1" style="font-size: 12px;">workspace_premium</span>
+                                Premium
+                            </span>
+                            {% endif %}
+                            
                             {% if video.duration %}
-                            <span class="ms-3">
+                            <span class="text-muted">
                                 <span class="material-symbols-outlined me-1" style="font-size: 16px;">schedule</span>
                                 {{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}
                             </span>
                             {% endif %}
-                        </p>
+                        </div>
+                        
+                        {% if video.description %}
+                        <p class="text-muted mb-0">{{ video.description|safe }}</p>
+                        {% endif %}
                     </div>
                     
                     <div class="d-flex gap-2">
                         <!-- Favorite Button -->
                         <button class="btn btn-outline-danger" 
-                                onclick="toggleFavorite({{ video.id }})"
-                                id="favorite-btn">
-                            <span class="material-symbols-outlined">
+                                onclick="toggleFavorite()"
+                                id="favoriteBtn">
+                            <span class="material-symbols-outlined" id="favoriteIcon">
                                 {% if is_favorited %}favorite{% else %}favorite_border{% endif %}
                             </span>
                         </button>
                         
                         <!-- Share Button -->
-                        <button class="btn btn-outline-primary" onclick="shareVideo()">
+                        <button class="btn btn-outline-secondary" onclick="shareVideo()">
                             <span class="material-symbols-outlined">share</span>
                         </button>
                     </div>
                 </div>
                 
-                <!-- Progress Indicator -->
-                {% if progress %}
+                <!-- Progress Bar -->
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="text-muted small">Your Progress</span>
-                        {% if progress.completed %}
-                        <span class="badge bg-success">
-                            <span class="material-symbols-outlined me-1" style="font-size: 14px;">check_circle</span>
+                        <small class="text-muted">Your Progress</small>
+                        <small class="text-muted" id="progressText">
+                            {% if progress.completed %}
                             Completed
-                        </span>
-                        {% else %}
-                        <span class="text-muted small">
-                            {% if video.duration and progress.watched_duration > 0 %}
-                            {{ "%.0f"|format(progress.watched_duration / video.duration * 100) }}% watched
+                            {% elif progress.watched_duration > 0 %}
+                            {{ (progress.watched_duration // 60)|int }}:{{ "%02d"|format(progress.watched_duration % 60) }} watched
                             {% else %}
                             Not started
                             {% endif %}
-                        </span>
-                        {% endif %}
+                        </small>
                     </div>
-                    {% if video.duration and progress.watched_duration > 0 %}
-                    <div class="progress" style="height: 6px;">
+                    <div class="progress" style="height: 8px;">
                         <div class="progress-bar" 
-                             style="width: {{ (progress.watched_duration / video.duration * 100)|round(1) }}%"></div>
+                             id="progressBar"
+                             style="width: {% if video.duration and progress.watched_duration %}{{ (progress.watched_duration / video.duration * 100)|round(1) }}{% else %}0{% endif %}%">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Downloadable Files -->
+        {% if video.files %}
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">attachment</span>
+                    Course Materials
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for file in video.files %}
+                    <div class="col-md-6 mb-3">
+                        <div class="d-flex align-items-center p-3 border rounded">
+                            <span class="material-symbols-outlined me-3 text-primary">description</span>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1 text-white">{{ file.filename }}</h6>
+                                <small class="text-muted">{{ file.file_type|upper if file.file_type }}</small>
+                            </div>
+                            <a href="{{ url_for('download_file', file_id=file.id) }}" 
+                               class="btn btn-sm btn-primary">
+                                <span class="material-symbols-outlined">download</span>
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Next/Previous Videos -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">playlist_play</span>
+                    Course Navigation
+                </h6>
+            </div>
+            <div class="card-body">
+                {% set category_videos = video.category.videos|sort(attribute='order_index') %}
+                {% set current_index = category_videos.index(video) %}
+                
+                <!-- Previous Video -->
+                {% if current_index > 0 %}
+                {% set prev_video = category_videos[current_index - 1] %}
+                <div class="mb-3">
+                    <small class="text-muted">Previous</small>
+                    <div class="d-flex align-items-center">
+                        <div class="me-2">
+                            {% if prev_video.thumbnail_url %}
+                            <img src="{{ prev_video.thumbnail_url }}" alt="{{ prev_video.title }}" 
+                                 class="img-thumbnail" style="width: 40px; height: 22px; object-fit: cover;">
+                            {% else %}
+                            <div class="bg-gradient-primary d-flex align-items-center justify-content-center" 
+                                 style="width: 40px; height: 22px; border-radius: 4px;">
+                                <span class="material-symbols-outlined text-white" style="font-size: 12px;">play_circle</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="flex-grow-1">
+                            <a href="{{ url_for('watch_video', video_id=prev_video.id) }}" 
+                               class="text-primary text-decoration-none">
+                                <small>{{ prev_video.title }}</small>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Next Video -->
+                {% if current_index < category_videos|length - 1 %}
+                {% set next_video = category_videos[current_index + 1] %}
+                <div>
+                    <small class="text-muted">Up Next</small>
+                    <div class="d-flex align-items-center">
+                        <div class="me-2">
+                            {% if next_video.thumbnail_url %}
+                            <img src="{{ next_video.thumbnail_url }}" alt="{{ next_video.title }}" 
+                                 class="img-thumbnail" style="width: 40px; height: 22px; object-fit: cover;">
+                            {% else %}
+                            <div class="bg-gradient-primary d-flex align-items-center justify-content-center" 
+                                 style="width: 40px; height: 22px; border-radius: 4px;">
+                                <span class="material-symbols-outlined text-white" style="font-size: 12px;">play_circle</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="flex-grow-1">
+                            {% if next_video.is_free or current_user.has_subscription %}
+                            <a href="{{ url_for('watch_video', video_id=next_video.id) }}" 
+                               class="text-primary text-decoration-none">
+                                <small>{{ next_video.title }}</small>
+                            </a>
+                            {% else %}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">{{ next_video.title }}</small>
+                                <span class="material-symbols-outlined text-warning" style="font-size: 16px;">lock</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if next_video.is_free or current_user.has_subscription %}
+                    <div class="mt-2">
+                        <a href="{{ url_for('watch_video', video_id=next_video.id) }}" 
+                           class="btn btn-primary btn-sm w-100">
+                            <span class="material-symbols-outlined me-2">play_arrow</span>
+                            Continue to Next Video
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="mt-2">
+                        <a href="{{ url_for('subscription') }}" 
+                           class="btn btn-warning btn-sm w-100">
+                            <span class="material-symbols-outlined me-2">workspace_premium</span>
+                            Upgrade to Continue
+                        </a>
                     </div>
                     {% endif %}
                 </div>
                 {% endif %}
                 
-                <!-- Description -->
-                {% if video.description %}
-                <div class="mb-4">
-                    <h5 class="text-white mb-3">Description</h5>
-                    <div class="text-muted">{{ video.description|nl2br }}</div>
+                {% if current_index == 0 and current_index == category_videos|length - 1 %}
+                <div class="text-center text-muted">
+                    <small>This is the only video in this category</small>
                 </div>
-                {% endif %}
-                
-                <!-- Download Files -->
-                {% if video.files %}
-                <div class="mb-4">
-                    <h5 class="text-white mb-3">
-                        <span class="material-symbols-outlined me-2">attachment</span>
-                        Course Materials
-                    </h5>
-                    <div class="row">
-                        {% for file in video.files %}
-                        <div class="col-md-6 mb-2">
-                            <a href="{{ url_for('download_file', file_id=file.id) }}" 
-                               class="btn btn-outline-secondary w-100 text-start">
-                                <span class="material-symbols-outlined me-2">description</span>
-                                {{ file.filename }}
-                                <span class="material-symbols-outlined ms-auto">download</span>
-                            </a>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-                
-                <!-- Notes Section -->
-                <div class="notes-section">
-                    <h5 class="text-white mb-3">
-                        <span class="material-symbols-outlined me-2">note</span>
-                        Your Notes
-                    </h5>
-                    <textarea class="form-control notes-textarea" 
-                              placeholder="Add your notes about this video..."
-                              id="videoNotes"></textarea>
-                    <div class="d-flex justify-content-end mt-2">
-                        <button class="btn btn-sm btn-primary" onclick="saveNotes()">
-                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">save</span>
-                            Save Notes
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Sidebar -->
-    <div class="col-lg-4">
-        <!-- Up Next -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">playlist_play</span>
-                    Up Next in {{ video.category.name }}
-                </h6>
-            </div>
-            <div class="card-body">
-                {% set next_videos = video.category.videos|selectattr('order_index', '>', video.order_index)|sort(attribute='order_index')|list %}
-                {% if next_videos %}
-                    {% for next_video in next_videos[:3] %}
-                    <div class="d-flex align-items-center mb-3 {% if not loop.last %}border-bottom pb-3{% endif %}">
-                        <div class="flex-shrink-0 me-3">
-                            {% if next_video.thumbnail_url %}
-                            <img src="{{ next_video.thumbnail_url }}" alt="{{ next_video.title }}" 
-                                 style="width: 80px; height: 45px; object-fit: cover; border-radius: 8px;">
-                            {% else %}
-                            <div class="bg-gradient-primary d-flex align-items-center justify-content-center" 
-                                 style="width: 80px; height: 45px; border-radius: 8px;">
-                                <span class="material-symbols-outlined text-white">play_circle</span>
-                            </div>
-                            {% endif %}
-                            
-                            <!-- Premium/Lock overlay -->
-                            {% if not next_video.is_free and not current_user.has_subscription %}
-                            <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-75" 
-                                 style="border-radius: 8px;">
-                                <span class="material-symbols-outlined text-warning">lock</span>
-                            </div>
-                            {% endif %}
-                        </div>
-                        <div class="flex-grow-1">
-                            <h6 class="text-white mb-1">{{ next_video.title }}</h6>
-                            <p class="text-muted small mb-1">
-                                {% if next_video.duration %}
-                                {{ (next_video.duration // 60)|int }}:{{ "%02d"|format(next_video.duration % 60) }}
-                                {% endif %}
-                                {% if not next_video.is_free %}
-                                <span class="badge bg-warning ms-2">Premium</span>
-                                {% endif %}
-                            </p>
-                            {% if next_video.is_free or current_user.has_subscription %}
-                            <a href="{{ url_for('watch_video', video_id=next_video.id) }}" 
-                               class="btn btn-sm btn-outline-primary">Watch</a>
-                            {% else %}
-                            <button class="btn btn-sm btn-outline-warning" onclick="showSubscriptionModal()">
-                                <span class="material-symbols-outlined me-1" style="font-size: 14px;">lock</span>
-                                Locked
-                            </button>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                <p class="text-muted text-center py-3">No more videos in this category.</p>
                 {% endif %}
             </div>
         </div>
         
-        <!-- Learning Progress -->
+        <!-- Category Progress -->
         <div class="card mb-4">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">trending_up</span>
-                    Learning Progress
+                    <span class="material-symbols-outlined me-2">analytics</span>
+                    Category Progress
                 </h6>
             </div>
             <div class="card-body">
-                {% set category_videos = video.category.videos|list %}
-                {% set completed_in_category = category_videos|selectattr('id', 'in', user_progress.keys())|map(attribute='id')|map('extract', user_progress)|selectattr('completed')|list|length %}
+                {% set user_progress_data = {} %}
+                {% for prog in current_user.progress %}
+                    {% set _ = user_progress_data.update({prog.video_id: prog}) %}
+                {% endfor %}
+                
+                {% set completed_in_category = category_videos|selectattr('id', 'in', user_progress_data.keys())|map(attribute='id')|map('extract', user_progress_data)|selectattr('completed')|list|length %}
                 {% set category_progress = (completed_in_category / category_videos|length * 100) if category_videos else 0 %}
                 
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted">{{ video.category.name }}</span>
-                        <span class="text-success">{{ "%.0f"|format(category_progress) }}%</span>
-                    </div>
-                    <div class="progress" style="height: 8px;">
-                        <div class="progress-bar" style="width: {{ category_progress }}%"></div>
-                    </div>
+                <div class="text-center mb-3">
+                    <h4 class="text-gradient-primary">{{ "%.0f"|format(category_progress) }}%</h4>
+                    <p class="text-muted mb-0">{{ completed_in_category }} of {{ category_videos|length }} videos completed</p>
                 </div>
                 
-                <div class="row text-center">
-                    <div class="col-6">
-                        <h5 class="text-gradient-primary mb-0">{{ completed_in_category }}</h5>
-                        <small class="text-muted">Completed</small>
-                    </div>
-                    <div class="col-6">
-                        <h5 class="text-gradient-primary mb-0">{{ category_videos|length }}</h5>
-                        <small class="text-muted">Total Videos</small>
-                    </div>
+                <div class="progress mb-3" style="height: 8px;">
+                    <div class="progress-bar" style="width: {{ category_progress }}%"></div>
                 </div>
+                
+                <a href="{{ url_for('category_videos', category_id=video.category.id) }}" 
+                   class="btn btn-outline-primary btn-sm w-100">
+                    <span class="material-symbols-outlined me-2">list</span>
+                    View All Videos
+                </a>
             </div>
         </div>
         
@@ -366,48 +297,22 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <a href="{{ url_for('category_videos', category_id=video.category.id) }}" 
-                       class="btn btn-outline-primary">
-                        <span class="material-symbols-outlined me-2">list</span>
-                        View All in Category
-                    </a>
-                    <a href="{{ url_for('courses') }}" class="btn btn-outline-secondary">
+                    <a href="{{ url_for('courses') }}" class="btn btn-outline-secondary btn-sm">
                         <span class="material-symbols-outlined me-2">arrow_back</span>
-                        Back to Courses
+                        All Courses
                     </a>
-                    <a href="{{ url_for('donate') }}" class="btn btn-outline-success">
-                        <span class="material-symbols-outlined me-2">volunteer_activism</span>
-                        Support Us
+                    
+                    <a href="{{ url_for('favorites') }}" class="btn btn-outline-primary btn-sm">
+                        <span class="material-symbols-outlined me-2">favorite</span>
+                        My Favorites
                     </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Subscription Modal -->
-<div class="modal fade" id="subscriptionModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content bg-dark border-primary">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title text-gradient-primary">
-                    <span class="material-symbols-outlined me-2">workspace_premium</span>
-                    Premium Required
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center">
-                <span class="material-symbols-outlined text-warning mb-3" style="font-size: 4rem;">lock</span>
-                <h4 class="text-white mb-3">Unlock Premium Content</h4>
-                <p class="text-muted mb-4">This content requires an active premium subscription to access.</p>
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('subscription') }}" class="btn btn-primary">
+                    
+                    {% if not current_user.has_subscription %}
+                    <a href="{{ url_for('subscription') }}" class="btn btn-primary btn-sm">
                         <span class="material-symbols-outlined me-2">workspace_premium</span>
                         Upgrade to Premium
                     </a>
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                        Maybe Later
-                    </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -417,127 +322,118 @@
 
 {% block scripts %}
 <script>
-let player;
-let currentSpeed = 1;
+let videoPlayer;
 let progressUpdateInterval;
+let lastProgressUpdate = 0;
 
 document.addEventListener('DOMContentLoaded', function() {
-    player = document.getElementById('videoPlayer');
-    const playPauseBtn = document.getElementById('playPauseBtn');
-    const progressSlider = document.getElementById('progressSlider');
-    const progressFill = document.getElementById('progressFill');
-    const timeDisplay = document.getElementById('timeDisplay');
+    videoPlayer = document.getElementById('videoPlayer');
     
-    // Play/Pause button
-    playPauseBtn.addEventListener('click', function() {
-        if (player.paused) {
-            player.play();
-            playPauseBtn.querySelector('.material-symbols-outlined').textContent = 'pause';
-        } else {
-            player.pause();
-            playPauseBtn.querySelector('.material-symbols-outlined').textContent = 'play_arrow';
-        }
-    });
-    
-    // Progress bar click
-    progressSlider.addEventListener('click', function(e) {
-        const rect = progressSlider.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const width = rect.width;
-        const percentage = clickX / width;
-        player.currentTime = percentage * player.duration;
-    });
-    
-    // Update progress
-    player.addEventListener('timeupdate', function() {
-        if (player.duration) {
-            const percentage = (player.currentTime / player.duration) * 100;
-            progressFill.style.width = percentage + '%';
-            
-            // Update time display
-            const current = formatTime(player.currentTime);
-            const total = formatTime(player.duration);
-            timeDisplay.textContent = `${current} / ${total}`;
-            
-            // Update progress in backend every 10 seconds
-            if (Math.floor(player.currentTime) % 10 === 0) {
-                updateProgress();
-            }
-        }
-    });
-    
-    // Video ended
-    player.addEventListener('ended', function() {
-        playPauseBtn.querySelector('.material-symbols-outlined').textContent = 'play_arrow';
-        updateProgress(); // Final progress update
-    });
-    
-    // Auto-save progress every 30 seconds
-    setInterval(updateProgress, 30000);
-    
-    // Load saved notes
-    loadNotes();
+    if (videoPlayer) {
+        // Set initial time if there's previous progress
+        {% if progress.watched_duration > 0 and video.duration %}
+        videoPlayer.currentTime = {{ progress.watched_duration }};
+        {% endif %}
+        
+        // Start progress tracking
+        videoPlayer.addEventListener('play', startProgressTracking);
+        videoPlayer.addEventListener('pause', stopProgressTracking);
+        videoPlayer.addEventListener('ended', stopProgressTracking);
+        
+        // Update progress on time change
+        videoPlayer.addEventListener('timeupdate', updateVisualProgress);
+        
+        // Handle video completion
+        videoPlayer.addEventListener('ended', function() {
+            updateProgress(videoPlayer.duration, videoPlayer.duration, true);
+        });
+    }
 });
 
-function formatTime(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+function startProgressTracking() {
+    progressUpdateInterval = setInterval(function() {
+        if (videoPlayer && !videoPlayer.paused) {
+            const currentTime = Math.floor(videoPlayer.currentTime);
+            const duration = Math.floor(videoPlayer.duration) || 0;
+            
+            // Update progress every 5 seconds or if significantly different
+            if (currentTime - lastProgressUpdate >= 5 || Math.abs(currentTime - lastProgressUpdate) > 10) {
+                updateProgress(currentTime, duration);
+                lastProgressUpdate = currentTime;
+            }
+        }
+    }, 1000);
 }
 
-function changePlaybackSpeed() {
-    const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
-    const currentIndex = speeds.indexOf(currentSpeed);
-    const nextIndex = (currentIndex + 1) % speeds.length;
-    currentSpeed = speeds[nextIndex];
+function stopProgressTracking() {
+    if (progressUpdateInterval) {
+        clearInterval(progressUpdateInterval);
+        progressUpdateInterval = null;
+    }
     
-    player.playbackRate = currentSpeed;
-    document.getElementById('speedDisplay').textContent = currentSpeed + 'x';
-}
-
-function toggleFullscreen() {
-    if (document.fullscreenElement) {
-        document.exitFullscreen();
-    } else {
-        player.requestFullscreen();
+    // Final progress update
+    if (videoPlayer) {
+        const currentTime = Math.floor(videoPlayer.currentTime);
+        const duration = Math.floor(videoPlayer.duration) || 0;
+        updateProgress(currentTime, duration);
     }
 }
 
-async function updateProgress() {
-    if (!player.duration || !player.currentTime) return;
-    
-    try {
-        await fetch('/api/video/progress', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                video_id: {{ video.id }},
-                watched_duration: Math.floor(player.currentTime),
-                total_duration: Math.floor(player.duration)
-            })
-        });
-    } catch (error) {
-        console.error('Error updating progress:', error);
+function updateProgress(watchedDuration, totalDuration, forceComplete = false) {
+    fetch('/api/video/progress', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            video_id: {{ video.id }},
+            watched_duration: watchedDuration,
+            total_duration: totalDuration,
+            force_complete: forceComplete
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.completed) {
+            showToast('Video completed! 🎉', 'success');
+        }
+    })
+    .catch(error => console.error('Error updating progress:', error));
+}
+
+function updateVisualProgress() {
+    if (videoPlayer && videoPlayer.duration > 0) {
+        const progress = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        
+        if (progressBar) {
+            progressBar.style.width = progress + '%';
+        }
+        
+        if (progressText) {
+            const minutes = Math.floor(videoPlayer.currentTime / 60);
+            const seconds = Math.floor(videoPlayer.currentTime % 60);
+            progressText.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} watched`;
+        }
     }
 }
 
-async function toggleFavorite(videoId) {
+async function toggleFavorite() {
     try {
         const response = await fetch('/api/video/favorite', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ video_id: videoId })
+            body: JSON.stringify({ video_id: {{ video.id }} })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            const btn = document.getElementById('favorite-btn');
-            const icon = btn.querySelector('.material-symbols-outlined');
+            const icon = document.getElementById('favoriteIcon');
+            const btn = document.getElementById('favoriteBtn');
             
             if (data.is_favorited) {
                 icon.textContent = 'favorite';
@@ -561,57 +457,54 @@ function shareVideo() {
     if (navigator.share) {
         navigator.share({
             title: '{{ video.title }}',
-            text: 'Check out this video on TGFX Trade Lab',
+            text: 'Check out this video from TGFX Trade Lab',
             url: window.location.href
         });
     } else {
-        // Fallback: copy to clipboard
-        navigator.clipboard.writeText(window.location.href).then(() => {
+        // Fallback to clipboard
+        navigator.clipboard.writeText(window.location.href).then(function() {
             showToast('Video link copied to clipboard', 'success');
         });
     }
 }
 
-function saveNotes() {
-    const notes = document.getElementById('videoNotes').value;
-    localStorage.setItem(`video_notes_{{ video.id }}`, notes);
-    showToast('Notes saved', 'success');
-}
-
-function loadNotes() {
-    const savedNotes = localStorage.getItem(`video_notes_{{ video.id }}`);
-    if (savedNotes) {
-        document.getElementById('videoNotes').value = savedNotes;
-    }
-}
-
-function showSubscriptionModal() {
-    const modal = new bootstrap.Modal(document.getElementById('subscriptionModal'));
-    modal.show();
-}
-
-// Keyboard shortcuts
-document.addEventListener('keydown', function(e) {
-    if (e.target.tagName.toLowerCase() === 'textarea') return;
-    
-    switch(e.code) {
-        case 'Space':
-            e.preventDefault();
-            document.getElementById('playPauseBtn').click();
-            break;
-        case 'ArrowLeft':
-            e.preventDefault();
-            player.currentTime = Math.max(0, player.currentTime - 10);
-            break;
-        case 'ArrowRight':
-            e.preventDefault();
-            player.currentTime = Math.min(player.duration, player.currentTime + 10);
-            break;
-        case 'KeyF':
-            e.preventDefault();
-            toggleFullscreen();
-            break;
-    }
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    stopProgressTracking();
 });
 </script>
+
+<style>
+.video-container {
+    position: relative;
+    background: #000;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin-bottom: 1rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "›";
+    color: var(--text-muted);
+}
+
+#videoPlayer {
+    border-radius: 16px;
+}
+
+.progress {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.progress-bar {
+    background: var(--gradient-primary);
+    border-radius: 10px;
+}
+</style>
 {% endblock %}
