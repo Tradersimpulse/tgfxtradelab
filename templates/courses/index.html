@@ -64,7 +64,12 @@
                 </div>
                 <div>
                     {% set category_videos = category.videos|sort(attribute='order_index') %}
-                    {% set completed_in_category = category_videos|selectattr('id', 'in', user_progress.keys())|selectattr('id', 'in', user_progress.keys())|map(attribute='id')|map('extract', user_progress)|selectattr('completed')|list|length %}
+                    {% set completed_in_category = 0 %}
+                    {% for video in category_videos %}
+                        {% if video.id in user_progress and user_progress[video.id].completed %}
+                            {% set completed_in_category = completed_in_category + 1 %}
+                        {% endif %}
+                    {% endfor %}
                     <span class="badge bg-success">{{ completed_in_category }}/{{ category_videos|length }} Complete</span>
                 </div>
             </div>
