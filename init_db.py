@@ -13,7 +13,7 @@ from werkzeug.security import generate_password_hash
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from flask_app_main import app, db, User, Category, Video
+    from app import app, db, User, Category, Video
 except ImportError as e:
     print(f"❌ Import error: {e}")
     print("Make sure flask_app_main.py is in the same directory")
