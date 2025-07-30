@@ -304,10 +304,14 @@ def watch_video(video_id):
     # Check if user has favorited this video
     is_favorited = UserFavorite.query.filter_by(user_id=current_user.id, video_id=video_id).first() is not None
     
+    # Get user progress for all videos (needed by template)
+    user_progress = {p.video_id: p for p in current_user.progress}
+    
     return render_template('courses/watch.html', 
                          video=video, 
                          progress=progress,
-                         is_favorited=is_favorited)
+                         is_favorited=is_favorited,
+                         user_progress=user_progress)  # Add this line!
 
 @app.route('/api/video/progress', methods=['POST'])
 @login_required
