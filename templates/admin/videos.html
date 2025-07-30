@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Videos - TGFX Trade Lab Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2" style="font-size: 2rem;">video_library</span>
+                    Manage Videos
+                </h1>
+                <p class="text-muted mb-0">Upload and manage your video content</p>
+            </div>
+            <div>
+                <a href="{{ url_for('admin_add_video') }}" class="btn btn-primary">
+                    <span class="material-symbols-outlined me-2">add</span>
+                    Add New Video
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        {% if videos %}
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">list</span>
+                    All Videos ({{ videos|length }})
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Thumbnail</th>
+                                <th>Title</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>Order</th>
+                                <th>Duration</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for video in videos %}
+                            <tr>
+                                <td>
+                                    {% if video.thumbnail_url %}
+                                    <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" 
+                                         class="img-thumbnail" style="width: 60px; height: 34px; object-fit: cover;">
+                                    {% else %}
+                                    <div class="bg-gradient-primary d-flex align-items-center justify-content-center" 
+                                         style="width: 60px; height: 34px; border-radius: 4px;">
+                                        <span class="material-symbols-outlined text-white" style="font-size: 16px;">play_circle</span>
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div>
+                                        <h6 class="mb-1 text-white">{{ video.title }}</h6>
+                                        {% if video.description %}
+                                        <small class="text-muted">{{ video.description[:60] }}{% if video.description|length > 60 %}...{% endif %}</small>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ video.category.name }}</span>
+                                </td>
+                                <td>
+                                    {% if video.is_free %}
+                                    <span class="badge bg-success">
+                                        <span class="material-symbols-outlined me-1" style="font-size: 12px;">lock_open</span>
+                                        Free
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-warning">
+                                        <span class="material-symbols-outlined me-1" style="font-size: 12px;">workspace_premium</span>
+                                        Premium
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="text-muted">#{{ video.order_index }}</span>
+                                </td>
+                                <td>
+                                    {% if video.duration %}
+                                    <span class="text-muted">{{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small class="text-muted">{{ video.created_at.strftime('%m/%d/%Y') }}</small>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('watch_video', video_id=video.id) }}" 
+                                           class="btn btn-outline-primary" title="Preview">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">visibility</span>
+                                        </a>
+                                        <a href="{{ url_for('admin_edit_video', video_id=video.id) }}" 
+                                           class="btn btn-outline-secondary" title="Edit">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
+                                        </a>
+                                        <button class="btn btn-outline-danger" title="Delete"
+                                                onclick="deleteVideo({{ video.id }}, '{{ video.title }}')">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">video_library</span>
+                <h3 class="text-gradient-primary mb-3">No Videos Yet</h3>
+                <p class="text-muted mb-4">Start building your course by adding your first video.</p>
+                <a href="{{ url_for('admin_add_video') }}" class="btn btn-primary">
+                    <span class="material-symbols-outlined me-2">add</span>
+                    Add First Video
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark border-danger">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-danger">
+                    <span class="material-symbols-outlined me-2">warning</span>
+                    Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-white">Are you sure you want to delete the video "<span id="videoTitle" class="text-primary"></span>"?</p>
+                <p class="text-muted small">This action cannot be undone. All user progress and favorites for this video will also be deleted.</p>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDelete">
+                    <span class="material-symbols-outlined me-2">delete</span>
+                    Delete Video
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let videoToDelete = null;
+
+function deleteVideo(videoId, videoTitle) {
+    videoToDelete = videoId;
+    document.getElementById('videoTitle').textContent = videoTitle;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+
+document.getElementById('confirmDelete').addEventListener('click', async function() {
+    if (!videoToDelete) return;
+    
+    try {
+        const response = await fetch(`/api/admin/video/${videoToDelete}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Video deleted successfully', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('Error deleting video', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error deleting video', 'error');
+    }
+    
+    bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+    videoToDelete = null;
+});
+
+// Add smooth animations
+document.addEventListener('DOMContentLoaded', function() {
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach((row, index) => {
+        row.style.opacity = '0';
+        row.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            row.style.transition = 'all 0.5s ease';
+            row.style.opacity = '1';
+            row.style.transform = 'translateY(0)';
+        }, index * 50);
+    });
+});
+</script>
+{% endblock %}
