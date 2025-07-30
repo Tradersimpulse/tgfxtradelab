@@ -1,46 +1,35 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }} - TGFX Trade Lab Admin{% endblock %}
+{% block title %}{{ title }} - Admin - TGFX Trade Lab{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item">
-                    <a href="{{ url_for('admin') }}" class="text-primary text-decoration-none">
-                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">dashboard</span>
-                        Admin
-                    </a>
-                </li>
-                <li class="breadcrumb-item">
-                    <a href="{{ url_for('admin_videos') }}" class="text-primary text-decoration-none">
-                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">video_library</span>
-                        Videos
-                    </a>
-                </li>
-                <li class="breadcrumb-item active text-muted">{{ title }}</li>
-            </ol>
-        </nav>
-        
-        <h1 class="text-gradient-primary mb-2">
-            <span class="material-symbols-outlined me-2" style="font-size: 2rem;">
-                {% if video %}edit{% else %}add{% endif %}
-            </span>
-            {{ title }}
-        </h1>
-        <p class="text-muted mb-0">
-            {% if video %}
-            Update video information and settings
-            {% else %}
-            Add a new video to your course library
-            {% endif %}
-        </p>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2" style="font-size: 2rem;">
+                        {% if video %}edit{% else %}add{% endif %}
+                    </span>
+                    {{ title }}
+                </h1>
+                <p class="text-muted mb-0">
+                    {% if video %}Update video information and settings{% else %}Add a new video to your course library{% endif %}
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('admin_videos') }}" class="btn btn-outline-secondary">
+                    <span class="material-symbols-outlined me-2">arrow_back</span>
+                    Back to Videos
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 
 <div class="row">
     <div class="col-lg-8">
+        <!-- Main Form -->
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
@@ -49,185 +38,241 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" id="videoForm">
                     {{ form.hidden_tag() }}
                     
-                    <div class="row">
-                        <div class="col-md-8">
-                            <div class="mb-3">
-                                {{ form.title.label(class="form-label") }}
-                                {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else "")) }}
-                                {% if form.title.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.title.errors[0] }}
-                                </div>
-                                {% endif %}
-                            </div>
+                    <!-- Title -->
+                    <div class="mb-4">
+                        {{ form.title.label(class="form-label") }}
+                        {{ form.title(class="form-control", placeholder="Enter video title") }}
+                        {% if form.title.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.title.errors %}{{ error }}{% endfor %}
                         </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                {{ form.order_index.label(class="form-label") }}
-                                {{ form.order_index(class="form-control" + (" is-invalid" if form.order_index.errors else "")) }}
-                                {% if form.order_index.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.order_index.errors[0] }}
-                                </div>
-                                {% endif %}
-                                <div class="form-text">Lower numbers appear first</div>
-                            </div>
-                        </div>
+                        {% endif %}
+                        <div class="form-text">Choose a clear, descriptive title for your video</div>
                     </div>
                     
-                    <div class="mb-3">
+                    <!-- Description -->
+                    <div class="mb-4">
                         {{ form.description.label(class="form-label") }}
-                        {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows="4") }}
+                        {{ form.description(class="form-control", rows="4", placeholder="Describe what students will learn in this video...") }}
                         {% if form.description.errors %}
-                        <div class="invalid-feedback">
-                            {{ form.description.errors[0] }}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.description.errors %}{{ error }}{% endfor %}
                         </div>
                         {% endif %}
+                        <div class="form-text">Provide a detailed description of the video content</div>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                {{ form.category_id.label(class="form-label") }}
-                                {{ form.category_id(class="form-select" + (" is-invalid" if form.category_id.errors else "")) }}
-                                {% if form.category_id.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.category_id.errors[0] }}
-                                </div>
-                                {% endif %}
+                    <!-- Tags -->
+                    <div class="mb-4">
+                        {{ form.tags.label(class="form-label") }}
+                        {{ form.tags(class="form-control", placeholder="market structure, support resistance, price action") }}
+                        {% if form.tags.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.tags.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="form-text">Enter tags separated by commas to help organize and filter your content</div>
+                        
+                        <!-- Suggested Tags -->
+                        <div class="mt-2">
+                            <label class="form-label small">Quick Tags:</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Market Structure">Market Structure</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Support & Resistance">Support & Resistance</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Price Action">Price Action</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Risk Management">Risk Management</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Psychology">Psychology</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Technical Analysis">Technical Analysis</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Chart Patterns">Chart Patterns</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Trading Strategies">Trading Strategies</button>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label class="form-label">Access Level</label>
-                                <div class="form-check form-switch">
-                                    {{ form.is_free(class="form-check-input") }}
-                                    {{ form.is_free.label(class="form-check-label") }}
-                                </div>
-                                <div class="form-text">Toggle to make this video free for all users</div>
-                            </div>
-                        </div>
+                        
+                        <!-- Current Tags Preview -->
+                        <div class="mt-2" id="tagsPreview"></div>
                     </div>
                     
-                    <div class="mb-3">
+                    <!-- S3 URL -->
+                    <div class="mb-4">
                         {{ form.s3_url.label(class="form-label") }}
-                        {{ form.s3_url(class="form-control" + (" is-invalid" if form.s3_url.errors else ""), placeholder="https://your-bucket.s3.amazonaws.com/videos/video.mp4") }}
+                        {{ form.s3_url(class="form-control", placeholder="https://your-bucket.s3.region.amazonaws.com/video.mp4") }}
                         {% if form.s3_url.errors %}
-                        <div class="invalid-feedback">
-                            {{ form.s3_url.errors[0] }}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.s3_url.errors %}{{ error }}{% endfor %}
                         </div>
                         {% endif %}
-                        <div class="form-text">Direct link to your video file on S3 or other storage</div>
+                        <div class="form-text">Direct link to the video file stored in AWS S3</div>
                     </div>
                     
+                    <!-- Thumbnail URL -->
                     <div class="mb-4">
                         {{ form.thumbnail_url.label(class="form-label") }}
-                        {{ form.thumbnail_url(class="form-control" + (" is-invalid" if form.thumbnail_url.errors else ""), placeholder="https://your-bucket.s3.amazonaws.com/thumbnails/thumb.jpg") }}
+                        {{ form.thumbnail_url(class="form-control", placeholder="https://your-bucket.s3.region.amazonaws.com/thumbnail.jpg") }}
                         {% if form.thumbnail_url.errors %}
-                        <div class="invalid-feedback">
-                            {{ form.thumbnail_url.errors[0] }}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.thumbnail_url.errors %}{{ error }}{% endfor %}
                         </div>
                         {% endif %}
-                        <div class="form-text">Optional thumbnail image for the video</div>
+                        <div class="form-text">Optional: Thumbnail image for the video</div>
                     </div>
                     
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <a href="{{ url_for('admin_videos') }}" class="btn btn-outline-secondary">
-                                <span class="material-symbols-outlined me-2">arrow_back</span>
-                                Cancel
-                            </a>
+                    <!-- Category and Settings -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            {{ form.category_id.label(class="form-label") }}
+                            {{ form.category_id(class="form-select") }}
+                            {% if form.category_id.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.category_id.errors %}{{ error }}{% endfor %}
+                            </div>
+                            {% endif %}
                         </div>
-                        <div>
-                            <button type="submit" class="btn btn-primary">
-                                <span class="material-symbols-outlined me-2">save</span>
-                                {% if video %}Update Video{% else %}Add Video{% endif %}
-                            </button>
+                        <div class="col-md-6">
+                            {{ form.order_index.label(class="form-label") }}
+                            {{ form.order_index(class="form-control", placeholder="0") }}
+                            {% if form.order_index.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.order_index.errors %}{{ error }}{% endfor %}
+                            </div>
+                            {% endif %}
+                            <div class="form-text">Lower numbers appear first</div>
                         </div>
+                    </div>
+                    
+                    <!-- Free Video Checkbox -->
+                    <div class="mb-4">
+                        <div class="form-check">
+                            {{ form.is_free(class="form-check-input") }}
+                            {{ form.is_free.label(class="form-check-label") }}
+                        </div>
+                        <div class="form-text">Check this box if the video should be available to all users</div>
+                    </div>
+                    
+                    <!-- Submit Buttons -->
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <span class="material-symbols-outlined me-2">save</span>
+                            {% if video %}Update Video{% else %}Add Video{% endif %}
+                        </button>
+                        <a href="{{ url_for('admin_videos') }}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                        {% if video %}
+                        <a href="{{ url_for('watch_video', video_id=video.id) }}" class="btn btn-outline-primary ms-auto">
+                            <span class="material-symbols-outlined me-2">play_arrow</span>
+                            Preview Video
+                        </a>
+                        {% endif %}
                     </div>
                 </form>
             </div>
         </div>
     </div>
     
+    <!-- Sidebar -->
     <div class="col-lg-4">
-        <!-- Preview Card -->
+        <!-- Video Preview -->
         <div class="card mb-4">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">preview</span>
+                    <span class="material-symbols-outlined me-2">visibility</span>
                     Video Preview
                 </h6>
             </div>
             <div class="card-body">
-                <div class="video-preview-card">
-                    <div class="position-relative">
-                        <div id="thumbnail-preview" class="video-thumbnail-preview">
-                            {% if video and video.thumbnail_url %}
-                            <img src="{{ video.thumbnail_url }}" alt="Thumbnail" class="w-100 h-100" style="object-fit: cover;">
-                            {% else %}
-                            <div class="d-flex align-items-center justify-content-center h-100 bg-gradient-primary">
-                                <span class="material-symbols-outlined text-white" style="font-size: 2rem;">play_circle</span>
-                            </div>
-                            {% endif %}
+                <div class="video-preview">
+                    <div class="thumbnail-preview mb-3" id="thumbnailPreview">
+                        {% if video and video.thumbnail_url %}
+                        <img src="{{ video.thumbnail_url }}" alt="Thumbnail" class="img-fluid rounded">
+                        {% else %}
+                        <div class="placeholder-thumbnail">
+                            <span class="material-symbols-outlined">image</span>
+                            <p class="small mt-2">Thumbnail Preview</p>
                         </div>
-                        
-                        <div class="position-absolute top-0 start-0 m-2">
-                            <span class="badge" id="access-badge">
-                                {% if video and not video.is_free %}
-                                <span class="bg-warning">Premium</span>
-                                {% else %}
-                                <span class="bg-success">Free</span>
-                                {% endif %}
-                            </span>
-                        </div>
+                        {% endif %}
                     </div>
                     
-                    <div class="p-3">
-                        <h6 class="text-white mb-2" id="title-preview">
-                            {% if video %}{{ video.title }}{% else %}Video Title{% endif %}
-                        </h6>
-                        <p class="text-muted small mb-2" id="description-preview">
-                            {% if video and video.description %}{{ video.description[:100] }}{% if video.description|length > 100 %}...{% endif %}{% else %}Video description will appear here...{% endif %}
-                        </p>
-                        <small class="text-muted" id="category-preview">
-                            {% if video %}{{ video.category.name }}{% else %}Select Category{% endif %}
+                    <h6 class="text-white mb-2" id="titlePreview">
+                        {{ video.title if video else 'Video Title' }}
+                    </h6>
+                    
+                    <p class="text-muted small mb-3" id="descriptionPreview">
+                        {{ video.description if video and video.description else 'Video description will appear here...' }}
+                    </p>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="badge" id="typePreview">
+                            {% if video %}
+                                {% if video.is_free %}Free{% else %}Premium{% endif %}
+                            {% else %}
+                                Free
+                            {% endif %}
+                        </span>
+                        <small class="text-muted" id="categoryPreview">
+                            {% if video %}{{ video.category.name }}{% else %}Category{% endif %}
                         </small>
                     </div>
                 </div>
             </div>
         </div>
         
-        <!-- Tips Card -->
-        <div class="card">
+        <!-- Video Guidelines -->
+        <div class="card mb-4">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">lightbulb</span>
-                    Tips
+                    <span class="material-symbols-outlined me-2">tips_and_updates</span>
+                    Video Guidelines
                 </h6>
             </div>
             <div class="card-body">
                 <ul class="list-unstyled mb-0">
                     <li class="mb-2">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Use descriptive titles that clearly explain the content</small>
+                        <small>Upload videos to S3 before adding them here</small>
                     </li>
                     <li class="mb-2">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Order videos logically for better learning flow</small>
+                        <small>Use descriptive titles and detailed descriptions</small>
                     </li>
                     <li class="mb-2">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Add thumbnails to make videos more engaging</small>
+                        <small>Add relevant tags to improve discoverability</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Set proper order within categories</small>
                     </li>
                     <li class="mb-0">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Write detailed descriptions to help users understand content</small>
+                        <small>Include high-quality thumbnails when possible</small>
                     </li>
                 </ul>
+            </div>
+        </div>
+        
+        <!-- Existing Tags -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">label</span>
+                    Popular Tags
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    <!-- This would be populated with existing tags from the database -->
+                    <span class="badge bg-primary">Market Structure</span>
+                    <span class="badge bg-success">Support & Resistance</span>
+                    <span class="badge bg-warning">Price Action</span>
+                    <span class="badge bg-info">Risk Management</span>
+                    <span class="badge bg-secondary">Psychology</span>
+                </div>
+                <p class="text-muted small mt-2 mb-0">
+                    Click any tag above to add it to your video.
+                </p>
             </div>
         </div>
     </div>
@@ -236,91 +281,237 @@
 
 {% block scripts %}
 <script>
+// Form submission with loading state
+document.getElementById('videoForm').addEventListener('submit', function(e) {
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+});
+
 // Live preview updates
+const titleInput = document.querySelector('[name="title"]');
+const descriptionInput = document.querySelector('[name="description"]');
+const thumbnailInput = document.querySelector('[name="thumbnail_url"]');
+const categorySelect = document.querySelector('[name="category_id"]');
+const freeCheckbox = document.querySelector('[name="is_free"]');
+const tagsInput = document.querySelector('[name="tags"]');
+
+titleInput.addEventListener('input', function() {
+    document.getElementById('titlePreview').textContent = this.value || 'Video Title';
+});
+
+descriptionInput.addEventListener('input', function() {
+    const preview = document.getElementById('descriptionPreview');
+    const text = this.value || 'Video description will appear here...';
+    preview.textContent = text.length > 100 ? text.substring(0, 100) + '...' : text;
+});
+
+thumbnailInput.addEventListener('input', function() {
+    const preview = document.getElementById('thumbnailPreview');
+    if (this.value) {
+        preview.innerHTML = `<img src="${this.value}" alt="Thumbnail" class="img-fluid rounded" onerror="this.parentElement.innerHTML='<div class=\\'placeholder-thumbnail\\'><span class=\\'material-symbols-outlined\\'>broken_image</span><p class=\\'small mt-2\\'>Invalid Image</p></div>'">`;
+    } else {
+        preview.innerHTML = '<div class="placeholder-thumbnail"><span class="material-symbols-outlined">image</span><p class="small mt-2">Thumbnail Preview</p></div>';
+    }
+});
+
+categorySelect.addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    document.getElementById('categoryPreview').textContent = selectedOption.text || 'Category';
+});
+
+freeCheckbox.addEventListener('change', function() {
+    const preview = document.getElementById('typePreview');
+    if (this.checked) {
+        preview.textContent = 'Free';
+        preview.className = 'badge bg-success';
+    } else {
+        preview.textContent = 'Premium';
+        preview.className = 'badge bg-warning';
+    }
+});
+
+// Tags functionality
+tagsInput.addEventListener('input', function() {
+    updateTagsPreview();
+});
+
+function updateTagsPreview() {
+    const tagsPreview = document.getElementById('tagsPreview');
+    const tagsValue = tagsInput.value;
+    
+    if (!tagsValue.trim()) {
+        tagsPreview.innerHTML = '';
+        return;
+    }
+    
+    const tags = tagsValue.split(',').map(tag => tag.trim()).filter(tag => tag);
+    const previewHtml = tags.map(tag => 
+        `<span class="badge bg-primary me-1 mb-1">${tag}</span>`
+    ).join('');
+    
+    tagsPreview.innerHTML = `<div class="mt-2"><small class="text-muted">Preview:</small><br>${previewHtml}</div>`;
+}
+
+// Tag suggestion buttons
+document.querySelectorAll('.tag-suggestion').forEach(button => {
+    button.addEventListener('click', function() {
+        const tag = this.dataset.tag;
+        const currentTags = tagsInput.value;
+        
+        // Check if tag already exists
+        const tagsList = currentTags.split(',').map(t => t.trim());
+        if (!tagsList.includes(tag)) {
+            if (currentTags.trim()) {
+                tagsInput.value = currentTags + ', ' + tag;
+            } else {
+                tagsInput.value = tag;
+            }
+            updateTagsPreview();
+        }
+        
+        // Visual feedback
+        this.classList.add('btn-success');
+        this.classList.remove('btn-outline-primary');
+        setTimeout(() => {
+            this.classList.remove('btn-success');
+            this.classList.add('btn-outline-primary');
+        }, 1000);
+    });
+});
+
+// Popular tags click handler
+document.querySelectorAll('.badge').forEach(badge => {
+    badge.addEventListener('click', function() {
+        const tag = this.textContent;
+        const currentTags = tagsInput.value;
+        
+        const tagsList = currentTags.split(',').map(t => t.trim());
+        if (!tagsList.includes(tag)) {
+            if (currentTags.trim()) {
+                tagsInput.value = currentTags + ', ' + tag;
+            } else {
+                tagsInput.value = tag;
+            }
+            updateTagsPreview();
+        }
+    });
+});
+
+// Initialize preview
 document.addEventListener('DOMContentLoaded', function() {
-    const titleInput = document.getElementById('title');
-    const descriptionInput = document.getElementById('description');
-    const thumbnailInput = document.getElementById('thumbnail_url');
-    const categorySelect = document.getElementById('category_id');
-    const freeCheckbox = document.getElementById('is_free');
+    updateTagsPreview();
     
-    // Update title preview
-    if (titleInput) {
-        titleInput.addEventListener('input', function() {
-            const preview = document.getElementById('title-preview');
-            preview.textContent = this.value || 'Video Title';
-        });
+    // Auto-suggest order index
+    const orderInput = document.querySelector('[name="order_index"]');
+    if (orderInput && !orderInput.value) {
+        // You could fetch the next order index via AJAX here
+        orderInput.value = 0;
     }
+});
+
+// Character counters
+titleInput.addEventListener('input', function() {
+    const maxLength = 200;
+    const currentLength = this.value.length;
+    const formText = this.parentElement.querySelector('.form-text');
     
-    // Update description preview
-    if (descriptionInput) {
-        descriptionInput.addEventListener('input', function() {
-            const preview = document.getElementById('description-preview');
-            const text = this.value || 'Video description will appear here...';
-            preview.textContent = text.length > 100 ? text.substring(0, 100) + '...' : text;
-        });
+    if (currentLength > maxLength - 20) {
+        formText.textContent = `${currentLength}/${maxLength} characters`;
+        formText.className = currentLength > maxLength ? 'form-text text-danger' : 'form-text text-warning';
+    } else {
+        formText.textContent = 'Choose a clear, descriptive title for your video';
+        formText.className = 'form-text';
     }
+});
+
+descriptionInput.addEventListener('input', function() {
+    const maxLength = 1000;
+    const currentLength = this.value.length;
+    const formText = this.parentElement.querySelector('.form-text');
     
-    // Update thumbnail preview
-    if (thumbnailInput) {
-        thumbnailInput.addEventListener('input', function() {
-            const preview = document.getElementById('thumbnail-preview');
-            if (this.value) {
-                preview.innerHTML = `<img src="${this.value}" alt="Thumbnail" class="w-100 h-100" style="object-fit: cover;" onerror="this.parentNode.innerHTML='<div class=\\'d-flex align-items-center justify-content-center h-100 bg-gradient-primary\\'><span class=\\'material-symbols-outlined text-white\\' style=\\'font-size: 2rem;\\'>play_circle</span></div>';">`;
-            } else {
-                preview.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 bg-gradient-primary"><span class="material-symbols-outlined text-white" style="font-size: 2rem;">play_circle</span></div>';
-            }
-        });
-    }
-    
-    // Update category preview
-    if (categorySelect) {
-        categorySelect.addEventListener('change', function() {
-            const preview = document.getElementById('category-preview');
-            const selectedOption = this.options[this.selectedIndex];
-            preview.textContent = selectedOption.text || 'Select Category';
-        });
-    }
-    
-    // Update access badge
-    if (freeCheckbox) {
-        freeCheckbox.addEventListener('change', function() {
-            const badge = document.getElementById('access-badge');
-            if (this.checked) {
-                badge.innerHTML = '<span class="badge bg-success">Free</span>';
-            } else {
-                badge.innerHTML = '<span class="badge bg-warning">Premium</span>';
-            }
-        });
+    if (currentLength > maxLength - 100) {
+        formText.textContent = `${currentLength}/${maxLength} characters`;
+        formText.className = currentLength > maxLength ? 'form-text text-danger' : 'form-text text-warning';
+    } else {
+        formText.textContent = 'Provide a detailed description of the video content';
+        formText.className = 'form-text';
     }
 });
 </script>
 
 <style>
-.video-thumbnail-preview {
-    width: 100%;
-    height: 140px;
-    border-radius: 12px 12px 0 0;
-    overflow: hidden;
-    background: var(--bg-card);
-}
-
-.video-preview-card {
-    background: var(--bg-card);
+.video-preview {
+    background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    overflow: hidden;
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
 }
 
-.breadcrumb {
-    background: transparent;
-    padding: 0;
-    margin-bottom: 1rem;
+.video-preview:hover {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(255, 255, 255, 0.05);
 }
 
-.breadcrumb-item + .breadcrumb-item::before {
-    content: "›";
+.placeholder-thumbnail {
+    background: var(--bg-secondary);
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
     color: var(--text-muted);
+}
+
+.placeholder-thumbnail .material-symbols-outlined {
+    font-size: 2rem;
+    opacity: 0.5;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
+}
+
+.tag-suggestion:hover {
+    transform: translateY(-1px);
+}
+
+.badge {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.card:hover {
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+/* Form validation styling */
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: #dc3545;
+}
+
+.form-control.is-valid,
+.form-select.is-valid {
+    border-color: #28a745;
+}
+
+/* Tags preview styling */
+#tagsPreview .badge {
+    font-size: 0.75rem;
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
 }
 </style>
 {% endblock %}
