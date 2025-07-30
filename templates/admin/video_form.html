@@ -281,8 +281,14 @@
 
 {% block scripts %}
 <script>
-// Form submission with loading state
+// Form submission with loading state and URL cleaning
 document.getElementById('videoForm').addEventListener('submit', function(e) {
+    // Clean the thumbnail URL before submission
+    const thumbnailInput = document.querySelector('[name="thumbnail_url"]');
+    if (thumbnailInput.value) {
+        thumbnailInput.value = cleanThumbnailUrl(thumbnailInput.value);
+    }
+    
     const submitBtn = this.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
@@ -306,10 +312,39 @@ descriptionInput.addEventListener('input', function() {
     preview.textContent = text.length > 100 ? text.substring(0, 100) + '...' : text;
 });
 
+// Helper function to clean and validate URLs
+function cleanThumbnailUrl(url) {
+    if (!url) return '';
+    
+    // Remove any leading/trailing whitespace
+    url = url.trim();
+    
+    // Replace + with %20 for proper URL encoding
+    url = url.replace(/\+/g, '%20');
+    
+    // Basic URL validation
+    try {
+        new URL(url);
+        return url;
+    } catch (e) {
+        return '';
+    }
+}
+
 thumbnailInput.addEventListener('input', function() {
     const preview = document.getElementById('thumbnailPreview');
-    if (this.value) {
-        preview.innerHTML = `<img src="${this.value}" alt="Thumbnail" class="img-fluid rounded" onerror="this.parentElement.innerHTML='<div class=\\'placeholder-thumbnail\\'><span class=\\'material-symbols-outlined\\'>broken_image</span><p class=\\'small mt-2\\'>Invalid Image</p></div>'">`;
+    const cleanUrl = cleanThumbnailUrl(this.value);
+    
+    if (cleanUrl) {
+        // Create a new image element to test if the URL is valid
+        const testImg = new Image();
+        testImg.onload = function() {
+            preview.innerHTML = `<img src="${cleanUrl}" alt="Thumbnail" class="img-fluid rounded">`;
+        };
+        testImg.onerror = function() {
+            preview.innerHTML = '<div class="placeholder-thumbnail"><span class="material-symbols-outlined">broken_image</span><p class="small mt-2">Invalid Image URL</p></div>';
+        };
+        testImg.src = cleanUrl;
     } else {
         preview.innerHTML = '<div class="placeholder-thumbnail"><span class="material-symbols-outlined">image</span><p class="small mt-2">Thumbnail Preview</p></div>';
     }
