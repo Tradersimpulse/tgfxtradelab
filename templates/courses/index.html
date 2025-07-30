@@ -112,14 +112,16 @@
 
 <!-- Courses Grid -->
 <div class="row">
-    {% for category in categories %}
-    {% if category.videos %}
+    {% for cat_data in categories %}
+    {% set category = cat_data.category %}
+    {% set videos = cat_data.videos %}
+    {% if videos %}
     <div class="col-12 mb-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 class="text-gradient-primary">
                 <span class="material-symbols-outlined me-2">folder</span>
                 {{ category.name }}
-                <span class="badge bg-primary ms-2">{{ category.videos|length }} videos</span>
+                <span class="badge bg-primary ms-2">{{ videos|length }} videos</span>
             </h2>
             <a href="{{ url_for('category_videos', category_id=category.id) }}" class="btn btn-outline-primary">
                 View All <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
@@ -131,7 +133,7 @@
         {% endif %}
         
         <div class="row">
-            {% for video in category.videos[:4] %}
+            {% for video in videos[:4] %}
             <div class="col-lg-3 col-md-6 mb-4">
                 <div class="card video-card h-100" data-video-id="{{ video.id }}">
                     <div class="position-relative">
@@ -233,10 +235,10 @@
             {% endfor %}
         </div>
         
-        {% if category.videos|length > 4 %}
+        {% if videos|length > 4 %}
         <div class="text-center">
             <a href="{{ url_for('category_videos', category_id=category.id) }}" class="btn btn-outline-primary">
-                View All {{ category.videos|length }} Videos in {{ category.name }}
+                View All {{ videos|length }} Videos in {{ category.name }}
                 <span class="material-symbols-outlined ms-2" style="font-size: 16px;">arrow_forward</span>
             </a>
         </div>
@@ -245,7 +247,7 @@
     {% endif %}
     {% endfor %}
     
-    {% if not categories or not any(category.videos for category in categories) %}
+    {% if not categories %}
     <div class="col-12">
         <div class="text-center py-5">
             <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">search_off</span>
