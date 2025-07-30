@@ -9,7 +9,7 @@
             <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">school</span>
             All Courses
         </h1>
-        <p class="text-muted mb-4">Master trading with our comprehensive course collection</p>
+        <p class="text-muted mb-4">Choose a course to start your trading education journey</p>
         
         <!-- Progress Overview -->
         <div class="row mb-5">
@@ -42,73 +42,50 @@
 </div>
 
 <!-- Filters Section -->
+{% if all_tags %}
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
                     <span class="material-symbols-outlined me-2">filter_list</span>
-                    Filter Courses
+                    Filter by Topic
                 </h5>
             </div>
             <div class="card-body">
                 <div class="row align-items-center">
-                    <div class="col-md-6">
-                        <label class="form-label">Filter by Tag:</label>
-                        <select class="form-select" id="tagFilter" onchange="filterByTag()">
-                            <option value="">All Topics</option>
-                            {% for tag in all_tags %}
-                            <option value="{{ tag.slug }}" {% if selected_tag == tag.slug %}selected{% endif %}>
-                                {{ tag.name }} ({{ tag.videos|length }} videos)
-                            </option>
+                    <div class="col-md-8">
+                        <label class="form-label">Find courses by topic:</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a href="{{ url_for('courses') }}" 
+                               class="badge text-decoration-none px-3 py-2 {% if not selected_tag %}bg-primary{% else %}bg-secondary{% endif %}">
+                                All Courses
+                            </a>
+                            {% for tag in all_tags[:8] %}
+                            <a href="?tag={{ tag.slug }}" 
+                               class="badge text-decoration-none px-3 py-2 {% if selected_tag == tag.slug %}bg-primary{% else %}bg-secondary{% endif %}"
+                               style="background-color: {% if selected_tag != tag.slug %}{{ tag.color }}33{% else %}{{ tag.color }}{% endif %} !important; border-color: {{ tag.color }};">
+                                {{ tag.name }}
+                                <span class="badge bg-light text-dark ms-1">{{ tag.videos|length }}</span>
+                            </a>
                             {% endfor %}
-                        </select>
+                        </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label">Quick Actions:</label>
                         <div class="d-flex gap-2">
-                            <button class="btn btn-outline-primary btn-sm" onclick="showFavorites()">
+                            <a href="{{ url_for('favorites') }}" class="btn btn-outline-primary btn-sm">
                                 <span class="material-symbols-outlined me-1" style="font-size: 16px;">favorite</span>
                                 My Favorites
-                            </button>
-                            <button class="btn btn-outline-success btn-sm" onclick="showCompleted()">
-                                <span class="material-symbols-outlined me-1" style="font-size: 16px;">check_circle</span>
-                                Completed
-                            </button>
-                            <button class="btn btn-outline-warning btn-sm" onclick="showInProgress()">
-                                <span class="material-symbols-outlined me-1" style="font-size: 16px;">play_circle</span>
-                                In Progress
-                            </button>
+                            </a>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Popular Tags -->
-                {% if all_tags %}
-                <div class="mt-3">
-                    <label class="form-label">Popular Topics:</label>
-                    <div class="d-flex flex-wrap gap-2">
-                        {% for tag in all_tags[:8] %}
-                        <a href="?tag={{ tag.slug }}" 
-                           class="badge text-decoration-none px-3 py-2 {% if selected_tag == tag.slug %}bg-primary{% else %}bg-secondary{% endif %}"
-                           style="background-color: {% if selected_tag != tag.slug %}{{ tag.color }}33{% else %}{{ tag.color }}{% endif %} !important; border-color: {{ tag.color }};">
-                            {{ tag.name }}
-                            <span class="badge bg-light text-dark ms-1">{{ tag.videos|length }}</span>
-                        </a>
-                        {% endfor %}
-                        {% if selected_tag %}
-                        <a href="{{ url_for('courses') }}" class="badge bg-danger text-decoration-none px-3 py-2">
-                            <span class="material-symbols-outlined me-1" style="font-size: 14px;">close</span>
-                            Clear Filter
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
             </div>
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Courses Grid -->
 <div class="row">
@@ -116,133 +93,124 @@
     {% set category = cat_data.category %}
     {% set videos = cat_data.videos %}
     {% if videos %}
-    <div class="col-12 mb-5">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="text-gradient-primary">
-                <span class="material-symbols-outlined me-2">folder</span>
-                {{ category.name }}
-                <span class="badge bg-primary ms-2">{{ videos|length }} videos</span>
-            </h2>
-            <a href="{{ url_for('category_videos', category_id=category.id) }}" class="btn btn-outline-primary">
-                View All <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
-            </a>
-        </div>
-        
-        {% if category.description %}
-        <p class="text-muted mb-4">{{ category.description }}</p>
-        {% endif %}
-        
-        <div class="row">
-            {% for video in videos[:4] %}
-            <div class="col-lg-3 col-md-6 mb-4">
-                <div class="card video-card h-100" data-video-id="{{ video.id }}">
-                    <div class="position-relative">
-                        {% if video.thumbnail_url %}
-                        <img src="{{ video.thumbnail_url }}" class="card-img-top" alt="{{ video.title }}" style="height: 200px; object-fit: cover;">
-                        {% else %}
-                        <div class="card-img-top bg-gradient-primary d-flex align-items-center justify-content-center" style="height: 200px;">
-                            <span class="material-symbols-outlined text-white" style="font-size: 3rem;">play_circle</span>
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Video Status Overlay -->
-                        {% if user_progress.get(video.id) %}
-                            {% if user_progress[video.id].completed %}
-                            <span class="position-absolute top-0 end-0 m-2 badge bg-success">
-                                <span class="material-symbols-outlined" style="font-size: 16px;">check_circle</span>
-                            </span>
-                            {% elif user_progress[video.id].watched_duration > 0 %}
-                            <span class="position-absolute top-0 end-0 m-2 badge bg-warning">
-                                <span class="material-symbols-outlined" style="font-size: 16px;">play_circle</span>
-                            </span>
-                            {% endif %}
-                        {% endif %}
-                        
-                        <!-- Free/Premium Badge -->
-                        {% if video.is_free %}
-                        <span class="position-absolute top-0 start-0 m-2 badge bg-success">Free</span>
-                        {% else %}
-                        <span class="position-absolute top-0 start-0 m-2 badge bg-warning">Premium</span>
-                        {% endif %}
-                        
-                        <!-- Favorite Button -->
-                        <button class="btn btn-sm position-absolute bottom-0 end-0 m-2 favorite-btn {% if video.id in user_favorites %}btn-danger{% else %}btn-outline-light{% endif %}"
-                                onclick="toggleFavorite({{ video.id }}, this)">
-                            <span class="material-symbols-outlined" style="font-size: 16px;">favorite</span>
-                        </button>
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card course-card h-100" data-category-id="{{ category.id }}">
+            <div class="position-relative">
+                <!-- Course Thumbnail (use first video's thumbnail or default) -->
+                {% set first_video = videos[0] %}
+                {% if first_video.thumbnail_url %}
+                <img src="{{ first_video.thumbnail_url }}" class="card-img-top" alt="{{ category.name }}" style="height: 250px; object-fit: cover;">
+                {% else %}
+                <div class="card-img-top bg-gradient-primary d-flex align-items-center justify-content-center" style="height: 250px;">
+                    <span class="material-symbols-outlined text-white" style="font-size: 4rem;">play_circle</span>
+                </div>
+                {% endif %}
+                
+                <!-- Course Stats Overlay -->
+                <div class="position-absolute top-0 end-0 m-3">
+                    <span class="badge bg-dark bg-opacity-75 text-white">
+                        <span class="material-symbols-outlined me-1" style="font-size: 14px;">video_library</span>
+                        {{ videos|length }} videos
+                    </span>
+                </div>
+                
+                <!-- Course Level Badge -->
+                <div class="position-absolute top-0 start-0 m-3">
+                    {% if category.name|lower in ['beginner', 'fundamentals', 'basics'] %}
+                    <span class="badge bg-success">Beginner</span>
+                    {% elif category.name|lower in ['intermediate', 'advanced basics'] %}
+                    <span class="badge bg-warning">Intermediate</span>
+                    {% elif category.name|lower in ['advanced', 'expert', 'pro'] %}
+                    <span class="badge bg-danger">Advanced</span>
+                    {% else %}
+                    <span class="badge bg-primary">Course</span>
+                    {% endif %}
+                </div>
+                
+                <!-- Progress Overlay -->
+                {% set category_progress = get_category_progress(category.id, user_progress) %}
+                {% if category_progress.total > 0 %}
+                <div class="position-absolute bottom-0 start-0 end-0 p-3">
+                    <div class="progress mb-2" style="height: 4px;">
+                        <div class="progress-bar bg-success" 
+                             style="width: {{ (category_progress.completed / category_progress.total * 100)|round }}%"></div>
                     </div>
-                    
-                    <div class="card-body d-flex flex-column">
-                        <h6 class="card-title">{{ video.title }}</h6>
-                        
-                        {% if video.description %}
-                        <p class="card-text text-muted small mb-3">{{ video.description[:100] }}{% if video.description|length > 100 %}...{% endif %}</p>
+                    <small class="text-white">
+                        {{ category_progress.completed }}/{{ category_progress.total }} completed
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="card-body d-flex flex-column">
+                <h5 class="card-title text-gradient-primary">{{ category.name }}</h5>
+                
+                {% if category.description %}
+                <p class="card-text text-muted mb-3">{{ category.description }}</p>
+                {% endif %}
+                
+                <!-- Course Topics (Tags) -->
+                {% set course_tags = get_course_tags(videos) %}
+                {% if course_tags %}
+                <div class="mb-3">
+                    <h6 class="small text-muted mb-2">Topics Covered:</h6>
+                    <div class="d-flex flex-wrap gap-1">
+                        {% for tag in course_tags[:4] %}
+                        <span class="badge small"
+                              style="background-color: {{ tag.color }}33; color: {{ tag.color }}; border: 1px solid {{ tag.color }};">
+                            {{ tag.name }}
+                        </span>
+                        {% endfor %}
+                        {% if course_tags|length > 4 %}
+                        <span class="badge bg-secondary small">+{{ course_tags|length - 4 }} more</span>
                         {% endif %}
-                        
-                        <!-- Video Tags -->
-                        {% if video.tags %}
-                        <div class="mb-3">
-                            <div class="d-flex flex-wrap gap-1">
-                                {% for tag in video.tags[:3] %}
-                                <a href="?tag={{ tag.slug }}" 
-                                   class="badge text-decoration-none small"
-                                   style="background-color: {{ tag.color }}33; color: {{ tag.color }}; border: 1px solid {{ tag.color }};">
-                                    {{ tag.name }}
-                                </a>
-                                {% endfor %}
-                                {% if video.tags|length > 3 %}
-                                <span class="badge bg-secondary small">+{{ video.tags|length - 3 }} more</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Progress Bar -->
-                        {% if user_progress.get(video.id) %}
-                        {% set progress = user_progress[video.id] %}
-                        {% if video.duration and progress.watched_duration > 0 %}
-                        <div class="mb-3">
-                            {% set progress_percent = (progress.watched_duration / video.duration * 100)|round %}
-                            <div class="progress" style="height: 4px;">
-                                <div class="progress-bar bg-primary" style="width: {{ progress_percent }}%"></div>
-                            </div>
-                            <small class="text-muted">{{ progress_percent }}% complete</small>
-                        </div>
-                        {% endif %}
-                        {% endif %}
-                        
-                        <div class="mt-auto">
-                            {% if user_can_access_video(video) %}
-                            <a href="{{ url_for('watch_video', video_id=video.id) }}" class="btn btn-primary w-100">
-                                {% if user_progress.get(video.id) and user_progress[video.id].watched_duration > 0 %}
-                                <span class="material-symbols-outlined me-2" style="font-size: 16px;">play_arrow</span>
-                                Continue Watching
-                                {% else %}
-                                <span class="material-symbols-outlined me-2" style="font-size: 16px;">play_arrow</span>
-                                Start Watching
-                                {% endif %}
-                            </a>
-                            {% else %}
-                            <a href="{{ url_for('subscription') }}" class="btn btn-warning w-100">
-                                <span class="material-symbols-outlined me-2" style="font-size: 16px;">workspace_premium</span>
-                                Upgrade to Access
-                            </a>
-                            {% endif %}
-                        </div>
                     </div>
                 </div>
+                {% endif %}
+                
+                <!-- Course Stats -->
+                <div class="row text-center mb-3">
+                    <div class="col-4">
+                        <h6 class="text-gradient-primary mb-0">{{ videos|length }}</h6>
+                        <small class="text-muted">Videos</small>
+                    </div>
+                    <div class="col-4">
+                        <h6 class="text-gradient-primary mb-0">
+                            {% set total_duration = get_total_duration(videos) %}
+                            {% if total_duration > 0 %}
+                            {{ (total_duration // 3600)|int }}h {{ ((total_duration % 3600) // 60)|int }}m
+                            {% else %}
+                            -
+                            {% endif %}
+                        </h6>
+                        <small class="text-muted">Duration</small>
+                    </div>
+                    <div class="col-4">
+                        <h6 class="text-gradient-primary mb-0">{{ videos|selectattr('is_free')|list|length }}</h6>
+                        <small class="text-muted">Free</small>
+                    </div>
+                </div>
+                
+                <div class="mt-auto">
+                    {% if category_progress.total > 0 and category_progress.completed == category_progress.total %}
+                    <a href="{{ url_for('category_videos', category_id=category.id) }}" class="btn btn-success w-100">
+                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">check_circle</span>
+                        Course Completed - Review
+                    </a>
+                    {% elif category_progress.completed > 0 %}
+                    <a href="{{ url_for('category_videos', category_id=category.id) }}" class="btn btn-primary w-100">
+                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">play_arrow</span>
+                        Continue Course
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('category_videos', category_id=category.id) }}" class="btn btn-outline-primary w-100">
+                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">play_arrow</span>
+                        Start Course
+                    </a>
+                    {% endif %}
+                </div>
             </div>
-            {% endfor %}
         </div>
-        
-        {% if videos|length > 4 %}
-        <div class="text-center">
-            <a href="{{ url_for('category_videos', category_id=category.id) }}" class="btn btn-outline-primary">
-                View All {{ videos|length }} Videos in {{ category.name }}
-                <span class="material-symbols-outlined ms-2" style="font-size: 16px;">arrow_forward</span>
-            </a>
-        </div>
-        {% endif %}
     </div>
     {% endif %}
     {% endfor %}
@@ -251,9 +219,9 @@
     <div class="col-12">
         <div class="text-center py-5">
             <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">search_off</span>
-            <h4 class="text-gradient-primary mb-3">No Videos Found</h4>
+            <h4 class="text-gradient-primary mb-3">No Courses Found</h4>
             {% if selected_tag %}
-            <p class="text-muted mb-4">No videos found with the tag "{{ selected_tag|replace('-', ' ')|title }}"</p>
+            <p class="text-muted mb-4">No courses found covering "{{ selected_tag|replace('-', ' ')|title }}"</p>
             <a href="{{ url_for('courses') }}" class="btn btn-primary">
                 <span class="material-symbols-outlined me-2">refresh</span>
                 View All Courses
@@ -265,83 +233,45 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Course Recommendations -->
+{% if categories|length > 3 %}
+<div class="row mt-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">recommend</span>
+                    Recommended Learning Path
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">We recommend starting with these courses in order:</p>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for cat_data in categories[:4] %}
+                    {% set category = cat_data.category %}
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-primary me-2">{{ loop.index }}</span>
+                        <a href="{{ url_for('category_videos', category_id=category.id) }}" 
+                           class="text-decoration-none">{{ category.name }}</a>
+                        {% if not loop.last %}
+                        <span class="material-symbols-outlined mx-2 text-muted">arrow_forward</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-function filterByTag() {
-    const select = document.getElementById('tagFilter');
-    const tag = select.value;
-    
-    if (tag) {
-        window.location.href = `{{ url_for('courses') }}?tag=${tag}`;
-    } else {
-        window.location.href = `{{ url_for('courses') }}`;
-    }
-}
-
-async function toggleFavorite(videoId, button) {
-    try {
-        const response = await fetch('/api/video/favorite', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ video_id: videoId })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            if (data.is_favorited) {
-                button.classList.remove('btn-outline-light');
-                button.classList.add('btn-danger');
-            } else {
-                button.classList.remove('btn-danger');
-                button.classList.add('btn-outline-light');
-            }
-        }
-    } catch (error) {
-        console.error('Error toggling favorite:', error);
-    }
-}
-
-function showFavorites() {
-    document.querySelectorAll('.video-card').forEach(card => {
-        const favoriteBtn = card.querySelector('.favorite-btn');
-        if (favoriteBtn.classList.contains('btn-danger')) {
-            card.style.display = 'block';
-        } else {
-            card.style.display = 'none';
-        }
-    });
-}
-
-function showCompleted() {
-    document.querySelectorAll('.video-card').forEach(card => {
-        const completedBadge = card.querySelector('.badge.bg-success');
-        if (completedBadge && completedBadge.innerHTML.includes('check_circle')) {
-            card.style.display = 'block';
-        } else {
-            card.style.display = 'none';
-        }
-    });
-}
-
-function showInProgress() {
-    document.querySelectorAll('.video-card').forEach(card => {
-        const progressBar = card.querySelector('.progress-bar');
-        if (progressBar && progressBar.style.width !== '0%' && progressBar.style.width !== '100%') {
-            card.style.display = 'block';
-        } else {
-            card.style.display = 'none';
-        }
-    });
-}
-
 // Add smooth animations
 document.addEventListener('DOMContentLoaded', function() {
-    const cards = document.querySelectorAll('.video-card');
+    const cards = document.querySelectorAll('.course-card');
     cards.forEach((card, index) => {
         card.style.opacity = '0';
         card.style.transform = 'translateY(20px)';
@@ -356,15 +286,16 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-.video-card {
+.course-card {
     transition: all 0.3s ease;
     border: 1px solid var(--border-color);
+    cursor: pointer;
 }
 
-.video-card:hover {
-    transform: translateY(-5px);
+.course-card:hover {
+    transform: translateY(-8px);
     border-color: var(--primary-color);
-    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.2);
+    box-shadow: 0 15px 35px rgba(16, 185, 129, 0.2);
 }
 
 .badge {
@@ -373,7 +304,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .progress {
     border-radius: 10px;
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(0, 0, 0, 0.3);
 }
 
 .progress-bar {
@@ -381,25 +312,30 @@ document.addEventListener('DOMContentLoaded', function() {
     background: var(--gradient-primary);
 }
 
-/* Tag hover effects */
-.badge:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
 /* Card image overlay effects */
 .card-img-top {
     transition: all 0.3s ease;
 }
 
-.video-card:hover .card-img-top {
+.course-card:hover .card-img-top {
     transform: scale(1.05);
 }
 
-/* Filter section styling */
-.form-select:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
+/* Course level badges */
+.badge.bg-success { background-color: #10B981 !important; }
+.badge.bg-warning { background-color: #F59E0B !important; }
+.badge.bg-danger { background-color: #EF4444 !important; }
+
+/* Stats styling */
+.row.text-center h6 {
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+}
+
+.row.text-center small {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 </style>
 {% endblock %}
