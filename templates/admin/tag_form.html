@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - Admin - TGFX Trade Lab{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2" style="font-size: 2rem;">
+                        {% if tag %}edit{% else %}add{% endif %}
+                    </span>
+                    {{ title }}
+                </h1>
+                <p class="text-muted mb-0">
+                    {% if tag %}Update tag information and settings{% else %}Create a new tag to organize your videos{% endif %}
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('admin_tags') }}" class="btn btn-outline-secondary">
+                    <span class="material-symbols-outlined me-2">arrow_back</span>
+                    Back to Tags
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Main Form -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">info</span>
+                    Tag Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="tagForm">
+                    {{ form.hidden_tag() }}
+                    
+                    <!-- Name -->
+                    <div class="mb-4">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control", placeholder="Enter tag name (e.g., Market Structure)") }}
+                        {% if form.name.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.name.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="form-text">Choose a clear, descriptive name for your tag</div>
+                    </div>
+                    
+                    <!-- Description -->
+                    <div class="mb-4">
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows="3", placeholder="Describe what this tag represents...") }}
+                        {% if form.description.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.description.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="form-text">Optional description to help identify the tag's purpose</div>
+                    </div>
+                    
+                    <!-- Color -->
+                    <div class="mb-4">
+                        {{ form.color.label(class="form-label") }}
+                        <div class="row">
+                            <div class="col-md-6">
+                                {{ form.color(class="form-control", type="color") }}
+                                {% if form.color.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.color.errors %}{{ error }}{% endfor %}
+                                </div>
+                                {% endif %}
+                                <div class="form-text">Choose a color to identify this tag</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="color-presets">
+                                    <label class="form-label">Quick Colors:</label>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button type="button" class="btn-color-preset" data-color="#10B981" style="background-color: #10B981;" title="Emerald"></button>
+                                        <button type="button" class="btn-color-preset" data-color="#3B82F6" style="background-color: #3B82F6;" title="Blue"></button>
+                                        <button type="button" class="btn-color-preset" data-color="#8B5CF6" style="background-color: #8B5CF6;" title="Purple"></button>
+                                        <button type="button" class="btn-color-preset" data-color="#F59E0B" style="background-color: #F59E0B;" title="Amber"></button>
+                                        <button type="button" class="btn-color-preset" data-color="#EF4444" style="background-color: #EF4444;" title="Red"></button>
+                                        <button type="button" class="btn-color-preset" data-color="#06B6D4" style="background-color: #06B6D4;" title="Cyan"></button>
+                                        <button type="button" class="btn-color-preset" data-color="#84CC16" style="background-color: #84CC16;" title="Lime"></button>
+                                        <button type="button" class="btn-color-preset" data-color="#F97316" style="background-color: #F97316;" title="Orange"></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Buttons -->
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <span class="material-symbols-outlined me-2">save</span>
+                            {% if tag %}Update Tag{% else %}Create Tag{% endif %}
+                        </button>
+                        <a href="{{ url_for('admin_tags') }}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                        {% if tag %}
+                        <a href="{{ url_for('courses') }}?tag={{ tag.slug }}" class="btn btn-outline-primary ms-auto">
+                            <span class="material-symbols-outlined me-2">visibility</span>
+                            View Tagged Videos
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Tagged Videos (if editing) -->
+        {% if tag and tag.videos %}
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">video_library</span>
+                    Videos with this Tag ({{ tag.videos|length }})
+                </h5>
+                <a href="{{ url_for('courses') }}?tag={{ tag.slug }}" class="btn btn-sm btn-outline-primary">
+                    <span class="material-symbols-outlined me-1" style="font-size: 16px;">visibility</span>
+                    View All
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for video in tag.videos[:6] %}
+                    <div class="col-md-6 mb-3">
+                        <div class="d-flex align-items-center p-3 border border-secondary rounded">
+                            {% if video.thumbnail_url %}
+                            <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" 
+                                 class="me-3" style="width: 80px; height: 45px; object-fit: cover; border-radius: 6px;">
+                            {% else %}
+                            <div class="bg-gradient-primary me-3 d-flex align-items-center justify-content-center" 
+                                 style="width: 80px; height: 45px; border-radius: 6px;">
+                                <span class="material-symbols-outlined text-white" style="font-size: 20px;">play_circle</span>
+                            </div>
+                            {% endif %}
+                            <div class="flex-grow-1">
+                                <h6 class="text-white mb-1">{{ video.title[:40] }}{% if video.title|length > 40 %}...{% endif %}</h6>
+                                <small class="text-muted">{{ video.category.name }}</small>
+                                <div class="mt-1">
+                                    {% if video.is_free %}
+                                    <span class="badge bg-success small">Free</span>
+                                    {% else %}
+                                    <span class="badge bg-warning small">Premium</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="ms-2">
+                                <a href="{{ url_for('watch_video', video_id=video.id) }}" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">play_arrow</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if tag.videos|length > 6 %}
+                <div class="text-center">
+                    <a href="{{ url_for('courses') }}?tag={{ tag.slug }}" class="btn btn-outline-primary">
+                        View All {{ tag.videos|length }} Videos
+                        <span class="material-symbols-outlined ms-2" style="font-size: 16px;">arrow_forward</span>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Preview -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">visibility</span>
+                    Tag Preview
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="tag-preview">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="tag-color-preview me-3" id="colorPreview"></div>
+                        <div>
+                            <h6 class="text-white mb-1" id="namePreview">{{ tag.name if tag else 'Tag Name' }}</h6>
+                            <small class="text-muted" id="slugPreview">{{ tag.slug if tag else 'tag-slug' }}</small>
+                        </div>
+                    </div>
+                    
+                    <p class="text-muted small mb-3" id="descriptionPreview">
+                        {{ tag.description if tag and tag.description else 'Tag description will appear here...' }}
+                    </p>
+                    
+                    {% if tag %}
+                    <div class="row text-center">
+                        <div class="col-12">
+                            <h6 class="text-gradient-primary mb-0">{{ tag.videos|length }}</h6>
+                            <small class="text-muted">Tagged Videos</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tag Guidelines -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">tips_and_updates</span>
+                    Tag Guidelines
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Use specific, descriptive names</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Keep names under 25 characters</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Choose distinct colors for easy identification</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Avoid creating duplicate or similar tags</small>
+                    </li>
+                    <li class="mb-0">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Use consistent naming conventions</small>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Example Tags -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">lightbulb</span>
+                    Suggested Tags
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge" style="background-color: #10B981;">Market Structure</span>
+                    <span class="badge" style="background-color: #3B82F6;">Support & Resistance</span>
+                    <span class="badge" style="background-color: #8B5CF6;">Price Action</span>
+                    <span class="badge" style="background-color: #F59E0B;">Risk Management</span>
+                    <span class="badge" style="background-color: #EF4444;">Psychology</span>
+                    <span class="badge" style="background-color: #06B6D4;">Technical Analysis</span>
+                    <span class="badge" style="background-color: #84CC16;">Trading Strategies</span>
+                    <span class="badge" style="background-color: #F97316;">Chart Patterns</span>
+                </div>
+                <p class="text-muted small mt-2 mb-0">
+                    Click on any suggested tag above to use its name and color.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Form submission with loading state
+document.getElementById('tagForm').addEventListener('submit', function(e) {
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+});
+
+// Live preview updates
+const nameInput = document.querySelector('[name="name"]');
+const descriptionInput = document.querySelector('[name="description"]');
+const colorInput = document.querySelector('[name="color"]');
+
+nameInput.addEventListener('input', function() {
+    const namePreview = document.getElementById('namePreview');
+    const slugPreview = document.getElementById('slugPreview');
+    
+    const name = this.value || 'Tag Name';
+    const slug = name.toLowerCase().replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-');
+    
+    namePreview.textContent = name;
+    slugPreview.textContent = slug;
+});
+
+descriptionInput.addEventListener('input', function() {
+    const descriptionPreview = document.getElementById('descriptionPreview');
+    descriptionPreview.textContent = this.value || 'Tag description will appear here...';
+});
+
+colorInput.addEventListener('input', function() {
+    updateColorPreview(this.value);
+});
+
+function updateColorPreview(color) {
+    const colorPreview = document.getElementById('colorPreview');
+    colorPreview.style.backgroundColor = color;
+}
+
+// Color preset buttons
+document.querySelectorAll('.btn-color-preset').forEach(button => {
+    button.addEventListener('click', function() {
+        const color = this.dataset.color;
+        colorInput.value = color;
+        updateColorPreview(color);
+        
+        // Visual feedback
+        document.querySelectorAll('.btn-color-preset').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        this.classList.add('active');
+    });
+});
+
+// Suggested tag clicks
+document.querySelectorAll('.badge').forEach(badge => {
+    badge.addEventListener('click', function() {
+        const name = this.textContent;
+        const color = this.style.backgroundColor;
+        
+        nameInput.value = name;
+        if (color) {
+            // Convert RGB to hex
+            const rgb = color.match(/\d+/g);
+            if (rgb) {
+                const hex = '#' + rgb.map(x => {
+                    const hex = parseInt(x).toString(16);
+                    return hex.length === 1 ? '0' + hex : hex;
+                }).join('');
+                colorInput.value = hex;
+                updateColorPreview(hex);
+            }
+        }
+        
+        // Trigger input events for live preview
+        nameInput.dispatchEvent(new Event('input'));
+        descriptionInput.focus();
+    });
+});
+
+// Initialize color preview
+document.addEventListener('DOMContentLoaded', function() {
+    updateColorPreview(colorInput.value || '#10B981');
+});
+
+// Character counter for name
+nameInput.addEventListener('input', function() {
+    const maxLength = 50;
+    const currentLength = this.value.length;
+    const formText = this.parentElement.querySelector('.form-text');
+    
+    if (currentLength > maxLength - 10) {
+        formText.textContent = `${currentLength}/${maxLength} characters - ${currentLength > maxLength ? 'Too long!' : 'Almost at limit'}`;
+        formText.className = currentLength > maxLength ? 'form-text text-danger' : 'form-text text-warning';
+    } else {
+        formText.textContent = 'Choose a clear, descriptive name for your tag';
+        formText.className = 'form-text';
+    }
+});
+</script>
+
+<style>
+.tag-color-preview {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+}
+
+.tag-preview {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.tag-preview:hover {
+    border-color: rgba(16, 185, 129, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-color-preset {
+    width: 30px;
+    height: 30px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-color-preset:hover,
+.btn-color-preset.active {
+    border-color: rgba(255, 255, 255, 0.8);
+    transform: scale(1.1);
+}
+
+.color-presets .form-label {
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
+}
+
+.badge {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 600;
+}
+
+.badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.card:hover {
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+/* Input validation styling */
+.form-control.is-invalid {
+    border-color: #dc3545;
+}
+
+.form-control.is-valid {
+    border-color: #28a745;
+}
+</style>
+{% endblock %}
