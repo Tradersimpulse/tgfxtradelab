@@ -16,15 +16,15 @@ try:
     from app import app, db, User, Category, Video
 except ImportError as e:
     print(f"❌ Import error: {e}")
-    print("Make sure flask_app_main.py is in the same directory")
+    print("Make sure app.py is in the same directory")
     sys.exit(1)
 
 def test_database_connection():
-    """Test the database connection"""
+    """Test the database connection - SQLAlchemy 2.0 compatible"""
     try:
         with app.app_context():
-            # Try to execute a simple query
-            db.engine.execute('SELECT 1')
+            # Test connection by attempting to create tables
+            db.create_all()
             print("✓ Database connection successful")
             return True
     except Exception as e:
@@ -203,14 +203,17 @@ def create_sample_videos(categories):
         print(f"❌ Error creating sample videos: {e}")
 
 def setup_mysql_charset():
-    """Set up proper charset for MySQL"""
+    """Set up proper charset for MySQL - SQLAlchemy 2.0 compatible"""
     try:
         # Only run if using MySQL
         db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
         if 'mysql' in db_uri:
-            db.engine.execute('SET NAMES utf8mb4')
-            db.engine.execute('SET CHARACTER SET utf8mb4')
-            db.engine.execute('SET character_set_connection=utf8mb4')
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                conn.execute(text('SET NAMES utf8mb4'))
+                conn.execute(text('SET CHARACTER SET utf8mb4'))
+                conn.execute(text('SET character_set_connection=utf8mb4'))
+                conn.commit()
             print("✓ MySQL charset configured")
     except Exception as e:
         print(f"⚠ MySQL charset setup warning: {e}")
@@ -229,9 +232,7 @@ def main():
             # Set up MySQL charset
             setup_mysql_charset()
             
-            # Create all database tables
-            print("📊 Creating database tables...")
-            db.create_all()
+            # Create all database tables (already done in test_database_connection)
             print("✓ Database tables created successfully")
             
             # Create admin user
