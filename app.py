@@ -312,33 +312,34 @@ def courses():
     tag_filter = request.args.get('tag')
     category_filter = request.args.get('category')
     
-    # Base query
-    categories = Category.query.order_by(Category.order_index).all()
-    
     # Get all tags for the filter dropdown
     all_tags = Tag.query.order_by(Tag.name).all()
     
-    # Apply filters if specified
-    filtered_categories = []
-    for category in categories:
-        videos = list(category.videos)
-        
-        # Filter by tag if specified
-        if tag_filter:
-            videos = [v for v in videos if any(tag.slug == tag_filter for tag in v.tags)]
-        
-        # Only include categories that have videos after filtering
-        if videos or not tag_filter:
-            # Create a copy of the category with filtered videos
-            filtered_category = type('obj', (object,), {
-                'id': category.id,
-                'name': category.name,
-                'description': category.description,
-                'order_index': category.order_index,
-                'created_at': category.created_at,
-                'videos': videos
-            })()
-            filtered_categories.append(filtered_category)
+    # Get categories and their videos
+    if tag_filter:
+        # Filter by tag - get videos with the specific tag
+        tag = Tag.query.filter_by(slug=tag_filter).first()
+        if tag:
+            # Get categories that have videos with this tag
+            categories_with_tagged_videos = []
+            all_categories = Category.query.order_by(Category.order_index).all()
+            
+            for category in all_categories:
+                # Get videos in this category that have the specified tag
+                tagged_videos = [v for v in category.videos if tag in v.tags]
+                if tagged_videos:
+                    categories_with_tagged_videos.append({
+                        'category': category,
+                        'videos': tagged_videos
+                    })
+            
+            categories = categories_with_tagged_videos
+        else:
+            categories = []
+    else:
+        # No filter - get all categories with all their videos
+        all_categories = Category.query.order_by(Category.order_index).all()
+        categories = [{'category': cat, 'videos': list(cat.videos)} for cat in all_categories if cat.videos]
     
     # Get user progress and favorites
     user_progress = {p.video_id: p for p in current_user.progress}
@@ -350,7 +351,7 @@ def courses():
     progress_percentage = (completed_videos / total_videos * 100) if total_videos > 0 else 0
     
     return render_template('courses/index.html', 
-                         categories=filtered_categories,
+                         categories=categories,
                          all_tags=all_tags,
                          selected_tag=tag_filter,
                          user_progress=user_progress,
