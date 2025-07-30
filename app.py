@@ -494,7 +494,7 @@ if __name__ == '__main__':
                 admin_user = User(
                     username='admin',
                     email='ray@tgfx-academy.com',
-                    password_hash=generate_password_hash('admin123'),
+                    password_hash=generate_password_hash('admin123!345gdfb3f35'),
                     is_admin=True
                 )
                 db.session.add(admin_user)
