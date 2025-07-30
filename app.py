@@ -256,6 +256,96 @@ def extract_filter(dictionary, key):
     except (KeyError, IndexError, TypeError, AttributeError):
         return None
 
+def get_category_progress(category_id, user_progress):
+    """Calculate progress for a category"""
+    category = Category.query.get(category_id)
+    if not category:
+        return {'completed': 0, 'total': 0}
+    
+    videos = category.videos
+    total_videos = len(videos)
+    completed_videos = 0
+    
+    for video in videos:
+        progress = user_progress.get(video.id)
+        if progress and progress.completed:
+            completed_videos += 1
+    
+    return {
+        'completed': completed_videos,
+        'total': total_videos
+    }
+
+def get_course_tags(videos):
+    """Get all unique tags from a list of videos"""
+    tags = set()
+    for video in videos:
+        for tag in video.tags:
+            tags.add(tag)
+    return list(tags)
+
+def get_total_duration(videos):
+    """Calculate total duration of videos in seconds"""
+    total = 0
+    for video in videos:
+        if video.duration:
+            total += video.duration
+    return total
+
+# Update the courses route
+@app.route('/courses')
+@login_required
+def courses():
+    # Get filter parameters
+    tag_filter = request.args.get('tag')
+    
+    # Get all tags for the filter dropdown
+    all_tags = Tag.query.order_by(Tag.name).all()
+    
+    # Get categories and their videos
+    if tag_filter:
+        # Filter by tag - get categories that have videos with the specific tag
+        tag = Tag.query.filter_by(slug=tag_filter).first()
+        if tag:
+            categories_with_tagged_videos = []
+            all_categories = Category.query.order_by(Category.order_index).all()
+            
+            for category in all_categories:
+                # Get videos in this category that have the specified tag
+                tagged_videos = [v for v in category.videos if tag in v.tags]
+                if tagged_videos:
+                    categories_with_tagged_videos.append({
+                        'category': category,
+                        'videos': tagged_videos
+                    })
+            
+            categories = categories_with_tagged_videos
+        else:
+            categories = []
+    else:
+        # No filter - get all categories with all their videos
+        all_categories = Category.query.order_by(Category.order_index).all()
+        categories = [{'category': cat, 'videos': list(cat.videos)} for cat in all_categories if cat.videos]
+    
+    # Get user progress and favorites
+    user_progress = {p.video_id: p for p in current_user.progress}
+    user_favorites = {f.video_id for f in current_user.favorites}
+    
+    # Calculate progress stats
+    total_videos = Video.query.count()
+    completed_videos = UserProgress.query.filter_by(user_id=current_user.id, completed=True).count()
+    progress_percentage = (completed_videos / total_videos * 100) if total_videos > 0 else 0
+    
+    return render_template('courses/index.html', 
+                         categories=categories,
+                         all_tags=all_tags,
+                         selected_tag=tag_filter,
+                         user_progress=user_progress,
+                         user_favorites=user_favorites,
+                         progress_percentage=progress_percentage,
+                         completed_videos=completed_videos,
+                         total_videos=total_videos)
+
         
 # Routes
 @app.route('/')
@@ -790,7 +880,12 @@ def api_delete_category(category_id):
 
 @app.context_processor
 def utility_processor():
-    return dict(user_can_access_video=user_can_access_video)
+    return dict(
+        user_can_access_video=user_can_access_video,
+        get_category_progress=get_category_progress,
+        get_course_tags=get_course_tags,
+        get_total_duration=get_total_duration
+    )
 
 # Register API blueprint (if api.py exists)
 try:
