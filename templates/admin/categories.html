@@ -127,9 +127,10 @@
                                     Created: {{ category.created_at.strftime('%m/%d/%Y') }}
                                 </span>
                                 {% if category.videos %}
+                                {% set latest_video = category.videos|sort(attribute='created_at', reverse=true)|first %}
                                 <span>
                                     <span class="material-symbols-outlined me-1" style="font-size: 14px;">update</span>
-                                    Last video: {{ category.videos|sort(attribute='created_at', reverse=true)|first.created_at.strftime('%m/%d/%Y') }}
+                                    Last video: {{ latest_video.created_at.strftime('%m/%d/%Y') }}
                                 </span>
                                 {% endif %}
                             </div>
