@@ -235,7 +235,12 @@
                                     <span class="badge bg-warning">{{ category.videos|length - category.videos|selectattr('is_free')|list|length }}</span>
                                 </td>
                                 <td class="text-center">
-                                    {% set total_duration = category.videos|sum(attribute='duration')|default(0) %}
+                                    {% set total_duration = 0 %}
+                                    {% for video in category.videos %}
+                                        {% if video.duration %}
+                                            {% set total_duration = total_duration + video.duration %}
+                                        {% endif %}
+                                    {% endfor %}
                                     {% if total_duration > 0 %}
                                     {{ (total_duration // 3600)|int }}h {{ ((total_duration % 3600) // 60)|int }}m
                                     {% else %}
