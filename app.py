@@ -345,7 +345,6 @@ def courses():
                          progress_percentage=progress_percentage,
                          completed_videos=completed_videos,
                          total_videos=total_videos)
-
         
 # Routes
 @app.route('/')
