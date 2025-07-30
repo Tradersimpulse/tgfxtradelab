@@ -7,6 +7,9 @@ WTForms==3.0.1
 Werkzeug==2.3.7
 Jinja2==3.1.2
 
+# SQLAlchemy (ensure compatibility)
+SQLAlchemy==2.0.23
+
 # MySQL Database
 PyMySQL==1.1.0
 cryptography==41.0.7
