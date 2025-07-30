@@ -190,30 +190,6 @@ def extract_filter(dictionary, key):
     except (KeyError, IndexError, TypeError, AttributeError):
         return None
 
-# Alternative approach - you can also register filters this way:
-def register_template_filters(app):
-    """Register custom template filters"""
-    
-    @app.template_filter('nl2br')
-    def nl2br_filter(text):
-        """Convert newlines to <br> tags"""
-        if text is None:
-            return ''
-        return text.replace('\n', '<br>\n')
-    
-    @app.template_filter('extract')
-    def extract_filter(dictionary, key):
-        """Extract a value from a dictionary - robust version"""
-        try:
-            if isinstance(dictionary, dict):
-                return dictionary.get(key)
-            elif hasattr(dictionary, '__getitem__'):
-                return dictionary[key]
-            else:
-                # If it's not a dictionary or indexable, return None
-                return None
-        except (KeyError, IndexError, TypeError, AttributeError):
-            return None
         
 # Routes
 @app.route('/')
