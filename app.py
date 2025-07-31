@@ -9,13 +9,12 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
 import boto3
-from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import NoCredentialsError ClientError
 import stripe
 from config import get_config
 import re
 import json
 import uuid
-from botocore.exceptions import ClientError
 
 # Initialize Flask app
 app = Flask(__name__)
