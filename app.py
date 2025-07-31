@@ -1090,29 +1090,34 @@ def api_delete_category(category_id):
 @app.route('/livestream')
 @login_required
 def livestream():
-    """User page to watch live streams"""
-    active_stream = Stream.query.filter_by(is_active=True).first()
+    """User page to watch live streams - now supports multiple streams"""
+    active_streams = Stream.query.filter_by(is_active=True).all()
     
-    attendee_data = None
-    if active_stream:
+    # Group streams by streamer for easier display
+    streams_by_streamer = {}
+    attendee_data_by_stream = {}
+    
+    for stream in active_streams:
+        streamer = stream.streamer_name or 'Unknown'
+        streams_by_streamer[streamer] = stream
+        
         # Check if user already has an attendee record for this stream
         existing_viewer = StreamViewer.query.filter_by(
-            stream_id=active_stream.id,
+            stream_id=stream.id,
             user_id=current_user.id,
             is_active=True
         ).first()
         
         if existing_viewer:
-            # Return existing attendee data
-            attendee_data = {
+            attendee_data_by_stream[stream.id] = {
                 'AttendeeId': existing_viewer.attendee_id,
                 'ExternalUserId': existing_viewer.external_user_id
             }
         else:
-            # Create new attendee
+            # Create new attendee for this stream
             external_user_id = f"user-{current_user.id}-{uuid.uuid4().hex[:8]}"
             attendee = create_chime_attendee(
-                active_stream.meeting_id,
+                stream.meeting_id,
                 external_user_id,
                 current_user.username
             )
@@ -1120,7 +1125,7 @@ def livestream():
             if attendee:
                 # Save viewer record
                 viewer = StreamViewer(
-                    stream_id=active_stream.id,
+                    stream_id=stream.id,
                     user_id=current_user.id,
                     attendee_id=attendee['AttendeeId'],
                     external_user_id=external_user_id
@@ -1128,53 +1133,85 @@ def livestream():
                 db.session.add(viewer)
                 
                 # Update viewer count
-                active_stream.viewer_count = StreamViewer.query.filter_by(
-                    stream_id=active_stream.id,
+                stream.viewer_count = StreamViewer.query.filter_by(
+                    stream_id=stream.id,
                     is_active=True
                 ).count() + 1
                 
                 db.session.commit()
-                attendee_data = attendee
+                attendee_data_by_stream[stream.id] = attendee
     
-    return render_template('courses/livestream.html', 
-                         stream=active_stream,
-                         attendee_data=attendee_data)
+    return render_template('courses/dual_livestream.html', 
+                         active_streams=active_streams,
+                         streams_by_streamer=streams_by_streamer,
+                         attendee_data_by_stream=attendee_data_by_stream)
 
 @app.route('/admin/stream')
 @login_required
 def admin_stream():
-    """Admin page to control streams"""
+    """Admin page to control streams - supports dual streaming"""
     if not current_user.is_admin:
         flash('Access denied', 'error')
         return redirect(url_for('courses'))
     
-    form = StreamForm()
-    active_stream = Stream.query.filter_by(is_active=True).first()
+    form = DualStreamForm()
+    
+    # Get active streams
+    active_streams = Stream.query.filter_by(is_active=True).all()
+    
+    # Get recent streams
     recent_streams = Stream.query.order_by(Stream.created_at.desc()).limit(10).all()
     
-    return render_template('admin/stream.html',
+    # Check if current user can start a stream (max 2 concurrent)
+    can_start_stream = len(active_streams) < 2 and current_user.can_stream
+    
+    # Get current user's active stream if any
+    user_active_stream = Stream.query.filter_by(
+        created_by=current_user.id,
+        is_active=True
+    ).first()
+    
+    return render_template('admin/dual_stream.html',
                          form=form,
-                         active_stream=active_stream,
-                         recent_streams=recent_streams)
+                         active_streams=active_streams,
+                         recent_streams=recent_streams,
+                         can_start_stream=can_start_stream,
+                         user_active_stream=user_active_stream)
 
 @app.route('/api/stream/start', methods=['POST'])
 @login_required
 def api_start_stream():
-    """Start a new live stream"""
-    if not current_user.is_admin:
-        return jsonify({'error': 'Access denied'}), 403
+    """Start a new live stream - supports concurrent streams"""
+    if not current_user.is_admin or not current_user.can_stream:
+        return jsonify({'error': 'Access denied - not authorized to stream'}), 403
     
-    # Check if there's already an active stream
-    active_stream = Stream.query.filter_by(is_active=True).first()
-    if active_stream:
-        return jsonify({'error': 'A stream is already active'}), 400
+    # Check if user already has an active stream
+    user_active_stream = Stream.query.filter_by(
+        created_by=current_user.id,
+        is_active=True
+    ).first()
+    if user_active_stream:
+        return jsonify({'error': 'You already have an active stream'}), 400
+    
+    # Check concurrent stream limit (max 2)
+    active_stream_count = Stream.query.filter_by(is_active=True).count()
+    if active_stream_count >= 2:
+        return jsonify({'error': 'Maximum concurrent streams reached (2)'}), 400
     
     data = request.get_json()
     title = data.get('title', 'Live Stream')
     description = data.get('description', '')
+    stream_type = data.get('stream_type', 'general')
+    
+    # Get streamer name
+    streamer_name = current_user.display_name or current_user.username
+    
+    # Add streamer name to title if not already there
+    if streamer_name not in title:
+        title = f"{streamer_name}'s {title}"
     
     # Create unique meeting ID
-    external_meeting_id = f"stream-{uuid.uuid4().hex[:12]}"
+    external_meeting_id = f"stream-{streamer_name.lower()}-{uuid.uuid4().hex[:12]}"
     
     # Create Chime meeting
     meeting_data = create_chime_meeting(title, external_meeting_id)
@@ -1186,7 +1223,7 @@ def api_start_stream():
     admin_attendee = create_chime_attendee(
         meeting_data['MeetingId'],
         admin_external_id,
-        f"Admin-{current_user.username}"
+        f"{streamer_name}-Admin"
     )
     
     if not admin_attendee:
@@ -1206,7 +1243,9 @@ def api_start_stream():
         media_placement_screen_data_url=meeting_data['MediaPlacement']['ScreenDataUrl'],
         is_active=True,
         started_at=datetime.utcnow(),
-        created_by=current_user.id
+        created_by=current_user.id,
+        streamer_name=streamer_name,
+        stream_type=stream_type
     )
     
     db.session.add(stream)
@@ -1217,128 +1256,177 @@ def api_start_stream():
         'stream': {
             'id': stream.id,
             'title': stream.title,
+            'streamer_name': stream.streamer_name,
             'meeting_id': stream.meeting_id,
             'meeting_data': meeting_data,
             'admin_attendee': admin_attendee
         }
     })
 
+# UPDATE the stop stream API
 @app.route('/api/stream/stop', methods=['POST'])
 @login_required
 def api_stop_stream():
-    """Stop the active live stream"""
+    """Stop a live stream - user can only stop their own stream"""
     if not current_user.is_admin:
         return jsonify({'error': 'Access denied'}), 403
     
-    active_stream = Stream.query.filter_by(is_active=True).first()
-    if not active_stream:
-        return jsonify({'error': 'No active stream found'}), 400
+    data = request.get_json()
+    stream_id = data.get('stream_id')
+    
+    if stream_id:
+        # Stop specific stream (must be owned by current user)
+        stream = Stream.query.filter_by(
+            id=stream_id,
+            created_by=current_user.id,
+            is_active=True
+        ).first()
+    else:
+        # Stop user's active stream
+        stream = Stream.query.filter_by(
+            created_by=current_user.id,
+            is_active=True
+        ).first()
+    
+    if not stream:
+        return jsonify({'error': 'No active stream found or access denied'}), 400
     
     # Delete Chime meeting
-    if active_stream.meeting_id:
-        delete_chime_meeting(active_stream.meeting_id)
+    if stream.meeting_id:
+        delete_chime_meeting(stream.meeting_id)
     
     # Update stream record
-    active_stream.is_active = False
-    active_stream.ended_at = datetime.utcnow()
+    stream.is_active = False
+    stream.ended_at = datetime.utcnow()
     
     # Mark all viewers as inactive
-    StreamViewer.query.filter_by(stream_id=active_stream.id, is_active=True).update({
+    StreamViewer.query.filter_by(stream_id=stream.id, is_active=True).update({
         'is_active': False,
         'left_at': datetime.utcnow()
     })
     
     db.session.commit()
     
-    return jsonify({'success': True})
+    return jsonify({
+        'success': True,
+        'message': f'{stream.streamer_name}\'s stream ended'
+    })
 
+# UPDATE the stream status API
 @app.route('/api/stream/status')
 @login_required
 def api_stream_status():
-    """Get current stream status"""
-    active_stream = Stream.query.filter_by(is_active=True).first()
+    """Get current streams status - supports multiple streams"""
+    active_streams = Stream.query.filter_by(is_active=True).all()
     
-    if not active_stream:
-        return jsonify({'active': False})
+    if not active_streams:
+        return jsonify({'active': False, 'streams': []})
     
-    # Update viewer count
-    active_viewers = StreamViewer.query.filter_by(
-        stream_id=active_stream.id,
-        is_active=True
-    ).count()
+    streams_data = []
+    for stream in active_streams:
+        # Update viewer count
+        active_viewers = StreamViewer.query.filter_by(
+            stream_id=stream.id,
+            is_active=True
+        ).count()
+        
+        stream.viewer_count = active_viewers
+        
+        streams_data.append({
+            'id': stream.id,
+            'title': stream.title,
+            'description': stream.description,
+            'streamer_name': stream.streamer_name,
+            'stream_type': stream.stream_type,
+            'viewer_count': stream.viewer_count,
+            'started_at': stream.started_at.isoformat() if stream.started_at else None,
+            'is_recording': stream.is_recording,
+            'created_by': stream.created_by,
+            'stream_color': stream.creator.stream_color if stream.creator else '#10B981'
+        })
     
-    active_stream.viewer_count = active_viewers
     db.session.commit()
     
     return jsonify({
         'active': True,
-        'stream': {
-            'id': active_stream.id,
-            'title': active_stream.title,
-            'description': active_stream.description,
-            'viewer_count': active_stream.viewer_count,
-            'started_at': active_stream.started_at.isoformat() if active_stream.started_at else None,
-            'is_recording': active_stream.is_recording
-        }
+        'count': len(active_streams),
+        'streams': streams_data
     })
 
-@app.route('/api/stream/leave', methods=['POST'])
-@login_required
-def api_leave_stream():
-    """Mark user as having left the stream"""
-    data = request.get_json()
-    stream_id = data.get('stream_id')
-    
-    if not stream_id:
-        return jsonify({'error': 'Stream ID required'}), 400
-    
-    viewer = StreamViewer.query.filter_by(
-        stream_id=stream_id,
-        user_id=current_user.id,
-        is_active=True
-    ).first()
-    
-    if viewer:
-        viewer.is_active = False
-        viewer.left_at = datetime.utcnow()
-        db.session.commit()
-    
-    return jsonify({'success': True})
-
+# UPDATE recording functions
 @app.route('/api/stream/recording/start', methods=['POST'])
 @login_required
 def api_start_recording():
-    """Start recording the active stream"""
+    """Start recording a stream - user can only record their own stream"""
     if not current_user.is_admin:
         return jsonify({'error': 'Access denied'}), 403
     
-    active_stream = Stream.query.filter_by(is_active=True).first()
-    if not active_stream:
-        return jsonify({'error': 'No active stream found'}), 400
+    data = request.get_json()
+    stream_id = data.get('stream_id')
     
-    # TODO: Implement Chime SDK media recording
-    # This would require additional AWS services like Kinesis Video Streams
-    # For now, we'll just mark it as recording
-    active_stream.is_recording = True
+    if stream_id:
+        stream = Stream.query.filter_by(
+            id=stream_id,
+            created_by=current_user.id,
+            is_active=True
+        ).first()
+    else:
+        stream = Stream.query.filter_by(
+            created_by=current_user.id,
+            is_active=True
+        ).first()
+    
+    if not stream:
+        return jsonify({'error': 'No active stream found or access denied'}), 400
+    
+    stream.is_recording = True
     db.session.commit()
     
-    return jsonify({'success': True, 'message': 'Recording started'})
+    return jsonify({
+        'success': True, 
+        'message': f'Recording started for {stream.streamer_name}\'s stream'
+    })
 
 @app.route('/api/stream/recording/stop', methods=['POST'])
 @login_required
 def api_stop_recording():
-    """Stop recording the active stream"""
+    """Stop recording a stream"""
     if not current_user.is_admin:
         return jsonify({'error': 'Access denied'}), 403
     
-    active_stream = Stream.query.filter_by(is_active=True).first()
-    if not active_stream:
-        return jsonify({'error': 'No active stream found'}), 400
+    data = request.get_json()
+    stream_id = data.get('stream_id')
     
-    active_stream.is_recording = False
+    if stream_id:
+        stream = Stream.query.filter_by(
+            id=stream_id,
+            created_by=current_user.id,
+            is_active=True
+        ).first()
+    else:
+        stream = Stream.query.filter_by(
+            created_by=current_user.id,
+            is_active=True
+        ).first()
+    
+    if not stream:
+        return jsonify({'error': 'No active stream found or access denied'}), 400
+    
+    stream.is_recording = False
+    
+    # Here you would implement the actual recording save logic
+    # For now, we'll just generate a placeholder URL
+    if stream.streamer_name:
+        recording_url = f"s3://tgfx-tradelab/livestream-recordings/{datetime.utcnow().strftime('%Y/%m/%d')}/{stream.streamer_name}-stream-{stream.id}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.mp4"
+        stream.recording_url = recording_url
+    
     db.session.commit()
     
-    return jsonify({'success': True, 'message': 'Recording stopped'})
+    return jsonify({
+        'success': True, 
+        'message': f'Recording stopped for {stream.streamer_name}\'s stream',
+        'recording_url': stream.recording_url
+    })
 
 @app.context_processor
 def utility_processor():
