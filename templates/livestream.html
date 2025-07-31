@@ -373,6 +373,49 @@ window.addEventListener('beforeunload', function() {
 });
 </script>
 
+<script>
+// Add this debugging function
+function debugStreamConnection(streamId) {
+    const stream = activeStreams.find(s => s.id === streamId);
+    const attendeeData = attendeeDataByStream[streamId];
+    
+    console.log('=== DEBUG STREAM CONNECTION ===');
+    console.log('Stream ID:', streamId);
+    console.log('Stream data:', stream);
+    console.log('Attendee data:', attendeeData);
+    console.log('Active streams:', activeStreams);
+    console.log('Attendee data by stream:', attendeeDataByStream);
+    
+    if (stream) {
+        console.log('Meeting configuration would be:', {
+            meetingId: stream.meeting_id,
+            externalMeetingId: stream.external_meeting_id,
+            mediaRegion: stream.media_region,
+            mediaPlacement: {
+                audioHostUrl: stream.media_placement_audio_host_url,
+                screenSharingUrl: stream.media_placement_screen_sharing_url,
+                screenDataUrl: stream.media_placement_screen_data_url
+            }
+        });
+    }
+    
+    // Check if Chime SDK is loaded
+    console.log('Chime SDK loaded:', typeof window.ChimeSDK !== 'undefined');
+    
+    // Check browser permissions
+    navigator.permissions.query({name: 'microphone'}).then(function(result) {
+        console.log('Microphone permission:', result.state);
+    });
+    
+    navigator.permissions.query({name: 'camera'}).then(function(result) {
+        console.log('Camera permission:', result.state);
+    });
+}
+
+// Call this function when Join Stream button is clicked
+// Modify your join button to: onclick="debugStreamConnection(123); joinStream(123);"
+</script>
+
 <style>
 .stream-card {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
