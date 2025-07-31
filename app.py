@@ -1243,13 +1243,19 @@ def admin_stream():
         is_active=True
     ).first()
     
+    # Convert Stream objects to dictionaries for JSON serialization
+    active_streams_dict = [stream.to_dict() for stream in active_streams] if active_streams else []
+    user_active_stream_dict = user_active_stream.to_dict() if user_active_stream else None
+    
     return render_template('admin/stream.html',
                          form=form,
-                         active_streams=active_streams,
+                         active_streams=active_streams,  # For template loops
+                         active_streams_dict=active_streams_dict,  # For JavaScript
                          recent_streams=recent_streams,
                          can_start_stream=can_start_stream,
-                         user_active_stream=user_active_stream)
-
+                         user_active_stream=user_active_stream,  # For template
+                         user_active_stream_dict=user_active_stream_dict)  # For JavaScript
+    
 @app.route('/api/stream/start', methods=['POST'])
 @login_required
 def api_start_stream():
