@@ -340,7 +340,7 @@ let userStreamStates = {
     screenSharing: false
 };
 
-const userActiveStream = {{ user_active_stream|tojson if user_active_stream else 'null' }};
+const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
 
 document.addEventListener('DOMContentLoaded', function() {
     if (userActiveStream) {
