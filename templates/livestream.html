@@ -186,7 +186,7 @@
 
 <script>
 // Global variables for managing multiple streams
-const activeStreams = {{ active_streams|tojson if active_streams else '[]' }};
+const activeStreams = {{ active_streams_dict|tojson if active_streams_dict else '[]' }};
 const attendeeDataByStream = {{ attendee_data_by_stream|tojson if attendee_data_by_stream else '{}' }};
 const joinedStreams = new Map(); // streamId -> meetingSession
 const streamStates = new Map(); // streamId -> {muted, videoEnabled}
