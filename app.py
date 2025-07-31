@@ -398,6 +398,169 @@ def courses():
                          progress_percentage=progress_percentage,
                          completed_videos=completed_videos,
                          total_videos=total_videos)
+
+def init_chime_client():
+    """Initialize AWS Chime client"""
+    try:
+        chime_client = boto3.client(
+            'chime',
+            aws_access_key_id=app.config['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=app.config['AWS_SECRET_ACCESS_KEY'],
+            region_name=app.config.get('AWS_CHIME_REGION', 'us-east-1')
+        )
+        return chime_client
+    except (NoCredentialsError, KeyError):
+        return None
+
+def create_chime_meeting(stream_title, external_meeting_id):
+    """Create a new Chime meeting for the stream"""
+    chime_client = init_chime_client()
+    if not chime_client:
+        return None
+    
+    try:
+        response = chime_client.create_meeting(
+            ClientRequestToken=str(uuid.uuid4()),
+            ExternalMeetingId=external_meeting_id,
+            MediaRegion=app.config.get('AWS_CHIME_REGION', 'us-east-1'),
+            MeetingHostId=str(current_user.id),
+            Tags=[
+                {
+                    'Key': 'StreamTitle',
+                    'Value': stream_title
+                },
+                {
+                    'Key': 'CreatedBy',
+                    'Value': current_user.username
+                }
+            ]
+        )
+        return response['Meeting']
+    except ClientError as e:
+        print(f"Error creating Chime meeting: {e}")
+        return None
+
+def create_chime_attendee(meeting_id, external_user_id, user_name):
+    """Create a Chime attendee for the meeting"""
+    chime_client = init_chime_client()
+    if not chime_client:
+        return None
+    
+    try:
+        response = chime_client.create_attendee(
+            MeetingId=meeting_id,
+            ExternalUserId=external_user_id,
+            Tags=[
+                {
+                    'Key': 'UserName',
+                    'Value': user_name
+                }
+            ]
+        )
+        return response['Attendee']
+    except ClientError as e:
+        print(f"Error creating Chime attendee: {e}")
+        return None
+
+def get_recording_s3_key(stream_id, timestamp=None):
+    """Generate S3 key for stream recording"""
+    if not timestamp:
+        timestamp = datetime.utcnow()
+    
+    date_str = timestamp.strftime('%Y/%m/%d')
+    filename = f"stream-{stream_id}-{timestamp.strftime('%Y%m%d-%H%M%S')}.mp4"
+    
+    prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
+    return f"{prefix}{date_str}/{filename}"
+
+def upload_recording_to_s3(local_file_path, stream_id):
+    """Upload recording file to S3"""
+    s3_client = init_s3_client()
+    if not s3_client:
+        return None
+    
+    try:
+        bucket = app.config['STREAM_RECORDINGS_BUCKET']
+        s3_key = get_recording_s3_key(stream_id)
+        
+        s3_client.upload_file(
+            local_file_path,
+            bucket,
+            s3_key,
+            ExtraArgs={
+                'ContentType': 'video/mp4',
+                'ServerSideEncryption': 'AES256'
+            }
+        )
+        
+        # Generate the S3 URL
+        s3_url = f"https://{bucket}.s3.amazonaws.com/{s3_key}"
+        return s3_url
+        
+    except ClientError as e:
+        print(f"Error uploading recording to S3: {e}")
+        return None
+
+def delete_chime_meeting(meeting_id):
+    """Delete a Chime meeting"""
+    chime_client = init_chime_client()
+    if not chime_client:
+        return False
+    
+    try:
+        chime_client.delete_meeting(MeetingId=meeting_id)
+        return True
+    except ClientError as e:
+        print(f"Error deleting Chime meeting: {e}")
+        return False
+    """Generate S3 key for stream recording"""
+    if not timestamp:
+        timestamp = datetime.utcnow()
+    
+    date_str = timestamp.strftime('%Y/%m/%d')
+    filename = f"stream-{stream_id}-{timestamp.strftime('%Y%m%d-%H%M%S')}.mp4"
+    
+    prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
+    return f"{prefix}{date_str}/{filename}"
+
+def upload_recording_to_s3(local_file_path, stream_id):
+    """Upload recording file to S3"""
+    s3_client = init_s3_client()
+    if not s3_client:
+        return None
+    
+    try:
+        bucket = app.config['STREAM_RECORDINGS_BUCKET']
+        s3_key = get_recording_s3_key(stream_id)
+        
+        s3_client.upload_file(
+            local_file_path,
+            bucket,
+            s3_key,
+            ExtraArgs={
+                'ContentType': 'video/mp4',
+                'ServerSideEncryption': 'AES256'
+            }
+        )
+        
+        # Generate the S3 URL
+        s3_url = f"https://{bucket}.s3.amazonaws.com/{s3_key}"
+        return s3_url
+        
+    except ClientError as e:
+        print(f"Error uploading recording to S3: {e}")
+        return None
+    """Delete a Chime meeting"""
+    chime_client = init_chime_client()
+    if not chime_client:
+        return False
+    
+    try:
+        chime_client.delete_meeting(MeetingId=meeting_id)
+        return True
+    except ClientError as e:
+        print(f"Error deleting Chime meeting: {e}")
+        return False
         
 # Routes
 @app.route('/')
@@ -917,6 +1080,260 @@ def api_delete_category(category_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+#Livestreaming app routes
+@app.route('/livestream')
+@login_required
+def livestream():
+    """User page to watch live streams"""
+    active_stream = Stream.query.filter_by(is_active=True).first()
+    
+    attendee_data = None
+    if active_stream:
+        # Check if user already has an attendee record for this stream
+        existing_viewer = StreamViewer.query.filter_by(
+            stream_id=active_stream.id,
+            user_id=current_user.id,
+            is_active=True
+        ).first()
+        
+        if existing_viewer:
+            # Return existing attendee data
+            attendee_data = {
+                'AttendeeId': existing_viewer.attendee_id,
+                'ExternalUserId': existing_viewer.external_user_id
+            }
+        else:
+            # Create new attendee
+            external_user_id = f"user-{current_user.id}-{uuid.uuid4().hex[:8]}"
+            attendee = create_chime_attendee(
+                active_stream.meeting_id,
+                external_user_id,
+                current_user.username
+            )
+            
+            if attendee:
+                # Save viewer record
+                viewer = StreamViewer(
+                    stream_id=active_stream.id,
+                    user_id=current_user.id,
+                    attendee_id=attendee['AttendeeId'],
+                    external_user_id=external_user_id
+                )
+                db.session.add(viewer)
+                
+                # Update viewer count
+                active_stream.viewer_count = StreamViewer.query.filter_by(
+                    stream_id=active_stream.id,
+                    is_active=True
+                ).count() + 1
+                
+                db.session.commit()
+                attendee_data = attendee
+    
+    return render_template('courses/livestream.html', 
+                         stream=active_stream,
+                         attendee_data=attendee_data)
+
+@app.route('/admin/stream')
+@login_required
+def admin_stream():
+    """Admin page to control streams"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('courses'))
+    
+    form = StreamForm()
+    active_stream = Stream.query.filter_by(is_active=True).first()
+    recent_streams = Stream.query.order_by(Stream.created_at.desc()).limit(10).all()
+    
+    return render_template('admin/stream.html',
+                         form=form,
+                         active_stream=active_stream,
+                         recent_streams=recent_streams)
+
+@app.route('/api/stream/start', methods=['POST'])
+@login_required
+def api_start_stream():
+    """Start a new live stream"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    # Check if there's already an active stream
+    active_stream = Stream.query.filter_by(is_active=True).first()
+    if active_stream:
+        return jsonify({'error': 'A stream is already active'}), 400
+    
+    data = request.get_json()
+    title = data.get('title', 'Live Stream')
+    description = data.get('description', '')
+    
+    # Create unique meeting ID
+    external_meeting_id = f"stream-{uuid.uuid4().hex[:12]}"
+    
+    # Create Chime meeting
+    meeting_data = create_chime_meeting(title, external_meeting_id)
+    if not meeting_data:
+        return jsonify({'error': 'Failed to create meeting'}), 500
+    
+    # Create admin attendee
+    admin_external_id = f"admin-{current_user.id}-{uuid.uuid4().hex[:8]}"
+    admin_attendee = create_chime_attendee(
+        meeting_data['MeetingId'],
+        admin_external_id,
+        f"Admin-{current_user.username}"
+    )
+    
+    if not admin_attendee:
+        delete_chime_meeting(meeting_data['MeetingId'])
+        return jsonify({'error': 'Failed to create admin attendee'}), 500
+    
+    # Create stream record
+    stream = Stream(
+        title=title,
+        description=description,
+        meeting_id=meeting_data['MeetingId'],
+        attendee_id=admin_attendee['AttendeeId'],
+        external_meeting_id=external_meeting_id,
+        media_region=meeting_data['MediaRegion'],
+        media_placement_audio_host_url=meeting_data['MediaPlacement']['AudioHostUrl'],
+        media_placement_screen_sharing_url=meeting_data['MediaPlacement']['ScreenSharingUrl'],
+        media_placement_screen_data_url=meeting_data['MediaPlacement']['ScreenDataUrl'],
+        is_active=True,
+        started_at=datetime.utcnow(),
+        created_by=current_user.id
+    )
+    
+    db.session.add(stream)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'stream': {
+            'id': stream.id,
+            'title': stream.title,
+            'meeting_id': stream.meeting_id,
+            'meeting_data': meeting_data,
+            'admin_attendee': admin_attendee
+        }
+    })
+
+@app.route('/api/stream/stop', methods=['POST'])
+@login_required
+def api_stop_stream():
+    """Stop the active live stream"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    active_stream = Stream.query.filter_by(is_active=True).first()
+    if not active_stream:
+        return jsonify({'error': 'No active stream found'}), 400
+    
+    # Delete Chime meeting
+    if active_stream.meeting_id:
+        delete_chime_meeting(active_stream.meeting_id)
+    
+    # Update stream record
+    active_stream.is_active = False
+    active_stream.ended_at = datetime.utcnow()
+    
+    # Mark all viewers as inactive
+    StreamViewer.query.filter_by(stream_id=active_stream.id, is_active=True).update({
+        'is_active': False,
+        'left_at': datetime.utcnow()
+    })
+    
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
+@app.route('/api/stream/status')
+@login_required
+def api_stream_status():
+    """Get current stream status"""
+    active_stream = Stream.query.filter_by(is_active=True).first()
+    
+    if not active_stream:
+        return jsonify({'active': False})
+    
+    # Update viewer count
+    active_viewers = StreamViewer.query.filter_by(
+        stream_id=active_stream.id,
+        is_active=True
+    ).count()
+    
+    active_stream.viewer_count = active_viewers
+    db.session.commit()
+    
+    return jsonify({
+        'active': True,
+        'stream': {
+            'id': active_stream.id,
+            'title': active_stream.title,
+            'description': active_stream.description,
+            'viewer_count': active_stream.viewer_count,
+            'started_at': active_stream.started_at.isoformat() if active_stream.started_at else None,
+            'is_recording': active_stream.is_recording
+        }
+    })
+
+@app.route('/api/stream/leave', methods=['POST'])
+@login_required
+def api_leave_stream():
+    """Mark user as having left the stream"""
+    data = request.get_json()
+    stream_id = data.get('stream_id')
+    
+    if not stream_id:
+        return jsonify({'error': 'Stream ID required'}), 400
+    
+    viewer = StreamViewer.query.filter_by(
+        stream_id=stream_id,
+        user_id=current_user.id,
+        is_active=True
+    ).first()
+    
+    if viewer:
+        viewer.is_active = False
+        viewer.left_at = datetime.utcnow()
+        db.session.commit()
+    
+    return jsonify({'success': True})
+
+@app.route('/api/stream/recording/start', methods=['POST'])
+@login_required
+def api_start_recording():
+    """Start recording the active stream"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    active_stream = Stream.query.filter_by(is_active=True).first()
+    if not active_stream:
+        return jsonify({'error': 'No active stream found'}), 400
+    
+    # TODO: Implement Chime SDK media recording
+    # This would require additional AWS services like Kinesis Video Streams
+    # For now, we'll just mark it as recording
+    active_stream.is_recording = True
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Recording started'})
+
+@app.route('/api/stream/recording/stop', methods=['POST'])
+@login_required
+def api_stop_recording():
+    """Stop recording the active stream"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    active_stream = Stream.query.filter_by(is_active=True).first()
+    if not active_stream:
+        return jsonify({'error': 'No active stream found'}), 400
+    
+    active_stream.is_recording = False
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Recording stopped'})
 
 @app.context_processor
 def utility_processor():
