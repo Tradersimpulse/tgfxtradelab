@@ -296,6 +296,95 @@ let ChimeSDK = null;
 let currentScreenShareStream = null;
 let currentScreenShareStreamId = null;
 
+// Force join function for debugging connection issues (defined early)
+function forceJoinStream(streamId) {
+    console.log('🔧 Force joining stream', streamId);
+    
+    const stream = activeStreams.find(s => s.id === streamId);
+    if (!stream) {
+        console.error('Stream not found:', streamId);
+        return;
+    }
+    
+    // Simulate immediate connection
+    const spinner = document.getElementById('loadingSpinner-' + streamId);
+    const videoGrid = document.getElementById('videoGrid-' + streamId);
+    const streamControls = document.getElementById('streamControls-' + streamId);
+    
+    if (spinner) spinner.style.display = 'none';
+    if (videoGrid) videoGrid.style.display = 'block';
+    if (streamControls) streamControls.style.display = 'block';
+    
+    // Create a fake video element with demo content
+    const videoElement = document.createElement('video');
+    videoElement.id = 'video-' + streamId + '-1';
+    videoElement.style.width = '100%';
+    videoElement.style.height = '100%';
+    videoElement.style.objectFit = 'cover';
+    videoElement.autoplay = true;
+    videoElement.muted = true;
+    videoElement.playsInline = true;
+    
+    // Create demo video stream
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+    
+    let frame = 0;
+    const animate = () => {
+        // Demo trading content
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#10B981';
+        ctx.font = 'bold 32px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(stream.streamer_name + '\'s Live Stream (Demo)', 640, 100);
+        
+        // Animated chart line
+        ctx.strokeStyle = '#10B981';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let i = 100; i < 1180; i += 5) {
+            const y = 360 + Math.sin((i + frame * 2) * 0.01) * 100;
+            if (i === 100) ctx.moveTo(i, y);
+            else ctx.lineTo(i, y);
+        }
+        ctx.stroke();
+        
+        // Live indicator
+        ctx.fillStyle = '#ff0000';
+        ctx.beginPath();
+        ctx.arc(100, 50, 8, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('● LIVE DEMO', 120, 55);
+        
+        frame++;
+        requestAnimationFrame(animate);
+    };
+    animate();
+    
+    const demoStream = canvas.captureStream(30);
+    videoElement.srcObject = demoStream;
+    videoElement.play();
+    
+    if (videoGrid) {
+        videoGrid.appendChild(videoElement);
+    }
+    
+    showToast('Force connected to ' + stream.streamer_name + '\'s stream (Demo Mode)', 'success');
+    
+    // Update state
+    const state = streamStates.get(streamId) || {};
+    state.joined = true;
+    streamStates.set(streamId, state);
+}
+
 // Enhanced SDK loading with viewer/admin distinction
 function loadChimeSDKAdvanced() {
     return new Promise((resolve, reject) => {
@@ -754,23 +843,22 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         // Still try to initialize for demo mode
         activeStreams.forEach(stream => {
-            const spinner = document.getElementById(`loadingSpinner-${stream.id}`);
+            const spinner = document.getElementById('loadingSpinner-' + stream.id);
             if (spinner) {
-                spinner.innerHTML = `
-                    <div class="text-center text-white">
-                        <span class="material-symbols-outlined mb-3 text-warning" style="font-size: 3rem;">warning</span>
-                        <p class="text-warning">No Stream Data</p>
-                        <small class="text-muted mb-3">Server may be starting up or stream not properly configured</small>
-                        <button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(${stream.id})">
-                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>
-                            Demo Mode
-                        </button>
-                        <button class="btn btn-outline-light btn-sm" onclick="location.reload()">
-                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>
-                            Refresh
-                        </button>
-                    </div>
-                `;
+                spinner.innerHTML = 
+                    '<div class="text-center text-white">' +
+                        '<span class="material-symbols-outlined mb-3 text-warning" style="font-size: 3rem;">warning</span>' +
+                        '<p class="text-warning">No Stream Data</p>' +
+                        '<small class="text-muted mb-3">Server may be starting up or stream not properly configured</small>' +
+                        '<button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(' + stream.id + ')">' +
+                            '<span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>' +
+                            'Demo Mode' +
+                        '</button>' +
+                        '<button class="btn btn-outline-light btn-sm" onclick="location.reload()">' +
+                            '<span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>' +
+                            'Refresh' +
+                        '</button>' +
+                    '</div>';
             }
         });
         return;
@@ -792,24 +880,24 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (!isAdmin && activeStreams.length > 0) {
             setTimeout(() => {
                 activeStreams.forEach(stream => {
-                    const spinner = document.getElementById(`loadingSpinner-${stream.id}`);
+                    const spinner = document.getElementById('loadingSpinner-' + stream.id);
                     if (spinner && !joinedStreams.has(stream.id)) {
                         const currentHTML = spinner.innerHTML;
                         if (currentHTML.includes('Connecting to')) {
-                            spinner.innerHTML = `
-                                <div class="text-center text-white">
-                                    <span class="material-symbols-outlined mb-3" style="color: ${stream.creator?.stream_color || '#10B981'}; font-size: 3rem;">play_circle</span>
-                                    <p>Ready to join ${stream.streamer_name}'s stream</p>
-                                    <button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(${stream.id})">
-                                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>
-                                        Quick Join
-                                    </button>
-                                    <button class="btn btn-primary btn-sm" onclick="joinStream(${stream.id})">
-                                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>
-                                        Full Connect
-                                    </button>
-                                </div>
-                            `;
+                            const streamColor = stream.creator?.stream_color || '#10B981';
+                            spinner.innerHTML = 
+                                '<div class="text-center text-white">' +
+                                    '<span class="material-symbols-outlined mb-3" style="color: ' + streamColor + '; font-size: 3rem;">play_circle</span>' +
+                                    '<p>Ready to join ' + stream.streamer_name + '\'s stream</p>' +
+                                    '<button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(' + stream.id + ')">' +
+                                        '<span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>' +
+                                        'Quick Join' +
+                                    '</button>' +
+                                    '<button class="btn btn-primary btn-sm" onclick="joinStream(' + stream.id + ')">' +
+                                        '<span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>' +
+                                        'Full Connect' +
+                                    '</button>' +
+                                '</div>';
                         }
                     }
                 });
@@ -835,7 +923,7 @@ function initializeStreams() {
         });
         
         // Add manual connection option to all stream spinners
-        const spinner = document.getElementById(`loadingSpinner-${stream.id}`);
+        const spinner = document.getElementById('loadingSpinner-' + stream.id);
         if (spinner) {
             const currentHTML = spinner.innerHTML;
             // Add a "Force Connect" option for debugging
@@ -851,92 +939,6 @@ function initializeStreams() {
     updateAllStreamStatus();
     
     console.log('✅ Stream initialization complete');
-}
-
-// Force join function for debugging connection issues
-async function forceJoinStream(streamId) {
-    console.log('🔧 Force joining stream', streamId);
-    
-    const stream = activeStreams.find(s => s.id === streamId);
-    if (!stream) return;
-    
-    // Simulate immediate connection
-    const spinner = document.getElementById(`loadingSpinner-${streamId}`);
-    const videoGrid = document.getElementById(`videoGrid-${streamId}`);
-    const streamControls = document.getElementById(`streamControls-${streamId}`);
-    
-    if (spinner) spinner.style.display = 'none';
-    if (videoGrid) videoGrid.style.display = 'block';
-    if (streamControls) streamControls.style.display = 'block';
-    
-    // Create a fake video element with demo content
-    const videoElement = document.createElement('video');
-    videoElement.id = `video-${streamId}-1`;
-    videoElement.style.width = '100%';
-    videoElement.style.height = '100%';
-    videoElement.style.objectFit = 'cover';
-    videoElement.autoplay = true;
-    videoElement.muted = true;
-    videoElement.playsInline = true;
-    
-    // Create demo video stream
-    const canvas = document.createElement('canvas');
-    canvas.width = 1280;
-    canvas.height = 720;
-    const ctx = canvas.getContext('2d');
-    
-    let frame = 0;
-    const animate = () => {
-        // Demo trading content
-        ctx.fillStyle = '#0a0a0a';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = '#10B981';
-        ctx.font = 'bold 32px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(`${stream.streamer_name}'s Live Stream (Demo)`, 640, 100);
-        
-        // Animated chart line
-        ctx.strokeStyle = '#10B981';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        for (let i = 100; i < 1180; i += 5) {
-            const y = 360 + Math.sin((i + frame * 2) * 0.01) * 100;
-            if (i === 100) ctx.moveTo(i, y);
-            else ctx.lineTo(i, y);
-        }
-        ctx.stroke();
-        
-        // Live indicator
-        ctx.fillStyle = '#ff0000';
-        ctx.beginPath();
-        ctx.arc(100, 50, 8, 0, 2 * Math.PI);
-        ctx.fill();
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText('● LIVE DEMO', 120, 55);
-        
-        frame++;
-        requestAnimationFrame(animate);
-    };
-    animate();
-    
-    const demoStream = canvas.captureStream(30);
-    videoElement.srcObject = demoStream;
-    videoElement.play();
-    
-    if (videoGrid) {
-        videoGrid.appendChild(videoElement);
-    }
-    
-    showToast(`Force connected to ${stream.streamer_name}'s stream (Demo Mode)`, 'success');
-    
-    // Update state
-    const state = streamStates.get(streamId) || {};
-    state.joined = true;
-    streamStates.set(streamId, state);
 }
 
 async function joinStream(streamId) {
@@ -960,17 +962,16 @@ async function joinStream(streamId) {
         showToast('Connection timeout - retrying...', 'warning');
         
         // Show retry option
-        const spinner = document.getElementById(`loadingSpinner-${streamId}`);
+        const spinner = document.getElementById('loadingSpinner-' + streamId);
         if (spinner) {
-            spinner.innerHTML = `
-                <div class="text-center text-white">
-                    <span class="material-symbols-outlined mb-3 text-warning" style="font-size: 3rem;">refresh</span>
-                    <p class="text-warning">Connection timeout</p>
-                    <small class="text-muted mb-3">Stream may be loading or temporarily unavailable</small>
-                    <button class="btn btn-primary btn-sm me-2" onclick="joinStream(${streamId})">Retry Connection</button>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">Refresh Page</button>
-                </div>
-            `;
+            spinner.innerHTML = 
+                '<div class="text-center text-white">' +
+                    '<span class="material-symbols-outlined mb-3 text-warning" style="font-size: 3rem;">refresh</span>' +
+                    '<p class="text-warning">Connection timeout</p>' +
+                    '<small class="text-muted mb-3">Stream may be loading or temporarily unavailable</small>' +
+                    '<button class="btn btn-primary btn-sm me-2" onclick="joinStream(' + streamId + ')">Retry Connection</button>' +
+                    '<button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">Refresh Page</button>' +
+                '</div>';
         }
     }, 10000); // 10 second timeout
     
@@ -978,17 +979,17 @@ async function joinStream(streamId) {
         console.log(`🔗 Connecting to ${stream.streamer_name}'s stream as ${isAdmin ? 'admin' : 'viewer'}...`);
         
         // Update spinner to show active connection attempt
-        const spinner = document.getElementById(`loadingSpinner-${streamId}`);
+        const spinner = document.getElementById('loadingSpinner-' + streamId);
         if (spinner) {
-            spinner.innerHTML = `
-                <div class="text-center text-white">
-                    <div class="spinner-border mb-3" style="color: ${stream.creator?.stream_color || '#10B981'};" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p>Joining ${stream.streamer_name}'s stream...</p>
-                    <small class="text-muted">Establishing connection...</small>
-                </div>
-            `;
+            const streamColor = stream.creator?.stream_color || '#10B981';
+            spinner.innerHTML = 
+                '<div class="text-center text-white">' +
+                    '<div class="spinner-border mb-3" style="color: ' + streamColor + ';" role="status">' +
+                        '<span class="visually-hidden">Loading...</span>' +
+                    '</div>' +
+                    '<p>Joining ' + stream.streamer_name + '\'s stream...</p>' +
+                    '<small class="text-muted">Establishing connection...</small>' +
+                '</div>';
         }
         
         const { ChimeSDK: SDK } = window;
@@ -1046,7 +1047,7 @@ async function joinStream(streamId) {
                 state.joined = true;
                 streamStates.set(streamId, state);
                 
-                showToast(`Connected to ${stream.streamer_name}'s stream ${isAdmin ? '(Admin)' : '(Viewer)'}`, 'success');
+                showToast('Connected to ' + stream.streamer_name + '\'s stream ' + (isAdmin ? '(Admin)' : '(Viewer)'), 'success');
                 
                 // Force video tile creation - faster response
                 setTimeout(() => {
@@ -1072,7 +1073,7 @@ async function joinStream(streamId) {
             audioVideoDidStop: (sessionStatus) => {
                 console.log(`🛑 Stream ${streamId} ended:`, sessionStatus);
                 clearTimeout(connectionTimeout);
-                showToast(`${stream.streamer_name}'s stream ended`, 'info');
+                showToast(stream.streamer_name + '\'s stream ended', 'info');
                 
                 // Clean up
                 joinedStreams.delete(streamId);
@@ -1085,10 +1086,10 @@ async function joinStream(streamId) {
             },
             
             videoTileDidUpdate: (tileState) => {
-                console.log(`🖼️ Video tile updated for stream ${streamId}:`, tileState);
-                const videoElement = document.getElementById(`video-${streamId}-${tileState.tileId}`) || 
+                console.log('🖼️ Video tile updated for stream ' + streamId + ':', tileState);
+                const videoElement = document.getElementById('video-' + streamId + '-' + tileState.tileId) || 
                                    document.createElement('video');
-                videoElement.id = `video-${streamId}-${tileState.tileId}`;
+                videoElement.id = 'video-' + streamId + '-' + tileState.tileId;
                 videoElement.style.width = '100%';
                 videoElement.style.height = '100%';
                 videoElement.style.objectFit = 'cover';
@@ -1098,8 +1099,8 @@ async function joinStream(streamId) {
                 
                 audioVideo.bindVideoElement(tileState.tileId, videoElement);
                 
-                const videoGrid = document.getElementById(`videoGrid-${streamId}`);
-                if (!document.getElementById(`video-${streamId}-${tileState.tileId}`)) {
+                const videoGrid = document.getElementById('videoGrid-' + streamId);
+                if (!document.getElementById('video-' + streamId + '-' + tileState.tileId)) {
                     videoGrid.appendChild(videoElement);
                     
                     // Add connection success indicator
@@ -1127,8 +1128,8 @@ async function joinStream(streamId) {
             },
             
             videoTileWasRemoved: (tileId) => {
-                console.log(`🗑️ Video tile removed for stream ${streamId}:`, tileId);
-                const videoElement = document.getElementById(`video-${streamId}-${tileId}`);
+                console.log('🗑️ Video tile removed for stream ' + streamId + ':', tileId);
+                const videoElement = document.getElementById('video-' + streamId + '-' + tileId);
                 if (videoElement) {
                     videoElement.remove();
                 }
@@ -1169,19 +1170,18 @@ async function joinStream(streamId) {
     } catch (error) {
         console.error(`💥 Error joining stream ${streamId}:`, error);
         clearTimeout(connectionTimeout);
-        showToast(`Connection error: ${error.message}`, 'error');
+        showToast('Connection error: ' + error.message, 'error');
         
-        const spinner = document.getElementById(`loadingSpinner-${streamId}`);
+        const spinner = document.getElementById('loadingSpinner-' + streamId);
         if (spinner) {
-            spinner.innerHTML = `
-                <div class="text-center text-white">
-                    <span class="material-symbols-outlined mb-3 text-danger" style="font-size: 3rem;">error</span>
-                    <p class="text-danger">Connection failed</p>
-                    <small class="text-muted mb-3">${error.message}</small>
-                    <button class="btn btn-primary btn-sm me-2" onclick="joinStream(${streamId})">Retry</button>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">Refresh</button>
-                </div>
-            `;
+            spinner.innerHTML = 
+                '<div class="text-center text-white">' +
+                    '<span class="material-symbols-outlined mb-3 text-danger" style="font-size: 3rem;">error</span>' +
+                    '<p class="text-danger">Connection failed</p>' +
+                    '<small class="text-muted mb-3">' + error.message + '</small>' +
+                    '<button class="btn btn-primary btn-sm me-2" onclick="joinStream(' + streamId + ')">Retry</button>' +
+                    '<button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">Refresh</button>' +
+                '</div>';
         }
     }
 }
@@ -1538,8 +1538,8 @@ async function stopScreenShare() {
 function updateScreenShareButton(streamId, isSharing) {
     if (!isAdmin) return;
     
-    const button = document.getElementById(`screenShareBtn-${streamId}`);
-    const icon = document.getElementById(`screenShareIcon-${streamId}`);
+    const button = document.getElementById('screenShareBtn-' + streamId);
+    const icon = document.getElementById('screenShareIcon-' + streamId);
     
     if (button && icon) {
         if (isSharing) {
@@ -1571,14 +1571,14 @@ function toggleMute(streamId) {
     
     if (state.muted) {
         audioVideo.realtimeUnmuteLocalAudio();
-        document.getElementById(`muteIcon-${streamId}`).textContent = 'mic';
-        document.getElementById(`muteBtn-${streamId}`).classList.add('btn-outline-success');
+        document.getElementById('muteIcon-' + streamId).textContent = 'mic';
+        document.getElementById('muteBtn-' + streamId).classList.add('btn-outline-success');
         state.muted = false;
         showToast('Admin microphone enabled', 'success');
     } else {
         audioVideo.realtimeMuteLocalAudio();
-        document.getElementById(`muteIcon-${streamId}`).textContent = 'mic_off';
-        document.getElementById(`muteBtn-${streamId}`).classList.remove('btn-outline-success');
+        document.getElementById('muteIcon-' + streamId).textContent = 'mic_off';
+        document.getElementById('muteBtn-' + streamId).classList.remove('btn-outline-success');
         state.muted = true;
         showToast('Admin microphone muted', 'info');
     }
@@ -1600,14 +1600,14 @@ function toggleVideo(streamId) {
     
     if (state.videoEnabled) {
         audioVideo.stopLocalVideoTile();
-        document.getElementById(`videoIcon-${streamId}`).textContent = 'videocam_off';
-        document.getElementById(`videoBtn-${streamId}`).classList.remove('btn-outline-success');
+        document.getElementById('videoIcon-' + streamId).textContent = 'videocam_off';
+        document.getElementById('videoBtn-' + streamId).classList.remove('btn-outline-success');
         state.videoEnabled = false;
         showToast('Admin camera disabled', 'info');
     } else {
         audioVideo.startLocalVideoTile();
-        document.getElementById(`videoIcon-${streamId}`).textContent = 'videocam';
-        document.getElementById(`videoBtn-${streamId}`).classList.add('btn-outline-success');
+        document.getElementById('videoIcon-' + streamId).textContent = 'videocam';
+        document.getElementById('videoBtn-' + streamId).classList.add('btn-outline-success');
         state.videoEnabled = true;
         showToast('Admin camera enabled', 'success');
     }
@@ -1617,9 +1617,9 @@ function toggleVideo(streamId) {
 
 // Fullscreen functionality (Available to all users)
 function toggleFullscreen(streamId) {
-    console.log(`🖼️ Toggling fullscreen for stream ${streamId}`);
+    console.log('🖼️ Toggling fullscreen for stream ' + streamId);
     
-    const videoContainer = document.getElementById(`videoContainer-${streamId}`);
+    const videoContainer = document.getElementById('videoContainer-' + streamId);
     if (!videoContainer) return;
     
     if (document.fullscreenElement) {
@@ -1643,7 +1643,7 @@ function toggleFullscreen(streamId) {
 }
 
 function updateFullscreenButton(streamId, isFullscreen) {
-    const icon = document.getElementById(`fullscreenIcon-${streamId}`);
+    const icon = document.getElementById('fullscreenIcon-' + streamId);
     if (icon) {
         icon.textContent = isFullscreen ? 'fullscreen_exit' : 'fullscreen';
     }
@@ -1710,13 +1710,13 @@ async function leaveStream(streamId) {
 }
 
 function shareStream(streamId) {
-    const streamUrl = `${window.location.origin}/livestream`;
+    const streamUrl = window.location.origin + '/livestream';
     const stream = activeStreams.find(s => s.id === streamId);
     
     if (navigator.share) {
         navigator.share({
-            title: `${stream.streamer_name}'s Live Stream - TGFX Trade Lab`,
-            text: `Join ${stream.streamer_name}'s live trading session! ${isAdmin ? '(Admin features available)' : '(Watch-only)'}`,
+            title: stream.streamer_name + '\'s Live Stream - TGFX Trade Lab',
+            text: 'Join ' + stream.streamer_name + '\'s live trading session! ' + (isAdmin ? '(Admin features available)' : '(Watch-only)'),
             url: streamUrl
         });
     } else {
@@ -1764,32 +1764,32 @@ async function updateAllStreamStatus() {
             // Update status badge
             if (statusBadgeEl) {
                 statusBadgeEl.className = 'badge bg-success';
-                statusBadgeEl.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 12px;">radio_button_checked</span>${data.count} Live`;
+                statusBadgeEl.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 12px;">radio_button_checked</span>' + data.count + ' Live';
             }
             
             // Check if any streams are not joined and offer quick connection
             data.streams.forEach(streamData => {
                 if (!joinedStreams.has(streamData.id)) {
-                    const spinner = document.getElementById(`loadingSpinner-${streamData.id}`);
+                    const spinner = document.getElementById('loadingSpinner-' + streamData.id);
                     if (spinner && spinner.style.display !== 'none') {
                         // Update spinner with current stream status
                         setTimeout(() => {
                             if (!joinedStreams.has(streamData.id)) {
-                                spinner.innerHTML = `
-                                    <div class="text-center text-white">
-                                        <span class="material-symbols-outlined mb-3" style="color: ${streamData.stream_color || '#10B981'}; font-size: 3rem;">live_tv</span>
-                                        <p>${streamData.streamer_name} is streaming live!</p>
-                                        <small class="text-muted mb-3">${streamData.viewer_count} viewers watching</small>
-                                        <button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(${streamData.id})">
-                                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>
-                                            Quick Join
-                                        </button>
-                                        <button class="btn btn-outline-primary btn-sm" onclick="joinStream(${streamData.id})">
-                                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>
-                                            Connect
-                                        </button>
-                                    </div>
-                                `;
+                                const streamColor = streamData.stream_color || '#10B981';
+                                spinner.innerHTML = 
+                                    '<div class="text-center text-white">' +
+                                        '<span class="material-symbols-outlined mb-3" style="color: ' + streamColor + '; font-size: 3rem;">live_tv</span>' +
+                                        '<p>' + streamData.streamer_name + ' is streaming live!</p>' +
+                                        '<small class="text-muted mb-3">' + streamData.viewer_count + ' viewers watching</small>' +
+                                        '<button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(' + streamData.id + ')">' +
+                                            '<span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>' +
+                                            'Quick Join' +
+                                        '</button>' +
+                                        '<button class="btn btn-outline-primary btn-sm" onclick="joinStream(' + streamData.id + ')">' +
+                                            '<span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>' +
+                                            'Connect' +
+                                        '</button>' +
+                                    '</div>';
                             }
                         }, 1000);
                     }
@@ -1836,9 +1836,9 @@ function debugStreamConnection(streamId) {
     // Additional debugging
     console.log('=== 📊 ADDITIONAL DEBUG INFO ===');
     console.log('DOM Elements:');
-    console.log('- Spinner:', document.getElementById(`loadingSpinner-${streamId}`));
-    console.log('- Video Grid:', document.getElementById(`videoGrid-${streamId}`));
-    console.log('- Stream Controls:', document.getElementById(`streamControls-${streamId}`));
+    console.log('- Spinner:', document.getElementById('loadingSpinner-' + streamId));
+    console.log('- Video Grid:', document.getElementById('videoGrid-' + streamId));
+    console.log('- Stream Controls:', document.getElementById('streamControls-' + streamId));
     
     console.log('Browser Support:');
     console.log('- MediaDevices:', !!navigator.mediaDevices);
@@ -2010,33 +2010,33 @@ setTimeout(() => {
     console.log('🔍 Running connection troubleshooter...');
     
     activeStreams.forEach(stream => {
-        const spinner = document.getElementById(`loadingSpinner-${stream.id}`);
+        const spinner = document.getElementById('loadingSpinner-' + stream.id);
         const isConnected = joinedStreams.has(stream.id);
         
         if (spinner && spinner.style.display !== 'none' && !isConnected) {
-            console.log(`⚠️ Stream ${stream.id} appears stuck, offering alternatives`);
+            console.log('⚠️ Stream ' + stream.id + ' appears stuck, offering alternatives');
             
-            spinner.innerHTML = `
-                <div class="text-center text-white">
-                    <span class="material-symbols-outlined mb-3" style="color: ${stream.creator?.stream_color || '#10B981'}; font-size: 3rem;">live_tv</span>
-                    <p>${stream.streamer_name} is Live!</p>
-                    <small class="text-muted mb-3">Having trouble connecting? Try these options:</small>
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-success btn-sm" onclick="forceJoinStream(${stream.id})">
-                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">flash_on</span>
-                            Instant Connect
-                        </button>
-                        <button class="btn btn-primary btn-sm" onclick="joinStream(${stream.id})">
-                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>
-                            Standard Connect
-                        </button>
-                        <button class="btn btn-outline-light btn-sm" onclick="location.reload()">
-                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>
-                            Refresh Page
-                        </button>
-                    </div>
-                </div>
-            `;
+            const streamColor = stream.creator?.stream_color || '#10B981';
+            spinner.innerHTML = 
+                '<div class="text-center text-white">' +
+                    '<span class="material-symbols-outlined mb-3" style="color: ' + streamColor + '; font-size: 3rem;">live_tv</span>' +
+                    '<p>' + stream.streamer_name + ' is Live!</p>' +
+                    '<small class="text-muted mb-3">Having trouble connecting? Try these options:</small>' +
+                    '<div class="d-grid gap-2">' +
+                        '<button class="btn btn-success btn-sm" onclick="forceJoinStream(' + stream.id + ')">' +
+                            '<span class="material-symbols-outlined me-1" style="font-size: 16px;">flash_on</span>' +
+                            'Instant Connect' +
+                        '</button>' +
+                        '<button class="btn btn-primary btn-sm" onclick="joinStream(' + stream.id + ')">' +
+                            '<span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>' +
+                            'Standard Connect' +
+                        '</button>' +
+                        '<button class="btn btn-outline-light btn-sm" onclick="location.reload()">' +
+                            '<span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>' +
+                            'Refresh Page' +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
         }
     });
 }, 2000); // Run after 2 seconds
