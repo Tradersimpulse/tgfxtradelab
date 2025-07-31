@@ -365,10 +365,12 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- AWS Chime SDK -->
-<script src="https://sdk.aws.amazon.com/js/aws-sdk-2.1179.0.min.js"></script>
+<!-- AWS Chime SDK REMOVED - using demo mode instead -->
 
 <script>
+// Set template data for JavaScript
+window.userActiveStreamData = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+
 console.log('🎛️ Starting admin stream control page...');
 
 let userMeetingSession = null;
@@ -381,383 +383,11 @@ let userStreamStates = {
 
 let currentAdminScreenShare = null;
 
-const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+// Get user active stream data safely
+const userActiveStream = window.userActiveStreamData || null;
 
-// Enhanced Chime SDK for Admin Controls
-function createAdminChimeSDK() {
-    console.log('🔧 Creating admin Chime SDK...');
-    
-    window.ChimeSDK = {
-        ConsoleLogger: class ConsoleLogger {
-            constructor(name, level) {
-                this.name = name;
-                this.level = level;
-            }
-            info(msg) { console.log('[AdminChimeSDK]', msg); }
-            warn(msg) { console.warn('[AdminChimeSDK]', msg); }
-            error(msg) { console.error('[AdminChimeSDK]', msg); }
-        },
-        
-        LogLevel: {
-            INFO: 1,
-            WARN: 2,
-            ERROR: 3
-        },
-        
-        DefaultDeviceController: class DefaultDeviceController {
-            constructor(logger) {
-                this.logger = logger;
-            }
-        },
-        
-        MeetingSessionConfiguration: class MeetingSessionConfiguration {
-            constructor(meetingConfiguration, attendeeConfiguration) {
-                this.meetingId = meetingConfiguration.meetingId;
-                this.externalMeetingId = meetingConfiguration.externalMeetingId;
-                this.attendeeId = attendeeConfiguration.AttendeeId;
-                this.externalUserId = attendeeConfiguration.ExternalUserId;
-                this.meetingConfiguration = meetingConfiguration;
-                this.attendeeConfiguration = attendeeConfiguration;
-            }
-        },
-        
-        DefaultMeetingSession: class DefaultMeetingSession {
-            constructor(config, logger, deviceController) {
-                this.configuration = config;
-                this.logger = logger;
-                this.deviceController = deviceController;
-                this.audioVideo = new ChimeSDK.DefaultAudioVideoController(this);
-            }
-        },
-        
-        DefaultAudioVideoController: class DefaultAudioVideoController {
-            constructor(meetingSession) {
-                this.meetingSession = meetingSession;
-                this.observers = [];
-                this.isStarted = false;
-                this.videoTiles = new Map();
-                this.currentScreenShare = null;
-            }
-            
-            addObserver(observer) {
-                this.observers.push(observer);
-            }
-            
-            async start() {
-                console.log('🎬 Starting admin stream session...');
-                this.isStarted = true;
-                
-                setTimeout(() => {
-                    this.observers.forEach(observer => {
-                        if (observer.audioVideoDidStart) {
-                            observer.audioVideoDidStart();
-                        }
-                    });
-                }, 2000);
-            }
-            
-            stop() {
-                console.log('⏹️ Stopping admin stream session...');
-                this.isStarted = false;
-                this.videoTiles.clear();
-                this.observers.forEach(observer => {
-                    if (observer.audioVideoDidStop) {
-                        observer.audioVideoDidStop({ statusCode: 0 });
-                    }
-                });
-            }
-            
-            realtimeMuteLocalAudio() {
-                console.log('🔇 Admin muting microphone');
-            }
-            
-            realtimeUnmuteLocalAudio() {
-                console.log('🔊 Admin unmuting microphone');
-            }
-            
-            startLocalVideoTile() {
-                console.log('📹 Admin starting camera');
-                this.simulateVideoTile(2, true);
-            }
-            
-            stopLocalVideoTile() {
-                console.log('📴 Admin stopping camera');
-                this.observers.forEach(observer => {
-                    if (observer.videoTileWasRemoved) {
-                        observer.videoTileWasRemoved(2);
-                    }
-                });
-            }
-            
-            bindVideoElement(tileId, element) {
-                console.log('🖼️ Admin binding video element for tile', tileId);
-                this.videoTiles.set(tileId, element);
-                
-                if (tileId === 1) {
-                    // Main admin stream
-                    this.createAdminStreamPreview(element);
-                } else if (tileId === 2) {
-                    // Admin camera
-                    this.createAdminCameraPreview(element);
-                } else if (tileId === 3) {
-                    // Admin screen share
-                    this.createAdminScreenSharePreview(element);
-                }
-            }
-            
-            simulateVideoTile(tileId, isLocal = false) {
-                setTimeout(() => {
-                    this.observers.forEach(observer => {
-                        if (observer.videoTileDidUpdate) {
-                            observer.videoTileDidUpdate({
-                                tileId: tileId,
-                                localTile: isLocal,
-                                isContent: tileId === 3
-                            });
-                        }
-                    });
-                }, 500);
-            }
-            
-            startContentShare(stream) {
-                console.log('🖥️ Admin starting screen share');
-                this.currentScreenShare = stream;
-                this.simulateVideoTile(3, false);
-                return Promise.resolve();
-            }
-            
-            stopContentShare() {
-                console.log('🛑 Admin stopping screen share');
-                this.currentScreenShare = null;
-                this.observers.forEach(observer => {
-                    if (observer.videoTileWasRemoved) {
-                        observer.videoTileWasRemoved(3);
-                    }
-                });
-                return Promise.resolve();
-            }
-            
-            createAdminStreamPreview(videoElement) {
-                // What admins see in their preview
-                const canvas = document.createElement('canvas');
-                canvas.width = 1280;
-                canvas.height = 720;
-                const ctx = canvas.getContext('2d');
-                
-                let frame = 0;
-                const animate = () => {
-                    if (!this.isStarted) return;
-                    
-                    // Admin stream preview
-                    ctx.fillStyle = '#0a0a0a';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Header
-                    ctx.fillStyle = '#10B981';
-                    ctx.font = 'bold 28px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('ADMIN STREAM PREVIEW', 640, 50);
-                    
-                    // Trading interface simulation
-                    this.drawAdminTradingInterface(ctx, frame);
-                    
-                    // Live indicator
-                    ctx.fillStyle = '#ff0000';
-                    ctx.beginPath();
-                    ctx.arc(1200, 40, 8, 0, 2 * Math.PI);
-                    ctx.fill();
-                    
-                    ctx.fillStyle = '#ffffff';
-                    ctx.font = '16px Arial';
-                    ctx.fillText('● STREAMING', 1150, 45);
-                    
-                    frame++;
-                    if (this.isStarted) {
-                        requestAnimationFrame(animate);
-                    }
-                };
-                animate();
-                
-                const stream = canvas.captureStream(30);
-                videoElement.srcObject = stream;
-                videoElement.play();
-            }
-            
-            createAdminCameraPreview(videoElement) {
-                // Admin camera preview
-                const canvas = document.createElement('canvas');
-                canvas.width = 320;
-                canvas.height = 240;
-                const ctx = canvas.getContext('2d');
-                
-                let frame = 0;
-                const animate = () => {
-                    if (!this.isStarted) return;
-                    
-                    ctx.fillStyle = '#1a1a1a';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Admin avatar
-                    ctx.fillStyle = '{{ current_user.stream_color }}';
-                    ctx.beginPath();
-                    ctx.arc(160, 100, 40, 0, 2 * Math.PI);
-                    ctx.fill();
-                    
-                    // Face
-                    ctx.fillStyle = '#ffffff';
-                    ctx.beginPath();
-                    ctx.arc(145, 85, 5, 0, 2 * Math.PI);
-                    ctx.arc(175, 85, 5, 0, 2 * Math.PI);
-                    ctx.fill();
-                    
-                    // Mouth
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(160, 115, 10, 0, Math.PI);
-                    ctx.stroke();
-                    
-                    ctx.fillStyle = '#ffffff';
-                    ctx.font = '14px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('{{ current_user.display_name or current_user.username }}', 160, 180);
-                    ctx.fillText('ADMIN CAMERA', 160, 200);
-                    
-                    frame++;
-                    if (this.isStarted) {
-                        requestAnimationFrame(animate);
-                    }
-                };
-                animate();
-                
-                const stream = canvas.captureStream(30);
-                videoElement.srcObject = stream;
-                videoElement.play();
-            }
-            
-            createAdminScreenSharePreview(videoElement) {
-                // Admin screen share preview
-                const canvas = document.createElement('canvas');
-                canvas.width = 1920;
-                canvas.height = 1080;
-                const ctx = canvas.getContext('2d');
-                
-                let frame = 0;
-                const animate = () => {
-                    if (!this.isStarted) return;
-                    
-                    // Screen share content
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Browser simulation
-                    ctx.fillStyle = '#e5e5e5';
-                    ctx.fillRect(0, 0, canvas.width, 60);
-                    
-                    ctx.fillStyle = '#333';
-                    ctx.font = '24px Arial';
-                    ctx.textAlign = 'left';
-                    ctx.fillText('{{ current_user.display_name or current_user.username }}\'s Screen Share - TradingView Pro', 30, 40);
-                    
-                    // Trading chart
-                    ctx.strokeStyle = '#00ff00';
-                    ctx.lineWidth = 4;
-                    ctx.beginPath();
-                    for (let i = 100; i < canvas.width - 100; i += 10) {
-                        const y = 400 + Math.sin((i + frame * 3) * 0.005) * 150;
-                        if (i === 100) ctx.moveTo(i, y);
-                        else ctx.lineTo(i, y);
-                    }
-                    ctx.stroke();
-                    
-                    // Screen share indicator
-                    ctx.fillStyle = '#ff0000';
-                    ctx.font = 'bold 32px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('🖥️ ADMIN SCREEN SHARING', 960, 900);
-                    
-                    frame++;
-                    if (this.isStarted) {
-                        requestAnimationFrame(animate);
-                    }
-                };
-                animate();
-                
-                const stream = canvas.captureStream(30);
-                videoElement.srcObject = stream;
-                videoElement.play();
-            }
-            
-            drawAdminTradingInterface(ctx, frame) {
-                // Professional trading interface for admin preview
-                
-                // Chart
-                ctx.strokeStyle = '#10B981';
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                for (let i = 100; i < 1180; i += 5) {
-                    const y = 300 + Math.sin((i + frame * 2) * 0.01) * 100;
-                    if (i === 100) ctx.moveTo(i, y);
-                    else ctx.lineTo(i, y);
-                }
-                ctx.stroke();
-                
-                // Price info
-                ctx.fillStyle = '#10B981';
-                ctx.font = 'bold 24px monospace';
-                ctx.textAlign = 'left';
-                const price = (4250.50 + Math.sin(frame * 0.05) * 15).toFixed(2);
-                ctx.fillText('SPY: $' + price + ' (+1.2%)', 100, 150);
-                
-                // Volume bars
-                for (let i = 100; i < 1180; i += 15) {
-                    const height = 20 + Math.random() * 40;
-                    ctx.fillStyle = Math.random() > 0.5 ? '#10B981' : '#ef4444';
-                    ctx.fillRect(i, 500 - height, 10, height);
-                }
-                
-                // Admin tools overlay
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-                ctx.fillRect(900, 100, 300, 200);
-                
-                ctx.fillStyle = '#ffffff';
-                ctx.font = '18px Arial';
-                ctx.textAlign = 'left';
-                ctx.fillText('ADMIN CONTROLS', 920, 130);
-                ctx.fillText('🎥 Camera: ON', 920, 160);
-                ctx.fillText('🎤 Mic: ON', 920, 190);
-                ctx.fillText('🖥️ Screen: READY', 920, 220);
-                ctx.fillText('📹 Recording: OFF', 920, 250);
-            }
-        }
-    };
-    
-    console.log('✅ Admin Chime SDK created');
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 Admin control page loaded');
-    
-    // Create admin SDK
-    createAdminChimeSDK();
-    
-    if (userActiveStream) {
-        console.log('🎬 User has active stream:', userActiveStream);
-        // Initialize admin stream if active
-    }
-    
-    // Set up form handlers
-    const startStreamForm = document.getElementById('startUserStreamForm');
-    if (startStreamForm) {
-        startStreamForm.addEventListener('submit', handleStartUserStream);
-    }
-    
-    // Poll for updates
-    setInterval(updateStreamStats, 5000);
-    updateStreamStats();
-});
-
-async function handleStartUserStream(e) {
+// Define all global functions first
+window.handleStartUserStream = async function(e) {
     e.preventDefault();
     
     const submitBtn = document.querySelector('#startUserStreamForm button[type="submit"]');
@@ -798,9 +428,9 @@ async function handleStartUserStream(e) {
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
     }
-}
+};
 
-async function stopUserStream() {
+window.stopUserStream = async function() {
     if (!confirm('Are you sure you want to end your stream? This action cannot be undone.')) {
         return;
     }
@@ -828,9 +458,9 @@ async function stopUserStream() {
         console.error('Error stopping stream:', error);
         showToast(error.message, 'error');
     }
-}
+};
 
-function toggleUserMute() {
+window.toggleUserMute = function() {
     if (userStreamStates.muted) {
         document.getElementById('userMuteIcon').textContent = 'mic';
         document.getElementById('userMuteBtn').classList.add('btn-outline-success');
@@ -842,9 +472,9 @@ function toggleUserMute() {
         userStreamStates.muted = true;
         showToast('Admin microphone muted', 'info');
     }
-}
+};
 
-function toggleUserVideo() {
+window.toggleUserVideo = function() {
     if (userStreamStates.videoEnabled) {
         document.getElementById('userVideoIcon').textContent = 'videocam_off';
         document.getElementById('userVideoBtn').classList.remove('btn-outline-success');
@@ -856,27 +486,19 @@ function toggleUserVideo() {
         userStreamStates.videoEnabled = true;
         showToast('Admin camera enabled', 'success');
     }
-}
+};
 
-async function toggleUserScreenShare() {
+window.toggleUserScreenShare = async function() {
     if (userStreamStates.screenSharing) {
         await stopUserScreenShare();
     } else {
         await startUserScreenShare();
     }
-}
+};
 
-async function startUserScreenShare() {
+window.startUserScreenShare = async function() {
     try {
         console.log('🖥️ Admin starting screen share...');
-        
-        // Show admin screen selection modal
-        const modal = new bootstrap.Modal(document.getElementById('adminScreenShareModal'));
-        modal.show();
-        
-        // Show loading
-        document.getElementById('adminScreenShareLoading').style.display = 'block';
-        document.getElementById('adminScreenOptions').innerHTML = '';
         
         // Try to get real screen share
         let stream = null;
@@ -892,17 +514,26 @@ async function startUserScreenShare() {
                 });
                 
                 console.log('✅ Real admin screen capture successful');
+                await handleAdminScreenShare(stream, 'Real Screen');
+                return;
                 
             } catch (error) {
                 console.log('ℹ️ Real screen capture not available, using admin demo');
-                stream = null;
             }
         }
         
-        // Hide loading
-        document.getElementById('adminScreenShareLoading').style.display = 'none';
+        // Show admin screen selection modal
+        const modal = new bootstrap.Modal(document.getElementById('adminScreenShareModal'));
+        modal.show();
         
-        if (!stream) {
+        // Show loading
+        document.getElementById('adminScreenShareLoading').style.display = 'block';
+        document.getElementById('adminScreenOptions').innerHTML = '';
+        
+        // Hide loading after a moment
+        setTimeout(() => {
+            document.getElementById('adminScreenShareLoading').style.display = 'none';
+            
             // Create admin demo screen options
             const screenOptions = document.getElementById('adminScreenOptions');
             const adminScreens = [
@@ -915,32 +546,27 @@ async function startUserScreenShare() {
             adminScreens.forEach(screen => {
                 const screenDiv = document.createElement('div');
                 screenDiv.className = 'col-6 mb-3';
-                screenDiv.innerHTML = `
-                    <div class="card text-center admin-screen-option" onclick="selectAdminDemoScreen('${screen.id}', '${screen.name}')" 
-                         style="cursor: pointer; border: 1px solid var(--border-color);">
-                        <div class="card-body">
-                            <span class="material-symbols-outlined mb-2" style="font-size: 2rem; color: {{ current_user.stream_color }};">${screen.icon}</span>
-                            <h6 class="card-title">${screen.name}</h6>
-                            <small class="text-muted">${screen.desc}</small>
-                        </div>
-                    </div>
-                `;
+                screenDiv.innerHTML = 
+                    '<div class="card text-center admin-screen-option" onclick="selectAdminDemoScreen(\'' + screen.id + '\', \'' + screen.name + '\')" ' +
+                         'style="cursor: pointer; border: 1px solid var(--border-color);">' +
+                        '<div class="card-body">' +
+                            '<span class="material-symbols-outlined mb-2" style="font-size: 2rem; color: {{ current_user.stream_color }};">' + screen.icon + '</span>' +
+                            '<h6 class="card-title">' + screen.name + '</h6>' +
+                            '<small class="text-muted">' + screen.desc + '</small>' +
+                        '</div>' +
+                    '</div>';
                 screenOptions.appendChild(screenDiv);
             });
-        } else {
-            // Real screen capture successful
-            modal.hide();
-            await handleAdminScreenShare(stream, 'Real Screen');
-        }
+        }, 1000);
         
     } catch (error) {
         console.error('❌ Admin screen share error:', error);
         showToast('Admin screen sharing failed: ' + error.message, 'error');
     }
-}
+};
 
-async function selectAdminDemoScreen(screenId, screenName) {
-    console.log(`📺 Admin selected demo screen: ${screenName}`);
+window.selectAdminDemoScreen = async function(screenId, screenName) {
+    console.log('📺 Admin selected demo screen: ' + screenName);
     
     // Hide modal
     const modal = bootstrap.Modal.getInstance(document.getElementById('adminScreenShareModal'));
@@ -949,10 +575,10 @@ async function selectAdminDemoScreen(screenId, screenName) {
     // Create admin demo screen content
     const stream = createAdminDemoScreenStream(screenId);
     await handleAdminScreenShare(stream, screenName);
-}
+};
 
 function createAdminDemoScreenStream(screenType) {
-    console.log(`🎨 Creating admin demo screen: ${screenType}`);
+    console.log('🎨 Creating admin demo screen: ' + screenType);
     
     const canvas = document.createElement('canvas');
     canvas.width = 1920;
@@ -991,7 +617,7 @@ function drawAdminTradingViewPro(ctx, frame) {
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 28px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText('TradingView Pro - {{ current_user.display_name or current_user.username }}\'s Analysis', 30, 50);
+    ctx.fillText('TradingView Pro - Admin Analysis', 30, 50);
     
     ctx.fillStyle = '#1e222d';
     ctx.fillRect(0, 80, canvas.width, canvas.height - 80);
@@ -1036,7 +662,7 @@ function drawAdminNewsTerminalPro(ctx, frame) {
     ctx.fillStyle = '#00ff00';
     ctx.font = 'bold 32px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('{{ current_user.display_name or current_user.username }}\'S ADMIN NEWS TERMINAL', 30, 60);
+    ctx.fillText('ADMIN NEWS TERMINAL', 30, 60);
     
     // Multiple news columns
     const columns = [
@@ -1064,7 +690,7 @@ function drawAdminNewsTerminalPro(ctx, frame) {
             const y = 160 + (index * 35);
             const alpha = (Math.sin(frame * 0.1 + index) + 1) / 2;
             ctx.fillStyle = col.color + Math.floor(alpha * 128).toString(16).padStart(2, '0');
-            ctx.fillText(`${String(index + 1).padStart(2, '0')}:${String(Math.floor(frame/60) % 60).padStart(2, '0')} ${item}`, col.x, y);
+            ctx.fillText(String(index + 1).padStart(2, '0') + ':' + String(Math.floor(frame/60) % 60).padStart(2, '0') + ' ' + item, col.x, y);
         });
     });
 }
@@ -1078,7 +704,7 @@ function drawAdminPortfolioPro(ctx, frame) {
     ctx.fillRect(0, 0, canvas.width, 100);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 36px Arial';
-    ctx.fillText('{{ current_user.display_name or current_user.username }}\'s Portfolio Dashboard', 30, 60);
+    ctx.fillText('Admin Portfolio Dashboard', 30, 60);
     
     // Portfolio metrics
     const metrics = [
@@ -1107,15 +733,6 @@ function drawAdminPortfolioPro(ctx, frame) {
         else ctx.lineTo(i, y);
     }
     ctx.stroke();
-    
-    // Holdings table
-    ctx.fillStyle = '#333';
-    ctx.font = '20px Arial';
-    ctx.textAlign = 'left';
-    const holdings = ['AAPL: 1,500 shares', 'MSFT: 2,000 shares', 'GOOGL: 800 shares', 'TSLA: 1,200 shares'];
-    holdings.forEach((holding, index) => {
-        ctx.fillText(holding, 100, 700 + (index * 40));
-    });
 }
 
 function drawAdminOptionsChain(ctx, frame) {
@@ -1127,7 +744,7 @@ function drawAdminOptionsChain(ctx, frame) {
     ctx.fillRect(0, 0, canvas.width, 80);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 28px Arial';
-    ctx.fillText('Options Chain - SPY ({{ current_user.display_name or current_user.username }})', 30, 50);
+    ctx.fillText('Options Chain - SPY (Admin)', 30, 50);
     
     // Options table headers
     ctx.fillStyle = '#333';
@@ -1157,7 +774,7 @@ function drawAdminOptionsChain(ctx, frame) {
 }
 
 async function handleAdminScreenShare(stream, screenName) {
-    console.log(`🚀 Admin handling screen share: ${screenName}`);
+    console.log('🚀 Admin handling screen share: ' + screenName);
     
     try {
         // Store screen share info
@@ -1169,7 +786,7 @@ async function handleAdminScreenShare(stream, screenName) {
         document.getElementById('userScreenBtn').classList.add('btn-success');
         document.getElementById('userScreenBtn').classList.remove('btn-outline-light');
         
-        showToast(`Admin screen sharing started: ${screenName}`, 'success');
+        showToast('Admin screen sharing started: ' + screenName, 'success');
         
         // Show stop button
         document.getElementById('stopAdminScreenShareBtn').style.display = 'inline-block';
@@ -1180,7 +797,7 @@ async function handleAdminScreenShare(stream, screenName) {
     }
 }
 
-async function stopUserScreenShare() {
+window.stopUserScreenShare = async function() {
     console.log('🛑 Admin stopping screen share...');
     
     try {
@@ -1214,9 +831,9 @@ async function stopUserScreenShare() {
         console.error('❌ Error stopping admin screen share:', error);
         showToast('Error stopping admin screen share', 'error');
     }
-}
+};
 
-async function toggleUserRecording() {
+window.toggleUserRecording = async function() {
     if (!userActiveStream) return;
     
     const recordingBtn = document.getElementById('userRecordingBtn');
@@ -1256,10 +873,10 @@ async function toggleUserRecording() {
         console.error('Error toggling recording:', error);
         showToast(error.message, 'error');
     }
-}
+};
 
-function shareStream(streamId) {
-    const streamUrl = window.location.origin + "{{ url_for('livestream') }}";
+window.shareStream = function(streamId) {
+    const streamUrl = window.location.origin + '/livestream';
     
     if (navigator.share) {
         navigator.share({
@@ -1272,7 +889,7 @@ function shareStream(streamId) {
             showToast('Stream link copied to clipboard', 'success');
         });
     }
-}
+};
 
 async function updateStreamStats() {
     try {
@@ -1283,40 +900,69 @@ async function updateStreamStats() {
             const totalViewers = data.streams.reduce((sum, stream) => sum + (stream.viewer_count || 0), 0);
             const recordingCount = data.streams.filter(stream => stream.is_recording).length;
             
-            document.getElementById('activeStreamCount').textContent = data.count;
-            document.getElementById('totalViewersCount').textContent = totalViewers;
-            document.getElementById('recordingStreamsCount').textContent = recordingCount;
+            const activeStreamCountEl = document.getElementById('activeStreamCount');
+            const totalViewersCountEl = document.getElementById('totalViewersCount');
+            const recordingStreamsCountEl = document.getElementById('recordingStreamsCount');
+            
+            if (activeStreamCountEl) activeStreamCountEl.textContent = data.count;
+            if (totalViewersCountEl) totalViewersCountEl.textContent = totalViewers;
+            if (recordingStreamsCountEl) recordingStreamsCountEl.textContent = recordingCount;
         } else {
-            document.getElementById('activeStreamCount').textContent = '0';
-            document.getElementById('totalViewersCount').textContent = '0';
-            document.getElementById('recordingStreamsCount').textContent = '0';
+            const activeStreamCountEl = document.getElementById('activeStreamCount');
+            const totalViewersCountEl = document.getElementById('totalViewersCount');
+            const recordingStreamsCountEl = document.getElementById('recordingStreamsCount');
+            
+            if (activeStreamCountEl) activeStreamCountEl.textContent = '0';
+            if (totalViewersCountEl) totalViewersCountEl.textContent = '0';
+            if (recordingStreamsCountEl) recordingStreamsCountEl.textContent = '0';
         }
     } catch (error) {
         console.error('Error updating stream stats:', error);
     }
 }
 
-// Toast function
-function showToast(message, type = 'info') {
+function showToast(message, type) {
     const toast = document.createElement('div');
-    toast.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info'} position-fixed`;
+    const alertType = type === 'error' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+    const iconType = type === 'error' ? 'error' : type === 'success' ? 'check_circle' : type === 'warning' ? 'warning' : 'info';
+    
+    toast.className = 'alert alert-' + alertType + ' position-fixed';
     toast.style.top = '20px';
     toast.style.right = '20px';
     toast.style.zIndex = '9999';
     toast.style.minWidth = '300px';
-    toast.innerHTML = `
-        <div class="d-flex align-items-center">
-            <span class="material-symbols-outlined me-2">${type === 'error' ? 'error' : type === 'success' ? 'check_circle' : type === 'warning' ? 'warning' : 'info'}</span>
-            <span>${message}</span>
-        </div>
-    `;
+    toast.innerHTML = 
+        '<div class="d-flex align-items-center">' +
+            '<span class="material-symbols-outlined me-2">' + iconType + '</span>' +
+            '<span>' + message + '</span>' +
+        '</div>';
     
     document.body.appendChild(toast);
     
     setTimeout(() => {
-        toast.remove();
+        if (toast.parentNode) {
+            toast.remove();
+        }
     }, 4000);
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📱 Admin control page loaded');
+    
+    if (userActiveStream) {
+        console.log('🎬 User has active stream:', userActiveStream);
+    }
+    
+    // Set up form handlers
+    const startStreamForm = document.getElementById('startUserStreamForm');
+    if (startStreamForm) {
+        startStreamForm.addEventListener('submit', handleStartUserStream);
+    }
+    
+    // Poll for updates
+    setInterval(updateStreamStats, 5000);
+    updateStreamStats();
+});
 
 console.log('✅ Admin stream control page loaded successfully');
 </script>
