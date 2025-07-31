@@ -97,9 +97,13 @@
                     
                     <!-- Category Icon -->
                     <div class="category-icon me-3">
+                        {% if category.image_url %}
+                        <img src="{{ category.image_url }}" alt="{{ category.name }}" class="category-image-small">
+                        {% else %}
                         <div class="icon-circle">
                             <span class="material-symbols-outlined">folder</span>
                         </div>
+                        {% endif %}
                     </div>
                     
                     <!-- Category Info -->
@@ -214,9 +218,13 @@
                             <tr>
                                 <td>
                                     <div class="d-flex align-items-center">
+                                        {% if category.image_url %}
+                                        <img src="{{ category.image_url }}" alt="{{ category.name }}" class="category-image-small me-2">
+                                        {% else %}
                                         <div class="category-icon-small me-2">
                                             <span class="material-symbols-outlined">folder</span>
                                         </div>
+                                        {% endif %}
                                         <div>
                                             <strong>{{ category.name }}</strong>
                                             {% if category.description %}
@@ -449,6 +457,14 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
+.category-image-small {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
 .category-item {
     transition: all 0.3s ease;
 }
