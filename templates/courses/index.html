@@ -96,13 +96,14 @@
     <div class="col-lg-4 col-md-6 mb-4">
         <div class="card course-card h-100" data-category-id="{{ category.id }}">
             <div class="position-relative">
-                <!-- Course Thumbnail (use first video's thumbnail or default) -->
-                {% set first_video = videos[0] %}
-                {% if first_video.thumbnail_url %}
-                <img src="{{ first_video.thumbnail_url }}" class="card-img-top" alt="{{ category.name }}" style="height: 250px; object-fit: cover;">
+                <!-- Course Thumbnail (use category image or fallback to first video) -->
+                {% if category.image_url %}
+                <img src="{{ category.image_url }}" class="card-img-top" alt="{{ category.name }}" style="height: 250px; object-fit: cover;">
+                {% elif videos and videos[0].thumbnail_url %}
+                <img src="{{ videos[0].thumbnail_url }}" class="card-img-top" alt="{{ category.name }}" style="height: 250px; object-fit: cover;">
                 {% else %}
                 <div class="card-img-top bg-gradient-primary d-flex align-items-center justify-content-center" style="height: 250px;">
-                    <span class="material-symbols-outlined text-white" style="font-size: 4rem;">play_circle</span>
+                    <span class="material-symbols-outlined text-white" style="font-size: 4rem;">school</span>
                 </div>
                 {% endif %}
                 
