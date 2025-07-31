@@ -749,6 +749,18 @@
 
         <!-- Navigation -->
         <nav class="sidebar-nav">
+            <div class="nav-section-title">Livestream</div>
+            <li class="nav-item">
+                <a class="nav-link d-flex align-items-center" href="{{ url_for('livestream') }}">
+                    <span class="material-symbols-outlined me-2">live_tv</span>
+                    <span>Live Stream</span>
+                    <!-- Optional: Show live indicator -->
+                    <span class="badge bg-danger ms-2 live-indicator" style="display: none;">
+                        <span class="material-symbols-outlined" style="font-size: 10px;">radio_button_checked</span>
+                        LIVE
+                    </span>
+                </a>
+            </li>
             <!-- Learning Section -->
             <div class="nav-section">
                 <div class="nav-section-title">Learning</div>
@@ -770,17 +782,27 @@
                         <span class="nav-text">Subscription</span>
                     </a>
                 </div>
-                <div class="nav-item">
-                    <a href="{{ url_for('donate') }}" class="nav-link {% if request.endpoint == 'donate' %}active{% endif %}">
-                        <span class="material-symbols-outlined">volunteer_activism</span>
-                        <span class="nav-text">Donate</span>
-                    </a>
-                </div>
             </div>
 
-            {% if current_user.is_admin %}
+            {% if current_user.is_authenticated and current_user.is_admin %}
             <!-- Admin Section -->
             <div class="nav-section">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <span class="material-symbols-outlined me-2">admin_panel_settings</span>
+                        Admin
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{{ url_for('admin') }}">Dashboard</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('admin_videos') }}">Videos</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('admin_categories') }}">Categories</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('admin_stream') }}">
+                            <span class="material-symbols-outlined me-2">live_tv</span>
+                            Stream Control
+                        </a></li>
+                    </ul>
+                </li>
                 <div class="nav-section-title">Admin</div>
                 <div class="nav-item">
                     <a href="{{ url_for('admin') }}" class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}">
@@ -809,6 +831,7 @@
             </div>
             {% endif %}
         </nav>
+
 
         <!-- User section -->
         <div class="sidebar-user">
