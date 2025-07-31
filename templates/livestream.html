@@ -284,6 +284,13 @@ const attendeeDataByStream = {{ attendee_data_by_stream|tojson if attendee_data_
 const joinedStreams = new Map(); // streamId -> meetingSession
 const streamStates = new Map(); // streamId -> {muted, videoEnabled, screenSharing}
 
+// Debug: Log the data we received from the server
+console.log('📊 Debug Info:');
+console.log('- Active Streams:', activeStreams);
+console.log('- Attendee Data:', attendeeDataByStream);
+console.log('- Stream Count:', activeStreams.length);
+console.log('- Attendee Count:', Object.keys(attendeeDataByStream).length);
+
 let chimeSDKLoaded = false;
 let ChimeSDK = null;
 let currentScreenShareStream = null;
@@ -734,6 +741,41 @@ document.addEventListener('DOMContentLoaded', async function() {
     console.log('🎯 Active streams:', activeStreams);
     console.log('👥 Attendee data:', attendeeDataByStream);
     
+    // Check for data issues
+    if (activeStreams.length === 0) {
+        console.warn('⚠️ No active streams found');
+        showToast('No active streams available', 'info');
+        return;
+    }
+    
+    if (Object.keys(attendeeDataByStream).length === 0) {
+        console.warn('⚠️ No attendee data found');
+        showToast('Stream data not available - check server logs', 'warning');
+        
+        // Still try to initialize for demo mode
+        activeStreams.forEach(stream => {
+            const spinner = document.getElementById(`loadingSpinner-${stream.id}`);
+            if (spinner) {
+                spinner.innerHTML = `
+                    <div class="text-center text-white">
+                        <span class="material-symbols-outlined mb-3 text-warning" style="font-size: 3rem;">warning</span>
+                        <p class="text-warning">No Stream Data</p>
+                        <small class="text-muted mb-3">Server may be starting up or stream not properly configured</small>
+                        <button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(${stream.id})">
+                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>
+                            Demo Mode
+                        </button>
+                        <button class="btn btn-outline-light btn-sm" onclick="location.reload()">
+                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>
+                            Refresh
+                        </button>
+                    </div>
+                `;
+            }
+        });
+        return;
+    }
+    
     try {
         await loadChimeSDKAdvanced();
         initializeStreams();
@@ -744,6 +786,34 @@ document.addEventListener('DOMContentLoaded', async function() {
             setTimeout(() => {
                 joinStream(activeStreams[0].id);
             }, 2000);
+        }
+        
+        // For viewers, offer immediate connection after 3 seconds
+        if (!isAdmin && activeStreams.length > 0) {
+            setTimeout(() => {
+                activeStreams.forEach(stream => {
+                    const spinner = document.getElementById(`loadingSpinner-${stream.id}`);
+                    if (spinner && !joinedStreams.has(stream.id)) {
+                        const currentHTML = spinner.innerHTML;
+                        if (currentHTML.includes('Connecting to')) {
+                            spinner.innerHTML = `
+                                <div class="text-center text-white">
+                                    <span class="material-symbols-outlined mb-3" style="color: ${stream.creator?.stream_color || '#10B981'}; font-size: 3rem;">play_circle</span>
+                                    <p>Ready to join ${stream.streamer_name}'s stream</p>
+                                    <button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(${stream.id})">
+                                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>
+                                        Quick Join
+                                    </button>
+                                    <button class="btn btn-primary btn-sm" onclick="joinStream(${stream.id})">
+                                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>
+                                        Full Connect
+                                    </button>
+                                </div>
+                            `;
+                        }
+                    }
+                });
+            }, 3000);
         }
         
     } catch (error) {
@@ -1658,10 +1728,15 @@ function shareStream(streamId) {
 
 async function updateAllStreamStatus() {
     try {
+        console.log('🔄 Checking stream status...');
         const response = await fetch('/api/stream/status');
         const data = await response.json();
         
+        console.log('📡 API Response:', data);
+        
         if (data.active && data.streams) {
+            console.log('✅ Active streams found:', data.streams.length);
+            
             // Update individual stream viewer counts
             data.streams.forEach(streamData => {
                 const viewerElement = document.querySelector(`.stream-viewer-count[data-stream-id="${streamData.id}"]`);
@@ -1691,7 +1766,39 @@ async function updateAllStreamStatus() {
                 statusBadgeEl.className = 'badge bg-success';
                 statusBadgeEl.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 12px;">radio_button_checked</span>${data.count} Live`;
             }
+            
+            // Check if any streams are not joined and offer quick connection
+            data.streams.forEach(streamData => {
+                if (!joinedStreams.has(streamData.id)) {
+                    const spinner = document.getElementById(`loadingSpinner-${streamData.id}`);
+                    if (spinner && spinner.style.display !== 'none') {
+                        // Update spinner with current stream status
+                        setTimeout(() => {
+                            if (!joinedStreams.has(streamData.id)) {
+                                spinner.innerHTML = `
+                                    <div class="text-center text-white">
+                                        <span class="material-symbols-outlined mb-3" style="color: ${streamData.stream_color || '#10B981'}; font-size: 3rem;">live_tv</span>
+                                        <p>${streamData.streamer_name} is streaming live!</p>
+                                        <small class="text-muted mb-3">${streamData.viewer_count} viewers watching</small>
+                                        <button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(${streamData.id})">
+                                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>
+                                            Quick Join
+                                        </button>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="joinStream(${streamData.id})">
+                                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>
+                                            Connect
+                                        </button>
+                                    </div>
+                                `;
+                            }
+                        }, 1000);
+                    }
+                }
+            });
+            
         } else {
+            console.log('❌ No active streams');
+            
             // No active streams
             const statusBadgeEl = document.getElementById('statusBadge');
             const totalViewersEl = document.getElementById('totalViewers');
@@ -1705,7 +1812,8 @@ async function updateAllStreamStatus() {
             }
         }
     } catch (error) {
-        console.error('Error updating stream status:', error);
+        console.error('❌ Error updating stream status:', error);
+        showToast('Error checking stream status', 'warning');
     }
 }
 
@@ -1725,8 +1833,67 @@ function debugStreamConnection(streamId) {
     console.log('Screen share active:', currentScreenShareStreamId === streamId);
     console.log('Screen share stream:', currentScreenShareStream);
     
+    // Additional debugging
+    console.log('=== 📊 ADDITIONAL DEBUG INFO ===');
+    console.log('DOM Elements:');
+    console.log('- Spinner:', document.getElementById(`loadingSpinner-${streamId}`));
+    console.log('- Video Grid:', document.getElementById(`videoGrid-${streamId}`));
+    console.log('- Stream Controls:', document.getElementById(`streamControls-${streamId}`));
+    
+    console.log('Browser Support:');
+    console.log('- MediaDevices:', !!navigator.mediaDevices);
+    console.log('- GetDisplayMedia:', !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia));
+    console.log('- WebRTC:', !!(window.RTCPeerConnection || window.webkitRTCPeerConnection));
+    
     showToast('Enhanced debug info logged to console (F12)', 'info');
 }
+
+// Global debug function accessible from console
+window.debugAllStreams = function() {
+    console.log('=== 🔍 GLOBAL STREAM DEBUG ===');
+    console.log('Is Admin:', isAdmin);
+    console.log('Active Streams:', activeStreams);
+    console.log('Attendee Data:', attendeeDataByStream);
+    console.log('Joined Streams:', Array.from(joinedStreams.keys()));
+    console.log('Stream States:', Array.from(streamStates.entries()));
+    console.log('ChimeSDK Loaded:', chimeSDKLoaded);
+    
+    // Test API endpoint
+    fetch('/api/stream/status')
+        .then(r => r.json())
+        .then(data => {
+            console.log('API Response:', data);
+        })
+        .catch(err => {
+            console.error('API Error:', err);
+        });
+    
+    return {
+        isAdmin,
+        activeStreams,
+        attendeeDataByStream,
+        joinedStreams: Array.from(joinedStreams.keys()),
+        streamStates: Array.from(streamStates.entries()),
+        chimeSDKLoaded
+    };
+};
+
+// Quick test connection function
+window.testStreamConnection = function(streamId) {
+    if (!streamId && activeStreams.length > 0) {
+        streamId = activeStreams[0].id;
+    }
+    
+    console.log('🧪 Testing stream connection for:', streamId);
+    
+    if (joinedStreams.has(streamId)) {
+        console.log('Already connected, leaving first...');
+        leaveStream(streamId);
+        setTimeout(() => forceJoinStream(streamId), 1000);
+    } else {
+        forceJoinStream(streamId);
+    }
+};
 
 // API endpoint for leaving stream (called from leaveStream function)
 async function apiLeaveStream(streamId) {
@@ -1746,6 +1913,40 @@ async function apiLeaveStream(streamId) {
         return { success: false, error: error.message };
     }
 }
+
+// Helper function to check server-side stream data
+window.checkServerStreamData = async function() {
+    try {
+        console.log('🔍 Checking server stream data...');
+        
+        const response = await fetch('/api/stream/status');
+        const data = await response.json();
+        
+        console.log('📡 Server Response:', data);
+        console.log('📊 Server vs Client Data:');
+        console.log('- Server Active:', data.active);
+        console.log('- Server Count:', data.count);
+        console.log('- Client Streams:', activeStreams.length);
+        console.log('- Client Attendee Data Keys:', Object.keys(attendeeDataByStream));
+        
+        if (data.active && data.streams) {
+            data.streams.forEach(serverStream => {
+                const clientStream = activeStreams.find(s => s.id === serverStream.id);
+                const clientAttendee = attendeeDataByStream[serverStream.id];
+                
+                console.log(`Stream ${serverStream.id}:`);
+                console.log('- Server:', serverStream.streamer_name, 'viewers:', serverStream.viewer_count);
+                console.log('- Client:', clientStream ? 'found' : 'missing');
+                console.log('- Attendee:', clientAttendee ? 'found' : 'missing');
+            });
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('❌ Error checking server data:', error);
+        return null;
+    }
+};
 
 // Clean up on page unload
 window.addEventListener('beforeunload', function() {
@@ -1803,6 +2004,49 @@ function monitorConnectionQuality() {
 setTimeout(monitorConnectionQuality, 10000); // Start after 10 seconds
 
 console.log('✅ Enhanced livestream page loaded successfully');
+
+// Immediate troubleshooting for stuck connections
+setTimeout(() => {
+    console.log('🔍 Running connection troubleshooter...');
+    
+    activeStreams.forEach(stream => {
+        const spinner = document.getElementById(`loadingSpinner-${stream.id}`);
+        const isConnected = joinedStreams.has(stream.id);
+        
+        if (spinner && spinner.style.display !== 'none' && !isConnected) {
+            console.log(`⚠️ Stream ${stream.id} appears stuck, offering alternatives`);
+            
+            spinner.innerHTML = `
+                <div class="text-center text-white">
+                    <span class="material-symbols-outlined mb-3" style="color: ${stream.creator?.stream_color || '#10B981'}; font-size: 3rem;">live_tv</span>
+                    <p>${stream.streamer_name} is Live!</p>
+                    <small class="text-muted mb-3">Having trouble connecting? Try these options:</small>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success btn-sm" onclick="forceJoinStream(${stream.id})">
+                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">flash_on</span>
+                            Instant Connect
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="joinStream(${stream.id})">
+                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>
+                            Standard Connect
+                        </button>
+                        <button class="btn btn-outline-light btn-sm" onclick="location.reload()">
+                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>
+                            Refresh Page
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    });
+}, 2000); // Run after 2 seconds
+
+// For immediate troubleshooting, also add to console
+console.log('💡 Troubleshooting Commands:');
+console.log('- debugAllStreams() - Full debug info');
+console.log('- testStreamConnection() - Test connection');
+console.log('- forceJoinStream(streamId) - Force connection');
+console.log('- Current streams:', activeStreams.map(s => s.id));
 </script>
 
 <style>
