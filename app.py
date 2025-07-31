@@ -184,6 +184,35 @@ class Stream(db.Model):
     # Relationships
     viewers = db.relationship('StreamViewer', backref='stream', lazy=True, cascade='all, delete-orphan')
 
+    def to_dict(self):
+        """Convert Stream object to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'meeting_id': self.meeting_id,
+            'attendee_id': self.attendee_id,
+            'external_meeting_id': self.external_meeting_id,
+            'media_region': self.media_region,
+            'media_placement_audio_host_url': self.media_placement_audio_host_url,
+            'media_placement_screen_sharing_url': self.media_placement_screen_sharing_url,
+            'media_placement_screen_data_url': self.media_placement_screen_data_url,
+            'is_active': self.is_active,
+            'is_recording': self.is_recording,
+            'recording_url': self.recording_url,
+            'viewer_count': self.viewer_count,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'ended_at': self.ended_at.isoformat() if self.ended_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'streamer_name': self.streamer_name,
+            'stream_type': self.stream_type,
+            'created_by': self.created_by
+        }
+    
+    def __json__(self):
+        """Make Stream objects JSON serializable"""
+        return self.to_dict()
+
 class StreamViewer(db.Model):
     __tablename__ = 'stream_viewers'
     
