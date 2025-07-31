@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Live Stream - TGFX Trade Lab{% endblock %}
+{% block title %}Live Streams - TGFX Trade Lab{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
@@ -9,177 +9,174 @@
             <div>
                 <h1 class="text-gradient-primary mb-2">
                     <span class="material-symbols-outlined me-2" style="font-size: 2rem;">live_tv</span>
-                    Live Stream
+                    Live Streams
                 </h1>
-                <p class="text-muted mb-0">Join the live trading session</p>
+                <p class="text-muted mb-0">Join Ray and Jordan's live trading sessions</p>
             </div>
             <div class="d-flex gap-2 align-items-center" id="streamStatus">
-                <span class="badge bg-secondary" id="statusBadge">Checking...</span>
-                <span class="text-muted" id="viewerCount">0 viewers</span>
+                <span class="badge bg-secondary" id="statusBadge">Loading...</span>
+                <span class="text-muted" id="totalViewers">0 total viewers</span>
             </div>
         </div>
     </div>
 </div>
 
+{% if active_streams %}
+<!-- Active Streams Container -->
 <div class="row">
-    <div class="col-lg-9">
-        <!-- Stream Container -->
-        <div class="card mb-4">
+    {% for stream in active_streams %}
+    <div class="col-lg-6 mb-4">
+        <div class="card stream-card" data-stream-id="{{ stream.id }}" style="border-left: 4px solid {{ stream.creator.stream_color }};">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-1 text-white">{{ stream.title }}</h5>
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="badge" style="background-color: {{ stream.creator.stream_color }};">
+                            <span class="material-symbols-outlined me-1" style="font-size: 10px;">radio_button_checked</span>
+                            {{ stream.streamer_name }} LIVE
+                        </span>
+                        <span class="text-muted stream-viewer-count" data-stream-id="{{ stream.id }}">
+                            {{ stream.viewer_count }} viewers
+                        </span>
+                    </div>
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <span class="material-symbols-outlined">more_vert</span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="joinStream({{ stream.id }})">
+                            <span class="material-symbols-outlined me-2">login</span>Join Stream
+                        </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="shareStream({{ stream.id }})">
+                            <span class="material-symbols-outlined me-2">share</span>Share
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+            
             <div class="card-body p-0">
-                <div id="streamContainer" class="position-relative">
-                    {% if stream and stream.is_active %}
-                    <!-- Video container for Chime SDK -->
-                    <div id="videoContainer" style="background: #000; min-height: 400px; border-radius: 16px; position: relative;">
-                        <div id="loadingSpinner" class="d-flex align-items-center justify-content-center h-100">
-                            <div class="text-center text-white">
-                                <div class="spinner-border text-primary mb-3" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                                <p>Connecting to stream...</p>
+                <!-- Video Container -->
+                <div id="videoContainer-{{ stream.id }}" class="stream-video-container" 
+                     style="background: #000; min-height: 300px; position: relative;">
+                    
+                    <div id="loadingSpinner-{{ stream.id }}" class="d-flex align-items-center justify-content-center h-100">
+                        <div class="text-center text-white">
+                            <div class="spinner-border mb-3" style="color: {{ stream.creator.stream_color }};" role="status">
+                                <span class="visually-hidden">Loading...</span>
                             </div>
+                            <p>Connecting to {{ stream.streamer_name }}'s stream...</p>
+                            <button class="btn btn-primary btn-sm" onclick="joinStream({{ stream.id }})">
+                                Join Stream
+                            </button>
                         </div>
-                        
-                        <!-- Video elements will be dynamically added here by Chime SDK -->
-                        <div id="videoGrid" class="position-absolute top-0 start-0 w-100 h-100"></div>
-                        
-                        <!-- Stream controls overlay -->
-                        <div class="position-absolute bottom-0 start-0 w-100 p-3" style="background: linear-gradient(transparent, rgba(0,0,0,0.7));">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h5 class="text-white mb-1">{{ stream.title }}</h5>
-                                    <small class="text-white-50">Started {{ stream.started_at.strftime('%I:%M %p') if stream.started_at }}</small>
-                                </div>
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-outline-light btn-sm" id="muteBtn" onclick="toggleMute()">
-                                        <span class="material-symbols-outlined" id="muteIcon">mic</span>
-                                    </button>
-                                    <button class="btn btn-outline-light btn-sm" id="videoBtn" onclick="toggleVideo()">
-                                        <span class="material-symbols-outlined" id="videoIcon">videocam</span>
-                                    </button>
-                                    <button class="btn btn-danger btn-sm" onclick="leaveStream()">
-                                        <span class="material-symbols-outlined me-1">call_end</span>
-                                        Leave
-                                    </button>
-                                </div>
+                    </div>
+                    
+                    <!-- Video grid for this stream -->
+                    <div id="videoGrid-{{ stream.id }}" class="position-absolute top-0 start-0 w-100 h-100" style="display: none;"></div>
+                    
+                    <!-- Stream controls overlay -->
+                    <div class="position-absolute bottom-0 start-0 w-100 p-3 stream-controls" 
+                         id="streamControls-{{ stream.id }}" style="background: linear-gradient(transparent, rgba(0,0,0,0.8)); display: none;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-white mb-1">{{ stream.streamer_name }}'s Stream</h6>
+                                <small class="text-white-50">{{ stream.stream_type|title }} • Started {{ stream.started_at.strftime('%I:%M %p') if stream.started_at }}</small>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-light btn-sm" id="muteBtn-{{ stream.id }}" onclick="toggleMute({{ stream.id }})">
+                                    <span class="material-symbols-outlined" id="muteIcon-{{ stream.id }}">mic_off</span>
+                                </button>
+                                <button class="btn btn-outline-light btn-sm" id="videoBtn-{{ stream.id }}" onclick="toggleVideo({{ stream.id }})">
+                                    <span class="material-symbols-outlined" id="videoIcon-{{ stream.id }}">videocam_off</span>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="leaveStream({{ stream.id }})">
+                                    <span class="material-symbols-outlined me-1">call_end</span>
+                                    Leave
+                                </button>
                             </div>
                         </div>
                     </div>
-                    {% else %}
-                    <!-- No active stream -->
-                    <div class="text-center py-5" style="background: #1a1a1a; border-radius: 16px;">
-                        <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">live_tv</span>
-                        <h4 class="text-muted mb-3">No Live Stream Active</h4>
-                        <p class="text-muted mb-4">There's no live stream happening right now. Check back later or follow our social media for stream announcements.</p>
-                        <a href="{{ url_for('courses') }}" class="btn btn-primary">
-                            <span class="material-symbols-outlined me-2">school</span>
-                            Browse Courses
-                        </a>
-                    </div>
-                    {% endif %}
                 </div>
-            </div>
-        </div>
-        
-        {% if stream and stream.is_active and stream.description %}
-        <!-- Stream Description -->
-        <div class="card">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">info</span>
-                    About This Stream
-                </h6>
-            </div>
-            <div class="card-body">
-                <p class="mb-0">{{ stream.description|nl2br|safe }}</p>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-    
-    <!-- Sidebar -->
-    <div class="col-lg-3">
-        {% if stream and stream.is_active %}
-        <!-- Stream Info -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">info</span>
-                    Stream Info
-                </h6>
-            </div>
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="text-muted">Status</span>
-                    <span class="badge bg-success">
-                        <span class="material-symbols-outlined me-1" style="font-size: 12px;">radio_button_checked</span>
-                        Live
-                    </span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="text-muted">Viewers</span>
-                    <span class="text-white" id="sidebarViewerCount">{{ stream.viewer_count }}</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="text-muted">Started</span>
-                    <span class="text-white">{{ stream.started_at.strftime('%I:%M %p') if stream.started_at }}</span>
-                </div>
-                {% if stream.is_recording %}
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="text-muted">Recording</span>
-                    <span class="badge bg-danger">
-                        <span class="material-symbols-outlined me-1" style="font-size: 12px;">fiber_manual_record</span>
-                        REC
-                    </span>
+                
+                {% if stream.description %}
+                <div class="p-3">
+                    <p class="text-muted mb-0">{{ stream.description }}</p>
                 </div>
                 {% endif %}
             </div>
         </div>
-        {% endif %}
-        
-        <!-- Quick Actions -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">bolt</span>
-                    Quick Actions
-                </h6>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('courses') }}" class="btn btn-outline-primary btn-sm">
-                        <span class="material-symbols-outlined me-2">school</span>
-                        Browse Courses
-                    </a>
-                    <a href="{{ url_for('favorites') }}" class="btn btn-outline-secondary btn-sm">
-                        <span class="material-symbols-outlined me-2">favorite</span>
-                        My Favorites
-                    </a>
-                    {% if not current_user.has_subscription %}
-                    <a href="{{ url_for('subscription') }}" class="btn btn-primary btn-sm">
-                        <span class="material-symbols-outlined me-2">workspace_premium</span>
-                        Upgrade to Premium
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        
-        <!-- Help -->
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Stream Statistics -->
+<div class="row mt-4">
+    <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">help</span>
-                    Need Help?
+                    <span class="material-symbols-outlined me-2">analytics</span>
+                    Live Stream Analytics
                 </h6>
             </div>
             <div class="card-body">
-                <small class="text-muted">
-                    Having trouble with the stream? Make sure you have a stable internet connection and your browser allows camera/microphone access.
-                </small>
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h4 class="text-gradient-primary" id="totalActiveStreams">{{ active_streams|length }}</h4>
+                        <small class="text-muted">Active Streams</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h4 class="text-gradient-primary" id="combinedViewers">
+                            {{ active_streams|map(attribute='viewer_count')|sum }}
+                        </h4>
+                        <small class="text-muted">Total Viewers</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h4 class="text-gradient-primary" id="recordingCount">
+                            {{ active_streams|selectattr('is_recording')|list|length }}
+                        </h4>
+                        <small class="text-muted">Recording Now</small>
+                    </div>
+                    <div class="col-md-3">
+                        <h4 class="text-gradient-primary">LIVE</h4>
+                        <small class="text-muted">Status</small>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+{% else %}
+<!-- No Active Streams -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5" style="background: #1a1a1a;">
+                <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">live_tv</span>
+                <h4 class="text-muted mb-3">No Live Streams Active</h4>
+                <p class="text-muted mb-4">Ray and Jordan aren't streaming right now. Check back later or follow our social media for stream announcements.</p>
+                
+                <div class="row justify-content-center">
+                    <div class="col-md-6">
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('courses') }}" class="btn btn-primary">
+                                <span class="material-symbols-outlined me-2">school</span>
+                                Browse Courses
+                            </a>
+                            <a href="{{ url_for('favorites') }}" class="btn btn-outline-primary">
+                                <span class="material-symbols-outlined me-2">favorite</span>
+                                My Favorites
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -188,37 +185,49 @@
 <script src="https://static.sdkassets.chime.aws/amazon-chime-sdk-js/v3.21.0/amazon-chime-sdk.js"></script>
 
 <script>
-let meetingSession = null;
-let audioVideo = null;
-let isMuted = true;
-let isVideoEnabled = false;
-
-const streamData = {{ stream|tojson if stream else 'null' }};
-const attendeeData = {{ attendee_data|tojson if attendee_data else 'null' }};
+// Global variables for managing multiple streams
+const activeStreams = {{ active_streams|tojson if active_streams else '[]' }};
+const attendeeDataByStream = {{ attendee_data_by_stream|tojson if attendee_data_by_stream else '{}' }};
+const joinedStreams = new Map(); // streamId -> meetingSession
+const streamStates = new Map(); // streamId -> {muted, videoEnabled}
 
 document.addEventListener('DOMContentLoaded', function() {
-    if (streamData && streamData.is_active && attendeeData) {
-        initializeChimeSDK();
-    }
+    // Initialize stream states
+    activeStreams.forEach(stream => {
+        streamStates.set(stream.id, {
+            muted: true,
+            videoEnabled: false,
+            joined: false
+        });
+    });
     
     // Poll for stream status updates
-    setInterval(updateStreamStatus, 5000);
-    updateStreamStatus();
+    setInterval(updateAllStreamStatus, 5000);
+    updateAllStreamStatus();
 });
 
-async function initializeChimeSDK() {
+async function joinStream(streamId) {
+    const stream = activeStreams.find(s => s.id === streamId);
+    if (!stream || joinedStreams.has(streamId)) return;
+    
+    const attendeeData = attendeeDataByStream[streamId];
+    if (!attendeeData) {
+        showToast('Unable to join stream - no attendee data', 'error');
+        return;
+    }
+    
     try {
         const { ChimeSDK } = window;
         
         // Meeting configuration
         const meetingConfiguration = {
-            meetingId: streamData.meeting_id,
-            externalMeetingId: streamData.external_meeting_id,
-            mediaRegion: streamData.media_region,
+            meetingId: stream.meeting_id,
+            externalMeetingId: stream.external_meeting_id,
+            mediaRegion: stream.media_region,
             mediaPlacement: {
-                audioHostUrl: streamData.media_placement_audio_host_url,
-                screenSharingUrl: streamData.media_placement_screen_sharing_url,
-                screenDataUrl: streamData.media_placement_screen_data_url
+                audioHostUrl: stream.media_placement_audio_host_url,
+                screenSharingUrl: stream.media_placement_screen_sharing_url,
+                screenDataUrl: stream.media_placement_screen_data_url
             }
         };
         
@@ -230,30 +239,36 @@ async function initializeChimeSDK() {
             attendeeData
         );
         
-        meetingSession = new ChimeSDK.DefaultMeetingSession(
+        const meetingSession = new ChimeSDK.DefaultMeetingSession(
             meetingSessionConfiguration,
             logger,
             deviceController
         );
         
-        audioVideo = meetingSession.audioVideo;
+        const audioVideo = meetingSession.audioVideo;
         
         // Set up observers
         const observer = {
             audioVideoDidStart: () => {
-                console.log('Audio/Video started');
-                document.getElementById('loadingSpinner').style.display = 'none';
+                console.log(`Audio/Video started for stream ${streamId}`);
+                document.getElementById(`loadingSpinner-${streamId}`).style.display = 'none';
+                document.getElementById(`videoGrid-${streamId}`).style.display = 'block';
+                document.getElementById(`streamControls-${streamId}`).style.display = 'block';
+                
+                const state = streamStates.get(streamId);
+                state.joined = true;
+                streamStates.set(streamId, state);
             },
             audioVideoDidStop: (sessionStatus) => {
-                console.log('Audio/Video stopped', sessionStatus);
-                showToast('Stream ended', 'info');
+                console.log(`Audio/Video stopped for stream ${streamId}`, sessionStatus);
+                showToast(`${stream.streamer_name}'s stream ended`, 'info');
             },
             videoTileDidUpdate: (tileState) => {
-                console.log('Video tile updated', tileState);
+                console.log(`Video tile updated for stream ${streamId}`, tileState);
                 if (!tileState.localTile && !tileState.isContent) {
-                    const videoElement = document.getElementById(`video-${tileState.tileId}`) || 
+                    const videoElement = document.getElementById(`video-${streamId}-${tileState.tileId}`) || 
                                        document.createElement('video');
-                    videoElement.id = `video-${tileState.tileId}`;
+                    videoElement.id = `video-${streamId}-${tileState.tileId}`;
                     videoElement.style.width = '100%';
                     videoElement.style.height = '100%';
                     videoElement.style.objectFit = 'cover';
@@ -262,15 +277,15 @@ async function initializeChimeSDK() {
                     
                     audioVideo.bindVideoElement(tileState.tileId, videoElement);
                     
-                    const videoGrid = document.getElementById('videoGrid');
-                    if (!document.getElementById(`video-${tileState.tileId}`)) {
+                    const videoGrid = document.getElementById(`videoGrid-${streamId}`);
+                    if (!document.getElementById(`video-${streamId}-${tileState.tileId}`)) {
                         videoGrid.appendChild(videoElement);
                     }
                 }
             },
             videoTileWasRemoved: (tileId) => {
-                console.log('Video tile removed', tileId);
-                const videoElement = document.getElementById(`video-${tileId}`);
+                console.log(`Video tile removed for stream ${streamId}`, tileId);
+                const videoElement = document.getElementById(`video-${streamId}-${tileId}`);
                 if (videoElement) {
                     videoElement.remove();
                 }
@@ -285,117 +300,156 @@ async function initializeChimeSDK() {
         // Mute audio by default (viewers shouldn't have audio enabled)
         audioVideo.realtimeMuteLocalAudio();
         
-        showToast('Connected to stream', 'success');
+        // Store the session
+        joinedStreams.set(streamId, { meetingSession, audioVideo });
+        
+        showToast(`Connected to ${stream.streamer_name}'s stream`, 'success');
         
     } catch (error) {
-        console.error('Error initializing Chime SDK:', error);
-        showToast('Failed to connect to stream', 'error');
-        document.getElementById('loadingSpinner').innerHTML = `
+        console.error(`Error joining stream ${streamId}:`, error);
+        showToast(`Failed to connect to ${stream.streamer_name}'s stream`, 'error');
+        document.getElementById(`loadingSpinner-${streamId}`).innerHTML = `
             <div class="text-center text-white">
                 <span class="material-symbols-outlined mb-3" style="font-size: 3rem;">error</span>
-                <p>Failed to connect to stream</p>
-                <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+                <p>Failed to connect</p>
+                <button class="btn btn-primary btn-sm" onclick="joinStream(${streamId})">Retry</button>
             </div>
         `;
     }
 }
 
-function toggleMute() {
-    if (!audioVideo) return;
+function toggleMute(streamId) {
+    const streamSession = joinedStreams.get(streamId);
+    if (!streamSession) return;
     
-    if (isMuted) {
+    const { audioVideo } = streamSession;
+    const state = streamStates.get(streamId);
+    
+    if (state.muted) {
         audioVideo.realtimeUnmuteLocalAudio();
-        document.getElementById('muteIcon').textContent = 'mic';
-        document.getElementById('muteBtn').classList.remove('btn-outline-light');
-        document.getElementById('muteBtn').classList.add('btn-outline-success');
-        isMuted = false;
+        document.getElementById(`muteIcon-${streamId}`).textContent = 'mic';
+        document.getElementById(`muteBtn-${streamId}`).classList.add('btn-outline-success');
+        state.muted = false;
     } else {
         audioVideo.realtimeMuteLocalAudio();
-        document.getElementById('muteIcon').textContent = 'mic_off';
-        document.getElementById('muteBtn').classList.remove('btn-outline-success');
-        document.getElementById('muteBtn').classList.add('btn-outline-light');
-        isMuted = true;
+        document.getElementById(`muteIcon-${streamId}`).textContent = 'mic_off';
+        document.getElementById(`muteBtn-${streamId}`).classList.remove('btn-outline-success');
+        state.muted = true;
     }
+    
+    streamStates.set(streamId, state);
 }
 
-function toggleVideo() {
-    if (!audioVideo) return;
+function toggleVideo(streamId) {
+    const streamSession = joinedStreams.get(streamId);
+    if (!streamSession) return;
     
-    if (isVideoEnabled) {
+    const { audioVideo } = streamSession;
+    const state = streamStates.get(streamId);
+    
+    if (state.videoEnabled) {
         audioVideo.stopLocalVideoTile();
-        document.getElementById('videoIcon').textContent = 'videocam_off';
-        document.getElementById('videoBtn').classList.remove('btn-outline-success');
-        document.getElementById('videoBtn').classList.add('btn-outline-light');
-        isVideoEnabled = false;
+        document.getElementById(`videoIcon-${streamId}`).textContent = 'videocam_off';
+        document.getElementById(`videoBtn-${streamId}`).classList.remove('btn-outline-success');
+        state.videoEnabled = false;
     } else {
         audioVideo.startLocalVideoTile();
-        document.getElementById('videoIcon').textContent = 'videocam';
-        document.getElementById('videoBtn').classList.remove('btn-outline-light');
-        document.getElementById('videoBtn').classList.add('btn-outline-success');
-        isVideoEnabled = true;
+        document.getElementById(`videoIcon-${streamId}`).textContent = 'videocam';
+        document.getElementById(`videoBtn-${streamId}`).classList.add('btn-outline-success');
+        state.videoEnabled = true;
+    }
+    
+    streamStates.set(streamId, state);
+}
+
+async function leaveStream(streamId) {
+    const streamSession = joinedStreams.get(streamId);
+    if (!streamSession) return;
+    
+    const { audioVideo } = streamSession;
+    audioVideo.stop();
+    joinedStreams.delete(streamId);
+    
+    // Reset UI
+    document.getElementById(`loadingSpinner-${streamId}`).style.display = 'flex';
+    document.getElementById(`videoGrid-${streamId}`).style.display = 'none';
+    document.getElementById(`streamControls-${streamId}`).style.display = 'none';
+    document.getElementById(`loadingSpinner-${streamId}`).innerHTML = `
+        <div class="text-center text-white">
+            <span class="material-symbols-outlined mb-3" style="font-size: 3rem;">live_tv</span>
+            <p>Left stream</p>
+            <button class="btn btn-primary btn-sm" onclick="joinStream(${streamId})">Rejoin Stream</button>
+        </div>
+    `;
+    
+    // Notify server
+    try {
+        await fetch('/api/stream/leave', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ stream_id: streamId })
+        });
+    } catch (error) {
+        console.error('Error leaving stream:', error);
+    }
+    
+    const state = streamStates.get(streamId);
+    state.joined = false;
+    streamStates.set(streamId, state);
+}
+
+function shareStream(streamId) {
+    const streamUrl = `${window.location.origin}/livestream`;
+    const stream = activeStreams.find(s => s.id === streamId);
+    
+    if (navigator.share) {
+        navigator.share({
+            title: `${stream.streamer_name}'s Live Stream - TGFX Trade Lab`,
+            text: `Join ${stream.streamer_name}'s live trading session!`,
+            url: streamUrl
+        });
+    } else {
+        navigator.clipboard.writeText(streamUrl).then(function() {
+            showToast('Stream link copied to clipboard', 'success');
+        });
     }
 }
 
-async function leaveStream() {
-    if (audioVideo) {
-        audioVideo.stop();
-    }
-    
-    // Notify server that user left
-    if (streamData) {
-        try {
-            await fetch('/api/stream/leave', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ stream_id: streamData.id })
-            });
-        } catch (error) {
-            console.error('Error leaving stream:', error);
-        }
-    }
-    
-    // Redirect to courses page
-    window.location.href = "{{ url_for('courses') }}";
-}
-
-async function updateStreamStatus() {
+async function updateAllStreamStatus() {
     try {
         const response = await fetch('/api/stream/status');
         const data = await response.json();
         
-        const statusBadge = document.getElementById('statusBadge');
-        const viewerCount = document.getElementById('viewerCount');
-        const sidebarViewerCount = document.getElementById('sidebarViewerCount');
-        
-        if (data.active) {
+        if (data.active && data.streams) {
+            // Update individual stream viewer counts
+            data.streams.forEach(streamData => {
+                const viewerElement = document.querySelector(`.stream-viewer-count[data-stream-id="${streamData.id}"]`);
+                if (viewerElement) {
+                    const count = streamData.viewer_count || 0;
+                    viewerElement.textContent = count === 1 ? '1 viewer' : `${count} viewers`;
+                }
+            });
+            
+            // Update overall statistics
+            const totalViewers = data.streams.reduce((sum, stream) => sum + (stream.viewer_count || 0), 0);
+            const recordingCount = data.streams.filter(stream => stream.is_recording).length;
+            
+            document.getElementById('totalActiveStreams').textContent = data.count;
+            document.getElementById('combinedViewers').textContent = totalViewers;
+            document.getElementById('recordingCount').textContent = recordingCount;
+            document.getElementById('totalViewers').textContent = `${totalViewers} total viewers`;
+            
+            // Update status badge
+            const statusBadge = document.getElementById('statusBadge');
             statusBadge.className = 'badge bg-success';
-            statusBadge.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 12px;">radio_button_checked</span>Live';
-            
-            const count = data.stream.viewer_count || 0;
-            const viewerText = count === 1 ? '1 viewer' : `${count} viewers`;
-            viewerCount.textContent = viewerText;
-            
-            if (sidebarViewerCount) {
-                sidebarViewerCount.textContent = count;
-            }
+            statusBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 12px;">radio_button_checked</span>${data.count} Live`;
         } else {
-            statusBadge.className = 'badge bg-secondary';
-            statusBadge.textContent = 'Offline';
-            viewerCount.textContent = '0 viewers';
-            
-            if (sidebarViewerCount) {
-                sidebarViewerCount.textContent = '0';
-            }
-            
-            // If stream ended while user was watching, redirect
-            if (streamData && streamData.is_active && audioVideo) {
-                showToast('Stream has ended', 'info');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
-            }
+            // No active streams
+            document.getElementById('statusBadge').className = 'badge bg-secondary';
+            document.getElementById('statusBadge').textContent = 'Offline';
+            document.getElementById('totalViewers').textContent = '0 total viewers';
         }
     } catch (error) {
         console.error('Error updating stream status:', error);
@@ -404,19 +458,32 @@ async function updateStreamStatus() {
 
 // Clean up on page unload
 window.addEventListener('beforeunload', function() {
-    if (audioVideo) {
-        audioVideo.stop();
-    }
+    joinedStreams.forEach((streamSession, streamId) => {
+        if (streamSession.audioVideo) {
+            streamSession.audioVideo.stop();
+        }
+    });
 });
 </script>
 
 <style>
-#videoContainer {
-    min-height: 500px;
+.stream-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-#videoGrid video {
+.stream-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.stream-video-container {
+    min-height: 300px;
     border-radius: 12px;
+    overflow: hidden;
+}
+
+.stream-video-container video {
+    border-radius: 0;
 }
 
 .btn-outline-success {
@@ -426,17 +493,22 @@ window.addEventListener('beforeunload', function() {
 
 .btn-outline-success:hover {
     background: #10B981;
-    border-color: #10B981;
     color: white;
 }
 
 .spinner-border {
-    width: 3rem;
-    height: 3rem;
+    width: 2rem;
+    height: 2rem;
 }
 
-.badge {
-    font-size: 0.75em;
+@media (max-width: 768px) {
+    .stream-video-container {
+        min-height: 200px;
+    }
+    
+    .col-lg-6 {
+        margin-bottom: 1rem;
+    }
 }
 </style>
 {% endblock %}
