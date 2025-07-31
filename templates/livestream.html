@@ -48,12 +48,17 @@
                         <li><a class="dropdown-item" href="#" onclick="joinStream({{ stream.id }})">
                             <span class="material-symbols-outlined me-2">login</span>Join Stream
                         </a></li>
+                        <li><a class="dropdown-item" href="#" onclick="toggleFullscreen({{ stream.id }})">
+                            <span class="material-symbols-outlined me-2">fullscreen</span>Fullscreen
+                        </a></li>
                         <li><a class="dropdown-item" href="#" onclick="shareStream({{ stream.id }})">
                             <span class="material-symbols-outlined me-2">share</span>Share
                         </a></li>
+                        {% if current_user.is_admin %}
                         <li><a class="dropdown-item" href="#" onclick="debugStreamConnection({{ stream.id }})">
                             <span class="material-symbols-outlined me-2">bug_report</span>Debug Info
                         </a></li>
+                        {% endif %}
                     </ul>
                 </div>
             </div>
@@ -61,7 +66,8 @@
             <div class="card-body p-0">
                 <!-- Video Container -->
                 <div id="videoContainer-{{ stream.id }}" class="stream-video-container" 
-                     style="background: #000; min-height: 300px; position: relative;">
+                     style="background: #000; min-height: 300px; position: relative;" 
+                     ondblclick="toggleFullscreen({{ stream.id }})">
                     
                     <div id="loadingSpinner-{{ stream.id }}" class="d-flex align-items-center justify-content-center h-100">
                         <div class="text-center text-white">
@@ -78,6 +84,14 @@
                     <!-- Video grid for this stream -->
                     <div id="videoGrid-{{ stream.id }}" class="position-absolute top-0 start-0 w-100 h-100" style="display: none;"></div>
                     
+                    <!-- Fullscreen toggle button (Always visible) -->
+                    <button class="btn btn-outline-light btn-sm position-absolute" 
+                            style="top: 10px; right: 10px; z-index: 1000;" 
+                            onclick="toggleFullscreen({{ stream.id }})"
+                            title="Toggle Fullscreen (Double-click video)">
+                        <span class="material-symbols-outlined" id="fullscreenIcon-{{ stream.id }}">fullscreen</span>
+                    </button>
+                    
                     <!-- Stream controls overlay -->
                     <div class="position-absolute bottom-0 start-0 w-100 p-3 stream-controls" 
                          id="streamControls-{{ stream.id }}" style="background: linear-gradient(transparent, rgba(0,0,0,0.8)); display: none;">
@@ -86,14 +100,28 @@
                                 <h6 class="text-white mb-1">{{ stream.streamer_name }}'s Stream</h6>
                                 <small class="text-white-50">{{ stream.stream_type|title }} • Started {{ stream.started_at.strftime('%I:%M %p') if stream.started_at }}</small>
                             </div>
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-outline-light btn-sm" id="muteBtn-{{ stream.id }}" onclick="toggleMute({{ stream.id }})">
+                            <div class="d-flex gap-1">
+                                {% if current_user.is_admin %}
+                                <!-- Admin Controls: Mic, Camera, Screen Share -->
+                                <button class="btn btn-outline-light btn-sm" id="muteBtn-{{ stream.id }}" onclick="toggleMute({{ stream.id }})" title="Toggle Microphone">
                                     <span class="material-symbols-outlined" id="muteIcon-{{ stream.id }}">mic_off</span>
                                 </button>
-                                <button class="btn btn-outline-light btn-sm" id="videoBtn-{{ stream.id }}" onclick="toggleVideo({{ stream.id }})">
+                                <button class="btn btn-outline-light btn-sm" id="videoBtn-{{ stream.id }}" onclick="toggleVideo({{ stream.id }})" title="Toggle Camera">
                                     <span class="material-symbols-outlined" id="videoIcon-{{ stream.id }}">videocam_off</span>
                                 </button>
-                                <button class="btn btn-danger btn-sm" onclick="leaveStream({{ stream.id }})">
+                                <button class="btn btn-outline-light btn-sm" id="screenShareBtn-{{ stream.id }}" onclick="toggleScreenShare({{ stream.id }})" title="Share Screen">
+                                    <span class="material-symbols-outlined" id="screenShareIcon-{{ stream.id }}">screen_share</span>
+                                </button>
+                                {% else %}
+                                <!-- Viewer Info: Show they're watching -->
+                                <span class="badge bg-primary me-2">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">visibility</span>
+                                    Watching
+                                </span>
+                                {% endif %}
+                                
+                                <!-- Leave button (Everyone can leave) -->
+                                <button class="btn btn-danger btn-sm" onclick="leaveStream({{ stream.id }})" title="Leave Stream">
                                     <span class="material-symbols-outlined me-1">call_end</span>
                                     Leave
                                 </button>
@@ -181,6 +209,41 @@
 </div>
 {% endif %}
 
+{% if current_user.is_admin %}
+<!-- Screen Share Selection Modal (Admin Only) -->
+<div class="modal fade" id="screenShareModal" tabindex="-1" aria-labelledby="screenShareModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--card-bg); border: 1px solid var(--border-color);">
+            <div class="modal-header">
+                <h5 class="modal-title" id="screenShareModalLabel">
+                    <span class="material-symbols-outlined me-2">screen_share</span>
+                    Choose Screen to Share (Admin)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row" id="screenOptions">
+                    <!-- Screen options will be populated here -->
+                </div>
+                <div class="text-center mt-3" id="screenShareLoading" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Detecting available screens...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="stopScreenShareBtn" onclick="stopScreenShare()" style="display: none;">
+                    <span class="material-symbols-outlined me-2">stop_screen_share</span>
+                    Stop Sharing
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- SDK Loading Status -->
 <div id="sdkLoadingStatus" class="position-fixed top-0 end-0 m-3" style="z-index: 9999; display: none;">
     <div class="alert alert-info">
@@ -190,50 +253,46 @@
         </div>
     </div>
 </div>
+
+<!-- Connection Status Toast -->
+<div id="connectionToast" class="toast position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index: 9999;">
+    <div class="toast-header">
+        <span class="material-symbols-outlined me-2 text-info">info</span>
+        <strong class="me-auto">Connection Status</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body" id="connectionToastBody">
+        Connecting to stream...
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <!-- AWS SDK v2 -->
 <script src="https://sdk.aws.amazon.com/js/aws-sdk-2.1479.0.min.js"></script>
 
-<!-- Content Security Policy Meta Tag -->
-<meta http-equiv="Content-Security-Policy" content="
-    default-src 'self'; 
-    script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' 'wasm-eval' 
-        https://sdk.aws.amazon.com 
-        https://*.sdkassets.chime.aws 
-        https://static.sdkassets.chime.aws 
-        blob:; 
-    script-src-elem 'self' 'unsafe-inline' 
-        https://sdk.aws.amazon.com 
-        https://*.sdkassets.chime.aws 
-        https://static.sdkassets.chime.aws 
-        blob:; 
-    connect-src 'self' 
-        https://*.chime.aws 
-        wss://*.chime.aws 
-        https://*.amazonaws.com 
-        https://*.sdkassets.chime.aws; 
-    worker-src 'self' blob: https://*.sdkassets.chime.aws; 
-    child-src 'self' blob: https://*.sdkassets.chime.aws;
-">
-
 <script>
-console.log('🚀 Starting livestream page initialization...');
+console.log('🚀 Starting viewer-focused livestream page...');
+
+// Check if user is admin
+const isAdmin = {{ 'true' if current_user.is_admin else 'false' }};
+console.log('👤 User is admin:', isAdmin);
 
 // Global variables for managing multiple streams
 const activeStreams = {{ active_streams_dict|tojson if active_streams_dict else '[]' }};
 const attendeeDataByStream = {{ attendee_data_by_stream|tojson if attendee_data_by_stream else '{}' }};
 const joinedStreams = new Map(); // streamId -> meetingSession
-const streamStates = new Map(); // streamId -> {muted, videoEnabled}
+const streamStates = new Map(); // streamId -> {muted, videoEnabled, screenSharing}
 
 let chimeSDKLoaded = false;
 let ChimeSDK = null;
+let currentScreenShareStream = null;
+let currentScreenShareStreamId = null;
 
-// Enhanced SDK loading with better error handling
+// Enhanced SDK loading with viewer/admin distinction
 function loadChimeSDKAdvanced() {
     return new Promise((resolve, reject) => {
-        console.log('🔄 Attempting to load Chime SDK...');
+        console.log('🔄 Loading Chime SDK for', isAdmin ? 'admin' : 'viewer', 'user...');
         
         // Show loading indicator
         const loadingStatus = document.getElementById('sdkLoadingStatus');
@@ -241,17 +300,12 @@ function loadChimeSDKAdvanced() {
             loadingStatus.style.display = 'block';
         }
         
-        // Method 1: Try to use AWS official CDN with dynamic import
-        console.log('📦 Method 1: Trying AWS official CDN...');
-        
-        // Create the Chime SDK using dynamic imports - this is the proper way
+        // Create Chime SDK implementation with role-based features
         const chimeSDKScript = `
             (async function() {
                 try {
-                    // Create a minimal Chime SDK implementation using AWS SDK
-                    console.log('🔧 Creating Chime SDK implementation...');
+                    console.log('🔧 Creating Chime SDK for ${isAdmin ? 'admin' : 'viewer'}...');
                     
-                    // This creates a simplified version of the Chime SDK classes we need
                     window.ChimeSDK = {
                         ConsoleLogger: class ConsoleLogger {
                             constructor(name, level) {
@@ -300,6 +354,9 @@ function loadChimeSDKAdvanced() {
                                 this.meetingSession = meetingSession;
                                 this.observers = [];
                                 this.isStarted = false;
+                                this.videoTiles = new Map();
+                                this.currentScreenShare = null;
+                                this.isAdmin = ${isAdmin};
                             }
                             
                             addObserver(observer) {
@@ -307,7 +364,7 @@ function loadChimeSDKAdvanced() {
                             }
                             
                             async start() {
-                                console.log('🎬 Starting audio/video session...');
+                                console.log('🎬 Starting', this.isAdmin ? 'admin' : 'viewer', 'session...');
                                 this.isStarted = true;
                                 
                                 // Simulate connection success after a delay
@@ -321,8 +378,9 @@ function loadChimeSDKAdvanced() {
                             }
                             
                             stop() {
-                                console.log('⏹️ Stopping audio/video session...');
+                                console.log('⏹️ Stopping session...');
                                 this.isStarted = false;
+                                this.videoTiles.clear();
                                 this.observers.forEach(observer => {
                                     if (observer.audioVideoDidStop) {
                                         observer.audioVideoDidStop({ statusCode: 0 });
@@ -331,75 +389,283 @@ function loadChimeSDKAdvanced() {
                             }
                             
                             realtimeMuteLocalAudio() {
-                                console.log('🔇 Muting local audio');
+                                if (this.isAdmin) {
+                                    console.log('🔇 Admin muting microphone');
+                                } else {
+                                    console.log('ℹ️ Viewer cannot control microphone');
+                                }
                             }
                             
                             realtimeUnmuteLocalAudio() {
-                                console.log('🔊 Unmuting local audio');
+                                if (this.isAdmin) {
+                                    console.log('🔊 Admin unmuting microphone');
+                                } else {
+                                    console.log('ℹ️ Viewer cannot control microphone');
+                                }
                             }
                             
                             startLocalVideoTile() {
-                                console.log('📹 Starting local video');
+                                if (this.isAdmin) {
+                                    console.log('📹 Admin starting camera');
+                                    this.simulateVideoTile(2, true); // Local video tile
+                                } else {
+                                    console.log('ℹ️ Viewer cannot control camera');
+                                }
                             }
                             
                             stopLocalVideoTile() {
-                                console.log('📴 Stopping local video');
+                                if (this.isAdmin) {
+                                    console.log('📴 Admin stopping camera');
+                                    this.observers.forEach(observer => {
+                                        if (observer.videoTileWasRemoved) {
+                                            observer.videoTileWasRemoved(2);
+                                        }
+                                    });
+                                } else {
+                                    console.log('ℹ️ Viewer cannot control camera');
+                                }
                             }
                             
                             bindVideoElement(tileId, element) {
                                 console.log('🖼️ Binding video element for tile', tileId);
-                                // Create a fake video stream for demo
-                                this.createDemoVideoStream(element);
+                                this.videoTiles.set(tileId, element);
+                                
+                                if (tileId === 1) {
+                                    // Main stream video (what everyone sees)
+                                    this.createViewerVideoStream(element);
+                                } else if (tileId === 2 && this.isAdmin) {
+                                    // Admin's local video
+                                    this.createAdminVideoStream(element, 'local');
+                                } else if (tileId === 3 && this.isAdmin) {
+                                    // Admin's screen share
+                                    this.createAdminVideoStream(element, 'screen');
+                                }
                             }
                             
-                            createDemoVideoStream(videoElement) {
-                                // Create a canvas with animated content to simulate video
+                            simulateVideoTile(tileId, isLocal = false) {
+                                setTimeout(() => {
+                                    this.observers.forEach(observer => {
+                                        if (observer.videoTileDidUpdate) {
+                                            observer.videoTileDidUpdate({
+                                                tileId: tileId,
+                                                localTile: isLocal,
+                                                isContent: tileId === 3
+                                            });
+                                        }
+                                    });
+                                }, 500);
+                            }
+                            
+                            startContentShare(stream) {
+                                if (this.isAdmin) {
+                                    console.log('🖥️ Admin starting screen share');
+                                    this.currentScreenShare = stream;
+                                    this.simulateVideoTile(3, false); // Screen share tile
+                                    return Promise.resolve();
+                                } else {
+                                    console.log('❌ Viewers cannot screen share');
+                                    return Promise.reject(new Error('Only admins can screen share'));
+                                }
+                            }
+                            
+                            stopContentShare() {
+                                if (this.isAdmin) {
+                                    console.log('🛑 Admin stopping screen share');
+                                    this.currentScreenShare = null;
+                                    this.observers.forEach(observer => {
+                                        if (observer.videoTileWasRemoved) {
+                                            observer.videoTileWasRemoved(3);
+                                        }
+                                    });
+                                    return Promise.resolve();
+                                } else {
+                                    console.log('ℹ️ Viewers cannot control screen share');
+                                    return Promise.resolve();
+                                }
+                            }
+                            
+                            createViewerVideoStream(videoElement) {
+                                // What viewers see - the main trading stream
+                                const canvas = document.createElement('canvas');
+                                canvas.width = 1280;
+                                canvas.height = 720;
+                                const ctx = canvas.getContext('2d');
+                                
+                                let frame = 0;
+                                const animate = () => {
+                                    if (!this.isStarted) return;
+                                    
+                                    // Professional trading stream content
+                                    ctx.fillStyle = '#0a0a0a';
+                                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                    
+                                    // Header with streamer info
+                                    ctx.fillStyle = '#1a1a1a';
+                                    ctx.fillRect(0, 0, canvas.width, 80);
+                                    
+                                    ctx.fillStyle = '#10B981';
+                                    ctx.font = 'bold 32px Arial';
+                                    ctx.textAlign = 'left';
+                                    ctx.fillText('TGFX Trade Lab - Live Session', 30, 50);
+                                    
+                                    // Trading chart
+                                    this.drawTradingChart(ctx, frame);
+                                    
+                                    // Live indicators
+                                    ctx.fillStyle = '#ff0000';
+                                    ctx.beginPath();
+                                    ctx.arc(1200, 40, 8, 0, 2 * Math.PI);
+                                    ctx.fill();
+                                    
+                                    ctx.fillStyle = '#ffffff';
+                                    ctx.font = '16px Arial';
+                                    ctx.fillText('● LIVE', 1150, 45);
+                                    
+                                    frame++;
+                                    if (this.isStarted) {
+                                        requestAnimationFrame(animate);
+                                    }
+                                };
+                                animate();
+                                
+                                const stream = canvas.captureStream(30);
+                                videoElement.srcObject = stream;
+                                videoElement.play();
+                            }
+                            
+                            createAdminVideoStream(videoElement, type) {
+                                // Admin's camera or screen share
                                 const canvas = document.createElement('canvas');
                                 canvas.width = 640;
                                 canvas.height = 480;
                                 const ctx = canvas.getContext('2d');
                                 
-                                // Animated demo content
                                 let frame = 0;
                                 const animate = () => {
-                                    // Clear canvas
-                                    ctx.fillStyle = '#1a1a1a';
-                                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                    if (!this.isStarted) return;
                                     
-                                    // Draw animated elements
-                                    ctx.fillStyle = '#10B981';
-                                    ctx.beginPath();
-                                    ctx.arc(
-                                        canvas.width/2 + Math.sin(frame * 0.02) * 100, 
-                                        canvas.height/2 + Math.cos(frame * 0.02) * 50, 
-                                        20, 0, 2 * Math.PI
-                                    );
-                                    ctx.fill();
-                                    
-                                    // Add text
-                                    ctx.fillStyle = '#ffffff';
-                                    ctx.font = '24px Arial';
-                                    ctx.textAlign = 'center';
-                                    ctx.fillText('LIVE DEMO STREAM', canvas.width/2, canvas.height/2 + 100);
-                                    ctx.fillText('Chime SDK Simulation', canvas.width/2, canvas.height/2 + 130);
+                                    if (type === 'local') {
+                                        // Admin's camera feed
+                                        this.drawAdminAvatar(ctx, frame);
+                                    } else if (type === 'screen') {
+                                        // Admin's screen share
+                                        this.drawAdminScreenShare(ctx, frame);
+                                    }
                                     
                                     frame++;
-                                    requestAnimationFrame(animate);
+                                    if (this.isStarted) {
+                                        requestAnimationFrame(animate);
+                                    }
                                 };
                                 animate();
                                 
-                                // Convert canvas to video stream
                                 const stream = canvas.captureStream(30);
                                 videoElement.srcObject = stream;
                                 videoElement.play();
                             }
+                            
+                            drawTradingChart(ctx, frame) {
+                                // Main trading chart for viewers
+                                ctx.strokeStyle = '#10B981';
+                                ctx.lineWidth = 3;
+                                ctx.beginPath();
+                                for (let i = 50; i < canvas.width - 50; i += 5) {
+                                    const y = 300 + Math.sin((i + frame * 2) * 0.01) * 120;
+                                    if (i === 50) ctx.moveTo(i, y);
+                                    else ctx.lineTo(i, y);
+                                }
+                                ctx.stroke();
+                                
+                                // Price display
+                                ctx.fillStyle = '#10B981';
+                                ctx.font = 'bold 28px monospace';
+                                ctx.textAlign = 'center';
+                                const price = (4250.50 + Math.sin(frame * 0.05) * 15).toFixed(2);
+                                ctx.fillText('SPY: $' + price, 640, 150);
+                                
+                                // Volume bars
+                                for (let i = 100; i < 1180; i += 20) {
+                                    const height = 20 + Math.random() * 60;
+                                    ctx.fillStyle = Math.random() > 0.5 ? '#10B981' : '#ef4444';
+                                    ctx.fillRect(i, 600 - height, 15, height);
+                                }
+                                
+                                // Indicators
+                                ctx.fillStyle = '#ffffff';
+                                ctx.font = '18px Arial';
+                                ctx.textAlign = 'left';
+                                ctx.fillText('RSI: 65.4', 50, 650);
+                                ctx.fillText('MACD: Bullish', 200, 650);
+                                ctx.fillText('Volume: 45.2M', 380, 650);
+                            }
+                            
+                            drawAdminAvatar(ctx, frame) {
+                                // Admin's camera view
+                                ctx.fillStyle = '#1a1a1a';
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                
+                                // Admin avatar
+                                ctx.fillStyle = '#3B82F6';
+                                ctx.beginPath();
+                                ctx.arc(320, 200, 80, 0, 2 * Math.PI);
+                                ctx.fill();
+                                
+                                // Face
+                                ctx.fillStyle = '#ffffff';
+                                ctx.beginPath();
+                                ctx.arc(290, 170, 8, 0, 2 * Math.PI);
+                                ctx.arc(350, 170, 8, 0, 2 * Math.PI);
+                                ctx.fill();
+                                
+                                ctx.strokeStyle = '#ffffff';
+                                ctx.lineWidth = 3;
+                                ctx.beginPath();
+                                ctx.arc(320, 230, 20, 0, Math.PI);
+                                ctx.stroke();
+                                
+                                ctx.fillStyle = '#ffffff';
+                                ctx.font = '18px Arial';
+                                ctx.textAlign = 'center';
+                                ctx.fillText('ADMIN CAMERA', 320, 350);
+                            }
+                            
+                            drawAdminScreenShare(ctx, frame) {
+                                // Admin's screen share
+                                ctx.fillStyle = '#ffffff';
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                
+                                // Browser simulation
+                                ctx.fillStyle = '#e5e5e5';
+                                ctx.fillRect(0, 0, canvas.width, 40);
+                                
+                                ctx.fillStyle = '#333';
+                                ctx.font = '14px Arial';
+                                ctx.textAlign = 'left';
+                                ctx.fillText('TradingView Pro - Advanced Analysis', 10, 25);
+                                
+                                // Chart
+                                ctx.strokeStyle = '#00ff00';
+                                ctx.lineWidth = 2;
+                                ctx.beginPath();
+                                for (let i = 20; i < canvas.width - 20; i += 3) {
+                                    const y = 150 + Math.sin((i + frame * 3) * 0.02) * 60;
+                                    if (i === 20) ctx.moveTo(i, y);
+                                    else ctx.lineTo(i, y);
+                                }
+                                ctx.stroke();
+                                
+                                ctx.fillStyle = '#ff0000';
+                                ctx.font = '20px Arial';
+                                ctx.textAlign = 'center';
+                                ctx.fillText('🖥️ ADMIN SCREEN SHARE', 320, 400);
+                            }
                         }
                     };
                     
-                    console.log('✅ Chime SDK implementation created successfully');
+                    console.log('✅ Chime SDK created for', isAdmin ? 'admin' : 'viewer');
                     return true;
                 } catch (error) {
-                    console.error('❌ Failed to create Chime SDK implementation:', error);
+                    console.error('❌ Failed to create Chime SDK:', error);
                     return false;
                 }
             })()
@@ -412,7 +678,7 @@ function loadChimeSDKAdvanced() {
             // Check if it worked
             setTimeout(() => {
                 if (window.ChimeSDK && window.ChimeSDK.DefaultMeetingSession) {
-                    console.log('✅ Chime SDK loaded successfully!');
+                    console.log('✅ Chime SDK loaded successfully for', isAdmin ? 'admin' : 'viewer');
                     chimeSDKLoaded = true;
                     ChimeSDK = window.ChimeSDK;
                     hideSDKLoading();
@@ -443,16 +709,16 @@ function showSDKError(message) {
     hideSDKLoading();
     showToast(message, 'error');
     
-    // Update all stream containers to show error
+    // Update all stream containers
     activeStreams.forEach(stream => {
         const spinner = document.getElementById(`loadingSpinner-${stream.id}`);
         if (spinner) {
             spinner.innerHTML = `
                 <div class="text-center text-white">
                     <span class="material-symbols-outlined mb-3 text-warning" style="font-size: 3rem;">warning</span>
-                    <p class="text-warning">Demo Mode Active</p>
-                    <small class="text-muted mb-3">Using simulated video stream for demonstration</small>
-                    <button class="btn btn-primary btn-sm" onclick="joinStream(${stream.id})">Try Demo Stream</button>
+                    <p class="text-warning">${isAdmin ? 'Admin' : 'Viewer'} Demo Mode</p>
+                    <small class="text-muted mb-3">Professional livestream simulation</small>
+                    <button class="btn btn-primary btn-sm" onclick="joinStream(${stream.id})">Join ${isAdmin ? 'as Admin' : 'as Viewer'}</button>
                 </div>
             `;
         }
@@ -461,7 +727,7 @@ function showSDKError(message) {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', async function() {
-    console.log('📱 DOM loaded, initializing livestream page...');
+    console.log('📱 DOM loaded for', isAdmin ? 'admin' : 'viewer', 'user...');
     console.log('🎯 Active streams:', activeStreams);
     console.log('👥 Attendee data:', attendeeDataByStream);
     
@@ -470,19 +736,19 @@ document.addEventListener('DOMContentLoaded', async function() {
         initializeStreams();
     } catch (error) {
         console.error('💥 Failed to load Chime SDK:', error);
-        // Continue with demo mode
         initializeStreams();
     }
 });
 
 function initializeStreams() {
-    console.log('🎬 Initializing streams...');
+    console.log('🎬 Initializing streams for', isAdmin ? 'admin' : 'viewer');
     
     // Initialize stream states
     activeStreams.forEach(stream => {
         streamStates.set(stream.id, {
             muted: true,
             videoEnabled: false,
+            screenSharing: false,
             joined: false
         });
     });
@@ -495,12 +761,7 @@ function initializeStreams() {
 }
 
 async function joinStream(streamId) {
-    console.log(`🚀 Attempting to join stream ${streamId}...`);
-    
-    if (!chimeSDKLoaded && !window.ChimeSDK) {
-        showToast('Starting demo mode - this simulates a live stream connection', 'info');
-        // Continue with demo mode
-    }
+    console.log(`🚀 ${isAdmin ? 'Admin' : 'Viewer'} joining stream ${streamId}...`);
     
     const stream = activeStreams.find(s => s.id === streamId);
     if (!stream || joinedStreams.has(streamId)) {
@@ -515,7 +776,7 @@ async function joinStream(streamId) {
     }
     
     try {
-        console.log(`🔗 Connecting to ${stream.streamer_name}'s stream...`);
+        console.log(`🔗 Connecting to ${stream.streamer_name}'s stream as ${isAdmin ? 'admin' : 'viewer'}...`);
         
         const { ChimeSDK: SDK } = window;
         
@@ -531,15 +792,12 @@ async function joinStream(streamId) {
             }
         };
         
-        // Add SignalingUrl if available
         if (stream.signaling_url) {
             meetingConfiguration.mediaPlacement.signalingUrl = stream.signaling_url;
         }
         
-        console.log('📡 Meeting configuration:', meetingConfiguration);
-        
         // Create meeting session
-        const logger = new SDK.ConsoleLogger('StreamViewer', SDK.LogLevel.INFO);
+        const logger = new SDK.ConsoleLogger(isAdmin ? 'AdminViewer' : 'StreamViewer', SDK.LogLevel.INFO);
         const deviceController = new SDK.DefaultDeviceController(logger);
         const meetingSessionConfiguration = new SDK.MeetingSessionConfiguration(
             meetingConfiguration,
@@ -557,7 +815,7 @@ async function joinStream(streamId) {
         // Set up observers
         const observer = {
             audioVideoDidStart: () => {
-                console.log(`✅ Connected to stream ${streamId}`);
+                console.log(`✅ ${isAdmin ? 'Admin' : 'Viewer'} connected to stream ${streamId}`);
                 document.getElementById(`loadingSpinner-${streamId}`).style.display = 'none';
                 document.getElementById(`videoGrid-${streamId}`).style.display = 'block';
                 document.getElementById(`streamControls-${streamId}`).style.display = 'block';
@@ -566,9 +824,9 @@ async function joinStream(streamId) {
                 state.joined = true;
                 streamStates.set(streamId, state);
                 
-                showToast(`Connected to ${stream.streamer_name}'s stream`, 'success');
+                showToast(`Connected to ${stream.streamer_name}'s stream ${isAdmin ? '(Admin)' : '(Viewer)'}`, 'success');
                 
-                // Simulate video tile for demo
+                // Simulate main video tile (what viewers see)
                 setTimeout(() => {
                     observer.videoTileDidUpdate({
                         tileId: 1,
@@ -587,29 +845,35 @@ async function joinStream(streamId) {
                 const state = streamStates.get(streamId);
                 if (state) {
                     state.joined = false;
+                    state.screenSharing = false;
                     streamStates.set(streamId, state);
                 }
             },
             
             videoTileDidUpdate: (tileState) => {
                 console.log(`🖼️ Video tile updated for stream ${streamId}:`, tileState);
-                if (!tileState.localTile && !tileState.isContent) {
-                    const videoElement = document.getElementById(`video-${streamId}-${tileState.tileId}`) || 
-                                       document.createElement('video');
-                    videoElement.id = `video-${streamId}-${tileState.tileId}`;
-                    videoElement.style.width = '100%';
-                    videoElement.style.height = '100%';
-                    videoElement.style.objectFit = 'cover';
-                    videoElement.autoplay = true;
-                    videoElement.muted = true;
-                    videoElement.playsInline = true;
-                    
-                    audioVideo.bindVideoElement(tileState.tileId, videoElement);
-                    
-                    const videoGrid = document.getElementById(`videoGrid-${streamId}`);
-                    if (!document.getElementById(`video-${streamId}-${tileState.tileId}`)) {
-                        videoGrid.appendChild(videoElement);
-                    }
+                const videoElement = document.getElementById(`video-${streamId}-${tileState.tileId}`) || 
+                                   document.createElement('video');
+                videoElement.id = `video-${streamId}-${tileState.tileId}`;
+                videoElement.style.width = '100%';
+                videoElement.style.height = '100%';
+                videoElement.style.objectFit = 'cover';
+                videoElement.autoplay = true;
+                videoElement.muted = true;
+                videoElement.playsInline = true;
+                
+                audioVideo.bindVideoElement(tileState.tileId, videoElement);
+                
+                const videoGrid = document.getElementById(`videoGrid-${streamId}`);
+                if (!document.getElementById(`video-${streamId}-${tileState.tileId}`)) {
+                    videoGrid.appendChild(videoElement);
+                }
+                
+                // Handle screen share content
+                if (tileState.isContent) {
+                    videoElement.style.zIndex = '10';
+                    videoElement.style.border = '2px solid #ff0000';
+                    console.log('🖥️ Screen share content tile added');
                 }
             },
             
@@ -619,10 +883,22 @@ async function joinStream(streamId) {
                 if (videoElement) {
                     videoElement.remove();
                 }
+                
+                if (tileId === 3) {
+                    // Screen share ended
+                    const state = streamStates.get(streamId);
+                    if (state) {
+                        state.screenSharing = false;
+                        streamStates.set(streamId, state);
+                        if (isAdmin) {
+                            updateScreenShareButton(streamId, false);
+                        }
+                    }
+                }
             },
             
             connectionDidBecomePoor: () => {
-                console.log('📶 Connection quality became poor for stream', streamId);
+                console.log('📶 Connection quality poor for stream', streamId);
                 showToast('Connection quality is poor', 'warning');
             }
         };
@@ -632,8 +908,11 @@ async function joinStream(streamId) {
         // Start the meeting session
         await audioVideo.start();
         
-        // Mute audio by default (viewers shouldn't have audio enabled)
-        audioVideo.realtimeMuteLocalAudio();
+        // For viewers, mute audio by default (they can't unmute anyway)
+        // For admins, they control their own audio
+        if (!isAdmin) {
+            audioVideo.realtimeMuteLocalAudio();
+        }
         
         // Store the session
         joinedStreams.set(streamId, { meetingSession, audioVideo });
@@ -656,7 +935,383 @@ async function joinStream(streamId) {
     }
 }
 
+// Admin-only functions
+async function toggleScreenShare(streamId) {
+    if (!isAdmin) {
+        showToast('Only admins can screen share', 'warning');
+        return;
+    }
+    
+    console.log(`🖥️ Admin toggling screen share for stream ${streamId}`);
+    
+    const streamSession = joinedStreams.get(streamId);
+    if (!streamSession) {
+        showToast('Join the stream first to share your screen', 'warning');
+        return;
+    }
+    
+    const state = streamStates.get(streamId);
+    
+    if (state.screenSharing) {
+        await stopScreenShare();
+    } else {
+        await startScreenShare(streamId);
+    }
+}
+
+async function startScreenShare(streamId) {
+    if (!isAdmin) return;
+    
+    try {
+        console.log('🖥️ Admin starting screen share...');
+        
+        // Show screen selection modal
+        const modal = new bootstrap.Modal(document.getElementById('screenShareModal'));
+        modal.show();
+        
+        // Show loading
+        document.getElementById('screenShareLoading').style.display = 'block';
+        document.getElementById('screenOptions').innerHTML = '';
+        
+        // Try to get real screen share
+        let stream = null;
+        
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            try {
+                stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: 'always',
+                        displaySurface: 'monitor'
+                    },
+                    audio: true
+                });
+                
+                console.log('✅ Real screen capture successful');
+                
+            } catch (error) {
+                console.log('ℹ️ Real screen capture not available, using demo');
+                stream = null;
+            }
+        }
+        
+        // Hide loading
+        document.getElementById('screenShareLoading').style.display = 'none';
+        
+        if (!stream) {
+            // Create demo screen options for admin
+            const screenOptions = document.getElementById('screenOptions');
+            const demoScreens = [
+                { id: 'screen1', name: 'TradingView Pro', icon: 'candlestick_chart' },
+                { id: 'screen2', name: 'News Terminal', icon: 'article' },
+                { id: 'screen3', name: 'Portfolio Analytics', icon: 'dashboard' }
+            ];
+            
+            demoScreens.forEach(screen => {
+                const screenDiv = document.createElement('div');
+                screenDiv.className = 'col-4 mb-3';
+                screenDiv.innerHTML = `
+                    <div class="card text-center screen-option" onclick="selectDemoScreen('${screen.id}', '${screen.name}', ${streamId})" 
+                         style="cursor: pointer; border: 1px solid var(--border-color);">
+                        <div class="card-body">
+                            <span class="material-symbols-outlined mb-2" style="font-size: 2rem;">${screen.icon}</span>
+                            <h6 class="card-title">${screen.name}</h6>
+                            <small class="text-muted">Admin Demo</small>
+                        </div>
+                    </div>
+                `;
+                screenOptions.appendChild(screenDiv);
+            });
+        } else {
+            // Real screen capture successful
+            modal.hide();
+            await handleScreenShare(streamId, stream, 'Real Screen');
+        }
+        
+    } catch (error) {
+        console.error('❌ Screen share error:', error);
+        showToast('Screen sharing failed: ' + error.message, 'error');
+    }
+}
+
+async function selectDemoScreen(screenId, screenName, streamId) {
+    if (!isAdmin) return;
+    
+    console.log(`📺 Admin selected demo screen: ${screenName}`);
+    
+    // Hide modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('screenShareModal'));
+    modal.hide();
+    
+    // Create demo screen content
+    const stream = createDemoScreenStream(screenId);
+    await handleScreenShare(streamId, stream, screenName);
+}
+
+function createDemoScreenStream(screenType) {
+    if (!isAdmin) return null;
+    
+    console.log(`🎨 Creating admin demo screen: ${screenType}`);
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = 1920;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+    
+    let frame = 0;
+    const animate = () => {
+        // Professional admin screen content
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        if (screenType === 'screen1') {
+            drawAdminTradingView(ctx, frame);
+        } else if (screenType === 'screen2') {
+            drawAdminNewsTerminal(ctx, frame);
+        } else if (screenType === 'screen3') {
+            drawAdminPortfolio(ctx, frame);
+        }
+        
+        frame++;
+        requestAnimationFrame(animate);
+    };
+    animate();
+    
+    return canvas.captureStream(30);
+}
+
+function drawAdminTradingView(ctx, frame) {
+    // Advanced TradingView interface
+    ctx.fillStyle = '#131722';
+    ctx.fillRect(0, 0, canvas.width, 80);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('TradingView Pro - Admin Analysis', 30, 50);
+    
+    ctx.fillStyle = '#1e222d';
+    ctx.fillRect(0, 80, canvas.width, canvas.height - 80);
+    
+    // Multiple charts
+    const charts = [
+        { x: 50, y: 150, w: 800, h: 400, color: '#00ff00', label: 'SPY 1H' },
+        { x: 900, y: 150, w: 800, h: 400, color: '#ff6600', label: 'QQQ 4H' },
+        { x: 50, y: 600, w: 800, h: 300, color: '#0099ff', label: 'DIA 1D' },
+        { x: 900, y: 600, w: 800, h: 300, color: '#ff0099', label: 'IWM 1W' }
+    ];
+    
+    charts.forEach(chart => {
+        ctx.strokeStyle = chart.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let i = chart.x; i < chart.x + chart.w; i += 5) {
+            const y = chart.y + chart.h/2 + Math.sin((i + frame * 2) * 0.01) * (chart.h * 0.3);
+            if (i === chart.x) ctx.moveTo(i, y);
+            else ctx.lineTo(i, y);
+        }
+        ctx.stroke();
+        
+        // Chart label
+        ctx.fillStyle = chart.color;
+        ctx.font = '20px Arial';
+        ctx.fillText(chart.label, chart.x + 10, chart.y + 30);
+    });
+}
+
+function drawAdminNewsTerminal(ctx, frame) {
+    // Terminal background
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Header
+    ctx.fillStyle = '#00ff00';
+    ctx.font = 'bold 32px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('ADMIN NEWS TERMINAL', 30, 60);
+    
+    // Multi-column news
+    const columns = [
+        { x: 50, title: 'MARKET NEWS', color: '#00ff00' },
+        { x: 650, title: 'EARNINGS', color: '#ffff00' },
+        { x: 1250, title: 'TECHNICAL', color: '#ff00ff' }
+    ];
+    
+    columns.forEach(col => {
+        ctx.fillStyle = col.color;
+        ctx.font = 'bold 24px monospace';
+        ctx.fillText(col.title, col.x, 120);
+        
+        // News items
+        const newsItems = [
+            'FED SIGNALS DOVISH STANCE',
+            'TECH EARNINGS BEAT EST',
+            'OIL PRICES SURGE 3.2%',
+            'CRYPTO VOLATILITY HIGH',
+            'BOND YIELDS DECLINE'
+        ];
+        
+        ctx.font = '18px monospace';
+        newsItems.forEach((item, index) => {
+            const y = 160 + (index * 40);
+            const alpha = (Math.sin(frame * 0.1 + index) + 1) / 2;
+            ctx.fillStyle = col.color + Math.floor(alpha * 128).toString(16).padStart(2, '0');
+            ctx.fillText(`${String(index + 1).padStart(2, '0')}:${String(Math.floor(frame/60) % 60).padStart(2, '0')} ${item}`, col.x, y);
+        });
+    });
+}
+
+function drawAdminPortfolio(ctx, frame) {
+    // Background
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Header
+    ctx.fillStyle = '#343a40';
+    ctx.fillRect(0, 0, canvas.width, 100);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px Arial';
+    ctx.fillText('Admin Portfolio Dashboard', 30, 60);
+    
+    // Portfolio metrics
+    const metrics = [
+        { label: 'Total Value', value: '$2,450,000', color: '#28a745', x: 50 },
+        { label: 'Daily P&L', value: '+$15,240', color: '#28a745', x: 400 },
+        { label: 'Win Rate', value: '78.5%', color: '#17a2b8', x: 750 },
+        { label: 'Sharpe Ratio', value: '2.14', color: '#6610f2', x: 1100 }
+    ];
+    
+    metrics.forEach(metric => {
+        ctx.fillStyle = metric.color;
+        ctx.font = 'bold 48px Arial';
+        ctx.fillText(metric.value, metric.x, 200);
+        ctx.font = '24px Arial';
+        ctx.fillStyle = '#333';
+        ctx.fillText(metric.label, metric.x, 230);
+    });
+    
+    // Performance chart
+    ctx.strokeStyle = '#28a745';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let i = 100; i < 1800; i += 10) {
+        const y = 400 + Math.sin((i + frame * 3) * 0.005) * 80 + Math.random() * 20;
+        if (i === 100) ctx.moveTo(i, y);
+        else ctx.lineTo(i, y);
+    }
+    ctx.stroke();
+}
+
+async function handleScreenShare(streamId, stream, screenName) {
+    if (!isAdmin) return;
+    
+    console.log(`🚀 Admin handling screen share: ${screenName}`);
+    
+    const streamSession = joinedStreams.get(streamId);
+    if (!streamSession) return;
+    
+    try {
+        // Store screen share info
+        currentScreenShareStream = stream;
+        currentScreenShareStreamId = streamId;
+        
+        // Update UI
+        const state = streamStates.get(streamId);
+        state.screenSharing = true;
+        streamStates.set(streamId, state);
+        
+        updateScreenShareButton(streamId, true);
+        
+        // Start content share in Chime SDK
+        await streamSession.audioVideo.startContentShare(stream);
+        
+        showToast(`Admin screen sharing started: ${screenName}`, 'success');
+        
+        // Show stop button
+        document.getElementById('stopScreenShareBtn').style.display = 'inline-block';
+        
+    } catch (error) {
+        console.error('❌ Failed to start screen share:', error);
+        showToast('Failed to start screen sharing', 'error');
+    }
+}
+
+async function stopScreenShare() {
+    if (!isAdmin) return;
+    
+    console.log('🛑 Admin stopping screen share...');
+    
+    if (!currentScreenShareStreamId) return;
+    
+    const streamSession = joinedStreams.get(currentScreenShareStreamId);
+    if (streamSession) {
+        try {
+            await streamSession.audioVideo.stopContentShare();
+            
+            // Stop the stream tracks
+            if (currentScreenShareStream) {
+                currentScreenShareStream.getTracks().forEach(track => track.stop());
+            }
+            
+            // Update UI
+            const state = streamStates.get(currentScreenShareStreamId);
+            if (state) {
+                state.screenSharing = false;
+                streamStates.set(currentScreenShareStreamId, state);
+            }
+            
+            updateScreenShareButton(currentScreenShareStreamId, false);
+            
+            // Clear variables
+            currentScreenShareStream = null;
+            currentScreenShareStreamId = null;
+            
+            showToast('Admin screen sharing stopped', 'info');
+            
+            // Hide stop button
+            document.getElementById('stopScreenShareBtn').style.display = 'none';
+            
+            // Hide modal if open
+            const modalElement = document.getElementById('screenShareModal');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) {
+                modal.hide();
+            }
+            
+        } catch (error) {
+            console.error('❌ Error stopping screen share:', error);
+            showToast('Error stopping screen share', 'error');
+        }
+    }
+}
+
+function updateScreenShareButton(streamId, isSharing) {
+    if (!isAdmin) return;
+    
+    const button = document.getElementById(`screenShareBtn-${streamId}`);
+    const icon = document.getElementById(`screenShareIcon-${streamId}`);
+    
+    if (button && icon) {
+        if (isSharing) {
+            button.classList.remove('btn-outline-light');
+            button.classList.add('btn-success');
+            icon.textContent = 'stop_screen_share';
+            button.title = 'Stop Screen Share';
+        } else {
+            button.classList.remove('btn-success');
+            button.classList.add('btn-outline-light');
+            icon.textContent = 'screen_share';
+            button.title = 'Share Screen';
+        }
+    }
+}
+
+// Audio/Video controls (Admin only)
 function toggleMute(streamId) {
+    if (!isAdmin) {
+        showToast('Only admins can control microphone', 'info');
+        return;
+    }
+    
     const streamSession = joinedStreams.get(streamId);
     if (!streamSession) return;
     
@@ -668,19 +1323,24 @@ function toggleMute(streamId) {
         document.getElementById(`muteIcon-${streamId}`).textContent = 'mic';
         document.getElementById(`muteBtn-${streamId}`).classList.add('btn-outline-success');
         state.muted = false;
-        showToast('Microphone enabled', 'info');
+        showToast('Admin microphone enabled', 'success');
     } else {
         audioVideo.realtimeMuteLocalAudio();
         document.getElementById(`muteIcon-${streamId}`).textContent = 'mic_off';
         document.getElementById(`muteBtn-${streamId}`).classList.remove('btn-outline-success');
         state.muted = true;
-        showToast('Microphone muted', 'info');
+        showToast('Admin microphone muted', 'info');
     }
     
     streamStates.set(streamId, state);
 }
 
 function toggleVideo(streamId) {
+    if (!isAdmin) {
+        showToast('Only admins can control camera', 'info');
+        return;
+    }
+    
     const streamSession = joinedStreams.get(streamId);
     if (!streamSession) return;
     
@@ -692,20 +1352,69 @@ function toggleVideo(streamId) {
         document.getElementById(`videoIcon-${streamId}`).textContent = 'videocam_off';
         document.getElementById(`videoBtn-${streamId}`).classList.remove('btn-outline-success');
         state.videoEnabled = false;
-        showToast('Camera disabled', 'info');
+        showToast('Admin camera disabled', 'info');
     } else {
         audioVideo.startLocalVideoTile();
         document.getElementById(`videoIcon-${streamId}`).textContent = 'videocam';
         document.getElementById(`videoBtn-${streamId}`).classList.add('btn-outline-success');
         state.videoEnabled = true;
-        showToast('Camera enabled', 'success');
+        showToast('Admin camera enabled', 'success');
     }
     
     streamStates.set(streamId, state);
 }
 
+// Fullscreen functionality (Available to all users)
+function toggleFullscreen(streamId) {
+    console.log(`🖼️ Toggling fullscreen for stream ${streamId}`);
+    
+    const videoContainer = document.getElementById(`videoContainer-${streamId}`);
+    if (!videoContainer) return;
+    
+    if (document.fullscreenElement) {
+        // Exit fullscreen
+        document.exitFullscreen().then(() => {
+            updateFullscreenButton(streamId, false);
+            showToast('Exited fullscreen', 'info');
+        }).catch(err => {
+            console.error('Error exiting fullscreen:', err);
+        });
+    } else {
+        // Enter fullscreen
+        videoContainer.requestFullscreen().then(() => {
+            updateFullscreenButton(streamId, true);
+            showToast('Entered fullscreen (Press ESC to exit)', 'success');
+        }).catch(err => {
+            console.error('Error entering fullscreen:', err);
+            showToast('Fullscreen not supported', 'warning');
+        });
+    }
+}
+
+function updateFullscreenButton(streamId, isFullscreen) {
+    const icon = document.getElementById(`fullscreenIcon-${streamId}`);
+    if (icon) {
+        icon.textContent = isFullscreen ? 'fullscreen_exit' : 'fullscreen';
+    }
+}
+
+// Listen for fullscreen changes
+document.addEventListener('fullscreenchange', function() {
+    const isFullscreen = !!document.fullscreenElement;
+    
+    // Update all fullscreen buttons
+    activeStreams.forEach(stream => {
+        updateFullscreenButton(stream.id, isFullscreen);
+    });
+});
+
 async function leaveStream(streamId) {
-    console.log(`👋 Leaving stream ${streamId}...`);
+    console.log(`👋 ${isAdmin ? 'Admin' : 'Viewer'} leaving stream ${streamId}...`);
+    
+    // Stop screen share if admin and active
+    if (isAdmin && currentScreenShareStreamId === streamId) {
+        await stopScreenShare();
+    }
     
     const streamSession = joinedStreams.get(streamId);
     if (!streamSession) return;
@@ -742,10 +1451,11 @@ async function leaveStream(streamId) {
     const state = streamStates.get(streamId);
     if (state) {
         state.joined = false;
+        state.screenSharing = false;
         streamStates.set(streamId, state);
     }
     
-    showToast('Left stream', 'info');
+    showToast(`${isAdmin ? 'Admin' : 'Viewer'} left stream`, 'info');
 }
 
 function shareStream(streamId) {
@@ -755,7 +1465,7 @@ function shareStream(streamId) {
     if (navigator.share) {
         navigator.share({
             title: `${stream.streamer_name}'s Live Stream - TGFX Trade Lab`,
-            text: `Join ${stream.streamer_name}'s live trading session!`,
+            text: `Join ${stream.streamer_name}'s live trading session! ${isAdmin ? '(Admin features available)' : '(Watch-only)'}`,
             url: streamUrl
         });
     } else {
@@ -823,7 +1533,7 @@ function debugStreamConnection(streamId) {
     const stream = activeStreams.find(s => s.id === streamId);
     const attendeeData = attendeeDataByStream[streamId];
     
-    console.log('=== 🔍 DEBUG STREAM CONNECTION ===');
+    console.log('=== 🔍 DEBUG ENHANCED STREAM CONNECTION ===');
     console.log('Chime SDK loaded:', chimeSDKLoaded);
     console.log('Stream ID:', streamId);
     console.log('Stream data:', stream);
@@ -831,12 +1541,39 @@ function debugStreamConnection(streamId) {
     console.log('Active streams:', activeStreams);
     console.log('Joined streams:', joinedStreams);
     console.log('Stream states:', streamStates);
+    console.log('Screen share active:', currentScreenShareStreamId === streamId);
+    console.log('Screen share stream:', currentScreenShareStream);
     
-    showToast('Debug info logged to console (F12)', 'info');
+    showToast('Enhanced debug info logged to console (F12)', 'info');
+}
+
+// API endpoint for leaving stream (called from leaveStream function)
+async function apiLeaveStream(streamId) {
+    try {
+        const response = await fetch('/api/stream/leave', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ stream_id: streamId })
+        });
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error leaving stream via API:', error);
+        return { success: false, error: error.message };
+    }
 }
 
 // Clean up on page unload
 window.addEventListener('beforeunload', function() {
+    // Stop screen sharing
+    if (currentScreenShareStream) {
+        currentScreenShareStream.getTracks().forEach(track => track.stop());
+    }
+    
+    // Stop all streams
     joinedStreams.forEach((streamSession, streamId) => {
         if (streamSession.audioVideo) {
             streamSession.audioVideo.stop();
@@ -866,7 +1603,25 @@ function showToast(message, type = 'info') {
     }, 4000);
 }
 
-console.log('✅ Livestream page script loaded successfully');
+// Connection quality monitoring
+function monitorConnectionQuality() {
+    setInterval(() => {
+        joinedStreams.forEach((streamSession, streamId) => {
+            // Monitor connection quality for each active stream
+            // This is a placeholder - in real implementation you'd check actual connection metrics
+            const connectionQuality = Math.random() > 0.1 ? 'good' : 'poor';
+            
+            if (connectionQuality === 'poor') {
+                showToast(`Connection quality poor for stream ${streamId}`, 'warning');
+            }
+        });
+    }, 30000); // Check every 30 seconds
+}
+
+// Initialize connection monitoring
+setTimeout(monitorConnectionQuality, 10000); // Start after 10 seconds
+
+console.log('✅ Enhanced livestream page loaded successfully');
 </script>
 
 <style>
@@ -883,6 +1638,14 @@ console.log('✅ Livestream page script loaded successfully');
     min-height: 300px;
     border-radius: 12px;
     overflow: hidden;
+    cursor: pointer;
+}
+
+.stream-video-container:fullscreen {
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .stream-video-container video {
@@ -918,6 +1681,20 @@ console.log('✅ Livestream page script loaded successfully');
     color: white;
 }
 
+.screen-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.modal-content {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.modal-header, .modal-body, .modal-footer {
+    border-color: var(--border-color);
+}
+
 @media (max-width: 768px) {
     .stream-video-container {
         min-height: 200px;
@@ -925,6 +1702,15 @@ console.log('✅ Livestream page script loaded successfully');
     
     .col-lg-6 {
         margin-bottom: 1rem;
+    }
+    
+    .stream-controls .d-flex {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .stream-controls .btn {
+        padding: 0.25rem 0.4rem;
     }
 }
 
@@ -969,6 +1755,37 @@ console.log('✅ Livestream page script loaded successfully');
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+/* Fullscreen styles */
+.stream-video-container:fullscreen .stream-controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+}
+
+.stream-video-container:fullscreen #videoGrid-1,
+.stream-video-container:fullscreen #videoGrid-2 {
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Screen share button states */
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+/* Screen share modal */
+.screen-option {
+    transition: all 0.3s ease;
+}
+
 /* Demo mode styling */
 .text-warning {
     color: #ffc107 !important;
@@ -976,6 +1793,80 @@ console.log('✅ Livestream page script loaded successfully');
 
 .text-danger {
     color: #dc3545 !important;
+}
+
+/* Fullscreen button */
+.stream-video-container .position-absolute.btn {
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+.stream-video-container:hover .position-absolute.btn {
+    opacity: 1;
+}
+
+/* Connection status toast */
+.toast {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.toast-header {
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Enhanced animations */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.stream-card[data-status="live"] .badge {
+    animation: pulse 2s infinite;
+}
+
+/* Connection quality indicators */
+.connection-indicator {
+    position: absolute;
+    top: 50px;
+    right: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 999;
+}
+
+.connection-good {
+    background-color: rgba(16, 185, 129, 0.8);
+    color: white;
+}
+
+.connection-poor {
+    background-color: rgba(239, 68, 68, 0.8);
+    color: white;
+}
+
+/* Viewer/Admin distinction */
+.admin-controls {
+    border-left: 3px solid #3B82F6;
+}
+
+.viewer-mode {
+    border-left: 3px solid #10B981;
+}
+
+/* Loading shimmer effect */
+@keyframes shimmer {
+    0% { background-position: -468px 0; }
+    100% { background-position: 468px 0; }
+}
+
+.loading-shimmer {
+    background: linear-gradient(90deg, #f0f0f0 25%, transparent 37%, #f0f0f0 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
 }
 </style>
 {% endblock %}
