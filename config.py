@@ -93,11 +93,38 @@ class Config:
     # Cache Configuration - Simple for Heroku
     CACHE_TYPE = 'simple'
     CACHE_DEFAULT_TIMEOUT = 300
+
+        # AWS Chime SDK Configuration
+    AWS_CHIME_REGION = os.environ.get('AWS_CHIME_REGION') or 'us-east-1'
+    
+    # S3 bucket for stream recordings
+    STREAM_RECORDINGS_BUCKET = os.environ.get('STREAM_RECORDINGS_BUCKET') or 'tgfx-tradelab'
+    STREAM_RECORDINGS_PREFIX = os.environ.get('STREAM_RECORDINGS_PREFIX') or 'livestream-recordings/'
+    
+    # Chime SDK settings
+    CHIME_MEETING_EXPIRY_MINUTES = int(os.environ.get('CHIME_MEETING_EXPIRY_MINUTES', 240))  # 4 hours default
     
     @staticmethod
     def init_app(app):
-        """Initialize app with this configuration"""
-        pass
+        """Initialize application-specific configuration"""
+        # Validate required AWS Chime settings
+        required_vars = [
+            'AWS_ACCESS_KEY_ID',
+            'AWS_SECRET_ACCESS_KEY',
+            'AWS_CHIME_REGION'
+        ]
+        
+        missing_vars = []
+        for var in required_vars:
+            if not app.config.get(var):
+                missing_vars.append(var)
+        
+        if missing_vars:
+            print(f"⚠ Warning: Missing AWS Chime configuration: {', '.join(missing_vars)}")
+            print("  Live streaming features may not work properly.")
+        else:
+            print("✓ AWS Chime SDK configuration loaded")
+    
 
 class DevelopmentConfig(Config):
     """Development configuration"""
@@ -115,6 +142,8 @@ class DevelopmentConfig(Config):
         'echo': True  # Log SQL queries in development
     }
 
+    AWS_CHIME_REGION = 'us-east-1'
+
 class ProductionConfig(Config):
     """Production configuration for Heroku"""
     DEBUG = False
@@ -123,6 +152,9 @@ class ProductionConfig(Config):
     # Force HTTPS in production
     SESSION_COOKIE_SECURE = True
     PREFERRED_URL_SCHEME = 'https'
+
+    # Production Chime settings
+    AWS_CHIME_REGION = os.environ.get('AWS_CHIME_REGION', 'us-east-1')
     
     # Optimized MySQL settings for production
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -139,6 +171,7 @@ class ProductionConfig(Config):
             'sql_mode': 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'
         }
     }
+    
     
     @classmethod
     def init_app(cls, app):
