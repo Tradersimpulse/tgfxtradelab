@@ -8,13 +8,13 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item">
-                    <a href="{{ url_for('courses') }}" class="text-primary text-decoration-none">
+                    <a href="{{ url_for('courses') }}" class="text-success text-decoration-none">
                         <span class="material-symbols-outlined me-1" style="font-size: 16px;">school</span>
                         All Courses
                     </a>
                 </li>
                 <li class="breadcrumb-item">
-                    <a href="{{ url_for('category_videos', category_id=video.category.id) }}" class="text-primary text-decoration-none">
+                    <a href="{{ url_for('category_videos', category_id=video.category.id) }}" class="text-success text-decoration-none">
                         <span class="material-symbols-outlined me-1" style="font-size: 16px;">category</span>
                         {{ video.category.name }}
                     </a>
@@ -444,6 +444,7 @@ window.addEventListener('beforeunload', function() {
     overflow: hidden;
 }
 
+/* Breadcrumb Styling */
 .breadcrumb {
     background: transparent;
     padding: 0;
@@ -453,6 +454,15 @@ window.addEventListener('beforeunload', function() {
 .breadcrumb-item + .breadcrumb-item::before {
     content: "›";
     color: var(--text-muted);
+}
+
+.breadcrumb-item a {
+    color: #10B981 !important;
+    transition: color 0.3s ease;
+}
+
+.breadcrumb-item a:hover {
+    color: #059669 !important;
 }
 
 #videoPlayer {
