@@ -166,6 +166,7 @@ class Stream(db.Model):
     media_placement_audio_host_url = db.Column(db.String(500), nullable=True)
     media_placement_screen_sharing_url = db.Column(db.String(500), nullable=True)
     media_placement_screen_data_url = db.Column(db.String(500), nullable=True)
+    signaling_url = db.Column(db.String(500), nullable=True)  # ADD THIS LINE
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     is_recording = db.Column(db.Boolean, default=False, nullable=False)
     recording_url = db.Column(db.String(500), nullable=True)
@@ -173,15 +174,9 @@ class Stream(db.Model):
     started_at = db.Column(db.DateTime, nullable=True)
     ended_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    
-    # ADD THESE NEW FIELDS:
-    streamer_name = db.Column(db.String(100), nullable=True)  # Ray, Jordan, etc.
-    stream_type = db.Column(db.String(50), default='general', nullable=False)  # general, trading, education
-    
-    # Foreign Keys
+    streamer_name = db.Column(db.String(100), nullable=True)
+    stream_type = db.Column(db.String(50), default='general', nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
-    
-    # Relationships
     viewers = db.relationship('StreamViewer', backref='stream', lazy=True, cascade='all, delete-orphan')
 
     def to_dict(self):
@@ -197,6 +192,7 @@ class Stream(db.Model):
             'media_placement_audio_host_url': self.media_placement_audio_host_url,
             'media_placement_screen_sharing_url': self.media_placement_screen_sharing_url,
             'media_placement_screen_data_url': self.media_placement_screen_data_url,
+            'signaling_url': self.signaling_url,  # ADD THIS LINE
             'is_active': self.is_active,
             'is_recording': self.is_recording,
             'recording_url': self.recording_url,
@@ -208,10 +204,6 @@ class Stream(db.Model):
             'stream_type': self.stream_type,
             'created_by': self.created_by
         }
-    
-    def __json__(self):
-        """Make Stream objects JSON serializable"""
-        return self.to_dict()
 
 class StreamViewer(db.Model):
     __tablename__ = 'stream_viewers'
@@ -1315,26 +1307,21 @@ def api_start_stream():
     # Create stream record with proper field mapping for new API
     stream = Stream(
         title=title,
-        description=description,
+        description=description,  # Keep description clean
         meeting_id=meeting_data['MeetingId'],
         attendee_id=admin_attendee['AttendeeId'],
         external_meeting_id=external_meeting_id,
         media_region=meeting_data['MediaRegion'],
-        # New API structure - MediaPlacement is directly under Meeting
         media_placement_audio_host_url=meeting_data['MediaPlacement']['AudioHostUrl'],
         media_placement_screen_sharing_url=meeting_data['MediaPlacement']['ScreenSharingUrl'],
         media_placement_screen_data_url=meeting_data['MediaPlacement']['ScreenDataUrl'],
+        signaling_url=meeting_data['MediaPlacement'].get('SignalingUrl'),  # Store properly
         is_active=True,
         started_at=datetime.utcnow(),
         created_by=current_user.id,
         streamer_name=streamer_name,
         stream_type=stream_type
     )
-    
-    # Handle missing SignalingUrl for backwards compatibility
-    if 'SignalingUrl' in meeting_data['MediaPlacement']:
-        # Store SignalingUrl in description field temporarily (or add a new field)
-        stream.description = f"{description}\n__SIGNALING_URL__:{meeting_data['MediaPlacement']['SignalingUrl']}"
     
     db.session.add(stream)
     db.session.commit()
