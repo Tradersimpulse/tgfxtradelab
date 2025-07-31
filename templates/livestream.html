@@ -337,6 +337,35 @@ window.screenShareChannel.addEventListener('message', function(event) {
     }
 });
 
+// CRITICAL: Also listen for localStorage changes as fallback
+window.addEventListener('storage', function(e) {
+    if (e.key === 'adminScreenShare') {
+        console.log('📡 Admin screen share status changed via localStorage');
+        const screenShareData = e.newValue ? JSON.parse(e.newValue) : null;
+        
+        if (screenShareData && screenShareData.active) {
+            console.log('🖥️ Admin started screen sharing:', screenShareData.name);
+            // Update all joined streams to show screen share
+            joinedStreams.forEach((streamSession, streamId) => {
+                displayRealScreenShareForViewer(streamId, screenShareData.name || 'Admin Screen Share');
+                window.activeScreenShareStreams.add(streamId);
+            });
+            showToast('Admin started screen sharing: ' + (screenShareData.name || 'Screen Share'), 'info');
+        } else {
+            console.log('🛑 Admin stopped screen sharing');
+            // Restore demo content for all joined streams
+            window.activeScreenShareStreams.forEach(streamId => {
+                const stream = activeStreams.find(s => s.id === streamId);
+                if (stream) {
+                    displayDemoContentForViewer(streamId, stream);
+                }
+            });
+            window.activeScreenShareStreams.clear();
+            showToast('Screen sharing ended - demo content restored', 'info');
+        }
+    }
+});
+
 // Screen share event handlers
 function handleScreenShareStart(data) {
     console.log('🖥️ Admin started screen sharing:', data.name);
