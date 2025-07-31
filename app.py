@@ -144,6 +144,50 @@ class UserFavorite(db.Model):
     # Composite unique constraint
     __table_args__ = (db.UniqueConstraint('user_id', 'video_id', name='unique_user_video_favorite'),)
 
+class Stream(db.Model):
+    __tablename__ = 'streams'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    meeting_id = db.Column(db.String(100), unique=True, nullable=True)  # Chime meeting ID
+    attendee_id = db.Column(db.String(100), nullable=True)  # Admin's attendee ID
+    external_meeting_id = db.Column(db.String(100), unique=True, nullable=True)
+    media_region = db.Column(db.String(50), nullable=True)
+    media_placement_audio_host_url = db.Column(db.String(500), nullable=True)
+    media_placement_screen_sharing_url = db.Column(db.String(500), nullable=True)
+    media_placement_screen_data_url = db.Column(db.String(500), nullable=True)
+    is_active = db.Column(db.Boolean, default=False, nullable=False)
+    is_recording = db.Column(db.Boolean, default=False, nullable=False)
+    recording_url = db.Column(db.String(500), nullable=True)
+    viewer_count = db.Column(db.Integer, default=0, nullable=False)
+    started_at = db.Column(db.DateTime, nullable=True)
+    ended_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Foreign Keys
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Relationships
+    viewers = db.relationship('StreamViewer', backref='stream', lazy=True, cascade='all, delete-orphan')
+
+class StreamViewer(db.Model):
+    __tablename__ = 'stream_viewers'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    attendee_id = db.Column(db.String(100), nullable=False)  # Chime attendee ID
+    external_user_id = db.Column(db.String(100), nullable=False)
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    left_at = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Foreign Keys
+    stream_id = db.Column(db.Integer, db.ForeignKey('streams.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Composite unique constraint
+    __table_args__ = (db.UniqueConstraint('stream_id', 'user_id', name='unique_stream_viewer'),)
+
 # Forms
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -177,6 +221,10 @@ class TagForm(FlaskForm):
     name = StringField('Tag Name', validators=[DataRequired(), Length(min=2, max=50)])
     description = TextAreaField('Description', validators=[Optional()])
     color = StringField('Color', validators=[Optional()], default='#10B981')
+
+class StreamForm(FlaskForm):
+    title = StringField('Stream Title', validators=[DataRequired(), Length(min=3, max=200)])
+    description = TextAreaField('Description', validators=[Optional()])
 
 @login_manager.user_loader
 def load_user(user_id):
