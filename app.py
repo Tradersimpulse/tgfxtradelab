@@ -1198,7 +1198,7 @@ def livestream():
                 db.session.commit()
                 attendee_data_by_stream[stream.id] = attendee
     
-    return render_template('courses/dual_livestream.html', 
+    return render_template('livestream.html', 
                          active_streams=active_streams,
                          streams_by_streamer=streams_by_streamer,
                          attendee_data_by_stream=attendee_data_by_stream)
@@ -1228,7 +1228,7 @@ def admin_stream():
         is_active=True
     ).first()
     
-    return render_template('admin/dual_stream.html',
+    return render_template('admin/stream.html',
                          form=form,
                          active_streams=active_streams,
                          recent_streams=recent_streams,
