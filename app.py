@@ -476,6 +476,16 @@ def create_chime_meeting(stream_title, external_meeting_id):
         return None
     
     try:
+        # Sanitize tag values to meet AWS Chime SDK regex requirements
+        # Pattern: [\s\w+-=\.:/@]* (spaces, word chars, +, -, =, ., :, /, @)
+        def sanitize_tag_value(value):
+            # Replace invalid characters with valid ones
+            sanitized = re.sub(r"[^\s\w+\-=\.:/@]", "", str(value))
+            return sanitized[:50]  # AWS tag values have max length limits
+        
+        sanitized_title = sanitize_tag_value(stream_title)
+        sanitized_username = sanitize_tag_value(current_user.username)
+        
         response = chime_client.create_meeting(
             ClientRequestToken=str(uuid.uuid4()),
             ExternalMeetingId=external_meeting_id,
@@ -483,19 +493,19 @@ def create_chime_meeting(stream_title, external_meeting_id):
             Tags=[
                 {
                     'Key': 'StreamTitle',
-                    'Value': stream_title
+                    'Value': sanitized_title
                 },
                 {
                     'Key': 'CreatedBy',
-                    'Value': current_user.username
+                    'Value': sanitized_username
                 }
             ]
-        )
+        )  # ← Make sure this closing parenthesis exists
         return response['Meeting']
     except ClientError as e:
         print(f"Error creating Chime meeting: {e}")
         return None
-
+        
 def create_chime_attendee(meeting_id, external_user_id, user_name):
     """Create a Chime attendee for the meeting"""
     chime_client = init_chime_client()
