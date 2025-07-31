@@ -496,13 +496,9 @@ def create_chime_attendee(meeting_id, external_user_id, user_name):
     try:
         response = chime_client.create_attendee(
             MeetingId=meeting_id,
-            ExternalUserId=external_user_id,
-            Tags=[
-                {
-                    'Key': 'UserName',
-                    'Value': user_name
-                }
-            ]
+            ExternalUserId=external_user_id
+            # Removed Tags parameter - not supported in new API
+            # Removed user_name parameter - not supported in new API
         )
         return response['Attendee']
     except ClientError as e:
