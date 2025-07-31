@@ -324,59 +324,16 @@
         </div>
     </div>
 </div>
-
-<!-- Admin Screen Share Modal -->
-<div class="modal fade" id="adminScreenShareModal" tabindex="-1" aria-labelledby="adminScreenShareModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content" style="background: var(--card-bg); border: 1px solid var(--border-color);">
-            <div class="modal-header">
-                <h5 class="modal-title" id="adminScreenShareModalLabel">
-                    <span class="material-symbols-outlined me-2">screen_share</span>
-                    Choose Screen to Share (Admin Control)
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info">
-                    <span class="material-symbols-outlined me-2">info</span>
-                    This will be visible to all viewers on the livestream page.
-                </div>
-                
-                <div class="row" id="adminScreenOptions">
-                    <!-- Screen options will be populated here -->
-                </div>
-                <div class="text-center mt-3" id="adminScreenShareLoading" style="display: none;">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2 text-muted">Detecting available screens...</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-danger" id="stopAdminScreenShareBtn" onclick="stopUserScreenShare()" style="display: none;">
-                    <span class="material-symbols-outlined me-2">stop_screen_share</span>
-                    Stop Sharing
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
-<!-- AWS Chime SDK REMOVED - using demo mode with real screen share support -->
-
 <script>
 // Set template data for JavaScript
 window.userActiveStreamData = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
-window.currentAdminScreenShare = null;
-window.currentScreenShareName = null;
 
 console.log('🎛️ Starting admin stream control page...');
 
-let userMeetingSession = null;
-let userAudioVideo = null;
+// Global state management
 let userStreamStates = {
     muted: false,
     videoEnabled: false,
@@ -384,11 +341,350 @@ let userStreamStates = {
 };
 
 let currentAdminScreenShare = null;
+let screenShareBroadcastChannel = null;
+let screenShareFrameInterval = null;
 
 // Get user active stream data safely
 const userActiveStream = window.userActiveStreamData || null;
 
-// Define all global functions first
+// CRITICAL: Set up BroadcastChannel for screen sharing
+function initializeScreenShareBroadcast() {
+    try {
+        screenShareBroadcastChannel = new BroadcastChannel('screen-share-channel');
+        console.log('✅ BroadcastChannel initialized for admin');
+        
+        // Listen for viewer requests
+        screenShareBroadcastChannel.addEventListener('message', function(event) {
+            if (event.data.type === 'REQUEST_SCREEN_SHARE_STATUS') {
+                console.log('📡 Viewer requesting screen share status');
+                
+                // Respond with current status
+                if (userStreamStates.screenSharing && currentAdminScreenShare) {
+                    screenShareBroadcastChannel.postMessage({
+                        type: 'SCREEN_SHARE_START',
+                        name: 'Admin Screen Share',
+                        width: 1280,
+                        height: 720
+                    });
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Failed to initialize BroadcastChannel:', error);
+    }
+}
+
+// CRITICAL: Real screen sharing implementation
+window.toggleUserScreenShare = async function() {
+    if (userStreamStates.screenSharing) {
+        await stopUserScreenShare();
+    } else {
+        await startUserScreenShare();
+    }
+};
+
+window.startUserScreenShare = async function() {
+    try {
+        console.log('🖥️ Admin attempting to start screen share...');
+        
+        // Try to get real screen capture
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: 'always',
+                        width: { ideal: 1280, max: 1920 },
+                        height: { ideal: 720, max: 1080 },
+                        frameRate: { ideal: 15, max: 30 }
+                    },
+                    audio: true
+                });
+                
+                console.log('✅ Real screen capture successful');
+                await handleAdminScreenShare(stream, 'Admin Live Screen Share');
+                return;
+                
+            } catch (error) {
+                console.log('ℹ️ Real screen capture failed:', error.message);
+                if (error.name === 'NotAllowedError') {
+                    showToast('Screen sharing was denied. Please allow screen access.', 'warning');
+                    return;
+                }
+            }
+        }
+        
+        // Fallback to demo if real screen share fails
+        console.log('🎭 Using demo screen share');
+        const demoStream = createDemoScreenStream();
+        await handleAdminScreenShare(demoStream, 'Admin Demo Screen Share');
+        
+    } catch (error) {
+        console.error('❌ Screen share failed:', error);
+        showToast('Screen sharing failed: ' + error.message, 'error');
+    }
+};
+
+// CRITICAL: Handle screen share stream
+async function handleAdminScreenShare(stream, screenName) {
+    console.log('🚀 Admin handling screen share: ' + screenName);
+    
+    try {
+        // Store screen share info
+        currentAdminScreenShare = stream;
+        userStreamStates.screenSharing = true;
+        
+        // Update UI
+        document.getElementById('userScreenIcon').textContent = 'stop_screen_share';
+        document.getElementById('userScreenBtn').classList.add('btn-success');
+        
+        // Show screen share in admin preview
+        displayScreenShareInAdminPreview(stream);
+        
+        // CRITICAL: Set up broadcasting to viewers
+        await setupScreenShareBroadcasting(stream, screenName);
+        
+        showToast('Screen sharing started: ' + screenName, 'success');
+        
+        // Handle stream end
+        stream.getVideoTracks().forEach(track => {
+            track.onended = () => {
+                console.log('🛑 Screen share ended by user');
+                stopUserScreenShare();
+            };
+        });
+        
+    } catch (error) {
+        console.error('❌ Failed to handle screen share:', error);
+        showToast('Failed to start screen sharing', 'error');
+    }
+}
+
+// CRITICAL: Set up broadcasting
+async function setupScreenShareBroadcasting(stream, screenName) {
+    console.log('📡 Setting up screen share broadcasting');
+    
+    // Notify viewers that screen share is starting
+    if (screenShareBroadcastChannel) {
+        screenShareBroadcastChannel.postMessage({
+            type: 'SCREEN_SHARE_START',
+            name: screenName,
+            width: 1280,
+            height: 720
+        });
+    }
+    
+    // Also use localStorage as fallback
+    localStorage.setItem('adminScreenShare', JSON.stringify({
+        active: true,
+        name: screenName,
+        timestamp: Date.now()
+    }));
+    
+    // Create hidden video for frame capture
+    const hiddenVideo = document.createElement('video');
+    hiddenVideo.style.display = 'none';
+    hiddenVideo.autoplay = true;
+    hiddenVideo.muted = true;
+    hiddenVideo.srcObject = stream;
+    document.body.appendChild(hiddenVideo);
+    
+    // Create canvas for frame capture
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    hiddenVideo.addEventListener('loadedmetadata', () => {
+        canvas.width = Math.min(hiddenVideo.videoWidth, 1280);
+        canvas.height = Math.min(hiddenVideo.videoHeight, 720);
+        
+        console.log('📺 Broadcasting frames at:', canvas.width, 'x', canvas.height);
+        
+        // Start frame broadcasting
+        let frameCount = 0;
+        const broadcastFrame = () => {
+            if (hiddenVideo.readyState >= 2 && userStreamStates.screenSharing) {
+                try {
+                    // Draw frame to canvas
+                    ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+                    
+                    // Broadcast every 5th frame (about 3 FPS) to reduce bandwidth
+                    if (frameCount % 5 === 0) {
+                        const imageData = canvas.toDataURL('image/jpeg', 0.6);
+                        
+                        // Broadcast via BroadcastChannel
+                        if (screenShareBroadcastChannel) {
+                            screenShareBroadcastChannel.postMessage({
+                                type: 'SCREEN_SHARE_FRAME',
+                                imageData: imageData,
+                                timestamp: Date.now()
+                            });
+                        }
+                    }
+                    
+                    frameCount++;
+                    
+                    if (userStreamStates.screenSharing) {
+                        screenShareFrameInterval = setTimeout(broadcastFrame, 100); // 10 FPS capture
+                    }
+                    
+                } catch (error) {
+                    console.error('Error broadcasting frame:', error);
+                    if (userStreamStates.screenSharing) {
+                        screenShareFrameInterval = setTimeout(broadcastFrame, 200);
+                    }
+                }
+            }
+        };
+        
+        // Start broadcasting
+        hiddenVideo.play().then(() => {
+            setTimeout(broadcastFrame, 500);
+        });
+    });
+    
+    // Store references for cleanup
+    window.screenShareVideo = hiddenVideo;
+    window.screenShareCanvas = canvas;
+}
+
+// Display screen share in admin preview
+function displayScreenShareInAdminPreview(stream) {
+    const adminVideoGrid = document.getElementById('userVideoGrid');
+    const spinner = document.getElementById('userStreamSpinner');
+    
+    if (adminVideoGrid) {
+        adminVideoGrid.innerHTML = '';
+        
+        const screenShareVideo = document.createElement('video');
+        screenShareVideo.style.width = '100%';
+        screenShareVideo.style.height = '100%';
+        screenShareVideo.style.objectFit = 'contain';
+        screenShareVideo.autoplay = true;
+        screenShareVideo.muted = true;
+        screenShareVideo.srcObject = stream;
+        
+        adminVideoGrid.appendChild(screenShareVideo);
+        adminVideoGrid.style.display = 'block';
+        
+        if (spinner) spinner.style.display = 'none';
+    }
+}
+
+// Create demo screen stream
+function createDemoScreenStream() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+    
+    let frame = 0;
+    const animate = () => {
+        // Professional demo content
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#10B981';
+        ctx.font = 'bold 36px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Admin Screen Share (Demo)', 640, 100);
+        
+        // Animated trading chart
+        ctx.strokeStyle = '#10B981';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let i = 100; i < 1180; i += 10) {
+            const y = 360 + Math.sin((i + frame * 3) * 0.01) * 150;
+            if (i === 100) ctx.moveTo(i, y);
+            else ctx.lineTo(i, y);
+        }
+        ctx.stroke();
+        
+        // Live indicator
+        ctx.fillStyle = '#ff0000';
+        ctx.beginPath();
+        ctx.arc(100, 50, 10, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('● ADMIN LIVE DEMO', 120, 60);
+        
+        frame++;
+        if (userStreamStates.screenSharing) {
+            requestAnimationFrame(animate);
+        }
+    };
+    animate();
+    
+    return canvas.captureStream(15);
+}
+
+// Stop screen sharing
+window.stopUserScreenShare = async function() {
+    console.log('🛑 Admin stopping screen share...');
+    
+    try {
+        // Stop broadcasting
+        if (screenShareFrameInterval) {
+            clearTimeout(screenShareFrameInterval);
+            screenShareFrameInterval = null;
+        }
+        
+        // Stop stream tracks
+        if (currentAdminScreenShare) {
+            currentAdminScreenShare.getTracks().forEach(track => track.stop());
+            currentAdminScreenShare = null;
+        }
+        
+        // Clean up elements
+        if (window.screenShareVideo) {
+            window.screenShareVideo.remove();
+            window.screenShareVideo = null;
+        }
+        window.screenShareCanvas = null;
+        
+        // Update state
+        userStreamStates.screenSharing = false;
+        
+        // Update UI
+        document.getElementById('userScreenIcon').textContent = 'screen_share';
+        document.getElementById('userScreenBtn').classList.remove('btn-success');
+        
+        // Restore admin preview
+        const adminVideoGrid = document.getElementById('userVideoGrid');
+        const spinner = document.getElementById('userStreamSpinner');
+        
+        if (adminVideoGrid) {
+            adminVideoGrid.innerHTML = '';
+            adminVideoGrid.style.display = 'none';
+        }
+        if (spinner) {
+            spinner.style.display = 'flex';
+        }
+        
+        // Notify viewers
+        if (screenShareBroadcastChannel) {
+            screenShareBroadcastChannel.postMessage({
+                type: 'SCREEN_SHARE_STOP'
+            });
+        }
+        
+        // Update localStorage
+        localStorage.setItem('adminScreenShare', JSON.stringify({
+            active: false,
+            timestamp: Date.now()
+        }));
+        
+        showToast('Screen sharing stopped', 'info');
+        
+    } catch (error) {
+        console.error('❌ Error stopping screen share:', error);
+        showToast('Error stopping screen share', 'error');
+    }
+};
+
+// Other admin functions
 window.handleStartUserStream = async function(e) {
     e.preventDefault();
     
@@ -435,6 +731,11 @@ window.handleStartUserStream = async function(e) {
 window.stopUserStream = async function() {
     if (!confirm('Are you sure you want to end your stream? This action cannot be undone.')) {
         return;
+    }
+    
+    // Stop screen sharing first
+    if (userStreamStates.screenSharing) {
+        await stopUserScreenShare();
     }
     
     try {
@@ -490,614 +791,6 @@ window.toggleUserVideo = function() {
     }
 };
 
-window.toggleUserScreenShare = async function() {
-    if (userStreamStates.screenSharing) {
-        await stopUserScreenShare();
-    } else {
-        await startUserScreenShare();
-    }
-};
-
-// ENHANCED: Screen share with real content support
-window.startUserScreenShare = async function() {
-    try {
-        console.log('🖥️ Admin starting screen share...');
-        
-        // FIRST: Try to get real screen share
-        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-            try {
-                const stream = await navigator.mediaDevices.getDisplayMedia({
-                    video: {
-                        cursor: 'always',
-                        displaySurface: 'monitor',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
-                        frameRate: { ideal: 30 }
-                    },
-                    audio: true
-                });
-                
-                console.log('✅ Real admin screen capture successful');
-                await handleAdminScreenShare(stream, 'Real Screen Share');
-                
-                // Notify viewers about the screen share
-                notifyViewersScreenShareStart(stream, 'Real Screen Share');
-                return; // Exit early - real screen share worked
-                
-            } catch (error) {
-                console.log('ℹ️ Real screen capture cancelled or failed:', error.message);
-                // Don't show error toast if user just cancelled
-                if (error.name !== 'NotAllowedError' && error.name !== 'AbortError') {
-                    showToast('Screen sharing not available, using demo mode', 'info');
-                }
-            }
-        }
-        
-        // FALLBACK: Show demo screen options only if real screen share failed
-        console.log('🎭 Falling back to demo screen options');
-        
-        // Show admin screen selection modal
-        const modal = new bootstrap.Modal(document.getElementById('adminScreenShareModal'));
-        modal.show();
-        
-        // Show loading briefly
-        document.getElementById('adminScreenShareLoading').style.display = 'block';
-        document.getElementById('adminScreenOptions').innerHTML = '';
-        
-        setTimeout(() => {
-            document.getElementById('adminScreenShareLoading').style.display = 'none';
-            
-            // Create admin demo screen options
-            const screenOptions = document.getElementById('adminScreenOptions');
-            
-            // Add "Try Real Screen Share Again" option
-            const realShareOption = document.createElement('div');
-            realShareOption.className = 'col-12 mb-3';
-            realShareOption.innerHTML = 
-                '<div class="card text-center" onclick="startUserScreenShare(); document.querySelector(\'.btn-close\').click();" style="cursor: pointer; border: 2px solid #10B981;">' +
-                    '<div class="card-body">' +
-                        '<span class="material-symbols-outlined mb-2" style="font-size: 2rem; color: #10B981;">screen_share</span>' +
-                        '<h6 class="card-title text-success">Try Real Screen Share Again</h6>' +
-                        '<small class="text-muted">Share your actual screen/window</small>' +
-                    '</div>' +
-                '</div>';
-            screenOptions.appendChild(realShareOption);
-            
-            const adminScreens = [
-                { id: 'admin1', name: 'TradingView Pro', icon: 'candlestick_chart', desc: 'Professional charts & analysis' },
-                { id: 'admin2', name: 'News Terminal', icon: 'article', desc: 'Real-time market news' },
-                { id: 'admin3', name: 'Portfolio Dashboard', icon: 'dashboard', desc: 'Portfolio management interface' },
-                { id: 'admin4', name: 'Options Chain', icon: 'table_chart', desc: 'Options trading interface' }
-            ];
-            
-            // Add demo options
-            adminScreens.forEach(screen => {
-                const screenDiv = document.createElement('div');
-                screenDiv.className = 'col-6 mb-3';
-                screenDiv.innerHTML = 
-                    '<div class="card text-center admin-screen-option" onclick="selectAdminDemoScreen(\'' + screen.id + '\', \'' + screen.name + '\')" ' +
-                         'style="cursor: pointer; border: 1px solid var(--border-color);">' +
-                        '<div class="card-body">' +
-                            '<span class="material-symbols-outlined mb-2" style="font-size: 2rem; color: {{ current_user.stream_color }};">' + screen.icon + '</span>' +
-                            '<h6 class="card-title">' + screen.name + '</h6>' +
-                            '<small class="text-muted">' + screen.desc + ' (Demo)</small>' +
-                        '</div>' +
-                    '</div>';
-                screenOptions.appendChild(screenDiv);
-            });
-        }, 500);
-        
-    } catch (error) {
-        console.error('❌ Admin screen share error:', error);
-        showToast('Admin screen sharing failed: ' + error.message, 'error');
-    }
-};
-
-window.selectAdminDemoScreen = async function(screenId, screenName) {
-    console.log('📺 Admin selected demo screen: ' + screenName);
-    
-    // Hide modal
-    const modal = bootstrap.Modal.getInstance(document.getElementById('adminScreenShareModal'));
-    modal.hide();
-    
-    // Create admin demo screen content
-    const stream = createAdminDemoScreenStream(screenId);
-    await handleAdminScreenShare(stream, screenName + ' (Demo)');
-};
-
-function createAdminDemoScreenStream(screenType) {
-    console.log('🎨 Creating admin demo screen: ' + screenType);
-    
-    const canvas = document.createElement('canvas');
-    canvas.width = 1920;
-    canvas.height = 1080;
-    const ctx = canvas.getContext('2d');
-    
-    let frame = 0;
-    const animate = () => {
-        // Professional admin screen content
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        if (screenType === 'admin1') {
-            drawAdminTradingViewPro(ctx, frame);
-        } else if (screenType === 'admin2') {
-            drawAdminNewsTerminalPro(ctx, frame);
-        } else if (screenType === 'admin3') {
-            drawAdminPortfolioPro(ctx, frame);
-        } else if (screenType === 'admin4') {
-            drawAdminOptionsChain(ctx, frame);
-        }
-        
-        frame++;
-        requestAnimationFrame(animate);
-    };
-    animate();
-    
-    return canvas.captureStream(30);
-}
-
-function drawAdminTradingViewPro(ctx, frame) {
-    // Advanced TradingView interface
-    ctx.fillStyle = '#131722';
-    ctx.fillRect(0, 0, canvas.width, 80);
-    
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 28px Arial';
-    ctx.textAlign = 'left';
-    ctx.fillText('TradingView Pro - Admin Analysis', 30, 50);
-    
-    ctx.fillStyle = '#1e222d';
-    ctx.fillRect(0, 80, canvas.width, canvas.height - 80);
-    
-    // Multiple charts
-    const charts = [
-        { x: 50, y: 150, w: 800, h: 400, color: '#00ff00', label: 'SPY 1H', price: '425.50' },
-        { x: 900, y: 150, w: 800, h: 400, color: '#ff6600', label: 'QQQ 4H', price: '365.25' },
-        { x: 50, y: 600, w: 800, h: 300, color: '#0099ff', label: 'DIA 1D', price: '340.75' },
-        { x: 900, y: 600, w: 800, h: 300, color: '#ff0099', label: 'IWM 1W', price: '195.30' }
-    ];
-    
-    charts.forEach(chart => {
-        // Chart background
-        ctx.fillStyle = '#2a2e39';
-        ctx.fillRect(chart.x, chart.y, chart.w, chart.h);
-        
-        // Chart line
-        ctx.strokeStyle = chart.color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = chart.x; i < chart.x + chart.w; i += 5) {
-            const y = chart.y + chart.h/2 + Math.sin((i + frame * 2) * 0.01) * (chart.h * 0.3);
-            if (i === chart.x) ctx.moveTo(i, y);
-            else ctx.lineTo(i, y);
-        }
-        ctx.stroke();
-        
-        // Chart info
-        ctx.fillStyle = chart.color;
-        ctx.font = 'bold 20px Arial';
-        ctx.fillText(chart.label, chart.x + 10, chart.y + 30);
-        ctx.fillText('$' + chart.price, chart.x + 10, chart.y + 60);
-    });
-}
-
-function drawAdminNewsTerminalPro(ctx, frame) {
-    // Professional news terminal
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = '#00ff00';
-    ctx.font = 'bold 32px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('ADMIN NEWS TERMINAL', 30, 60);
-    
-    // Multiple news columns
-    const columns = [
-        { x: 50, title: 'BREAKING NEWS', color: '#ff0000' },
-        { x: 500, title: 'MARKET ALERTS', color: '#00ff00' },
-        { x: 950, title: 'EARNINGS', color: '#ffff00' },
-        { x: 1400, title: 'TECHNICAL', color: '#ff00ff' }
-    ];
-    
-    columns.forEach(col => {
-        ctx.fillStyle = col.color;
-        ctx.font = 'bold 24px monospace';
-        ctx.fillText(col.title, col.x, 120);
-        
-        const newsItems = [
-            'FED ANNOUNCES RATE DECISION',
-            'TECH STOCKS SURGE 5%+',
-            'CRUDE OIL BREAKS $80',
-            'CRYPTO MARKET VOLATILE',
-            'EARNINGS BEAT ESTIMATES'
-        ];
-        
-        ctx.font = '16px monospace';
-        newsItems.forEach((item, index) => {
-            const y = 160 + (index * 35);
-            const alpha = (Math.sin(frame * 0.1 + index) + 1) / 2;
-            ctx.fillStyle = col.color + Math.floor(alpha * 128).toString(16).padStart(2, '0');
-            ctx.fillText(String(index + 1).padStart(2, '0') + ':' + String(Math.floor(frame/60) % 60).padStart(2, '0') + ' ' + item, col.x, y);
-        });
-    });
-}
-
-function drawAdminPortfolioPro(ctx, frame) {
-    // Professional portfolio dashboard
-    ctx.fillStyle = '#f8f9fa';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = '#343a40';
-    ctx.fillRect(0, 0, canvas.width, 100);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 36px Arial';
-    ctx.fillText('Admin Portfolio Dashboard', 30, 60);
-    
-    // Portfolio metrics
-    const metrics = [
-        { label: 'Total Value', value: '$5,240,000', color: '#28a745', x: 50 },
-        { label: 'Daily P&L', value: '+$25,450', color: '#28a745', x: 500 },
-        { label: 'Win Rate', value: '82.3%', color: '#17a2b8', x: 950 },
-        { label: 'Sharpe Ratio', value: '2.45', color: '#6610f2', x: 1400 }
-    ];
-    
-    metrics.forEach(metric => {
-        ctx.fillStyle = metric.color;
-        ctx.font = 'bold 48px Arial';
-        ctx.fillText(metric.value, metric.x, 200);
-        ctx.font = '24px Arial';
-        ctx.fillStyle = '#333';
-        ctx.fillText(metric.label, metric.x, 230);
-    });
-    
-    // Performance chart
-    ctx.strokeStyle = '#28a745';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    for (let i = 100; i < 1800; i += 10) {
-        const y = 400 + Math.sin((i + frame * 3) * 0.005) * 80 + Math.random() * 20;
-        if (i === 100) ctx.moveTo(i, y);
-        else ctx.lineTo(i, y);
-    }
-    ctx.stroke();
-}
-
-function drawAdminOptionsChain(ctx, frame) {
-    // Options chain interface
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = '#2c3e50';
-    ctx.fillRect(0, 0, canvas.width, 80);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 28px Arial';
-    ctx.fillText('Options Chain - SPY (Admin)', 30, 50);
-    
-    // Options table headers
-    ctx.fillStyle = '#333';
-    ctx.font = 'bold 18px Arial';
-    const headers = ['Strike', 'Calls Bid', 'Calls Ask', 'Puts Bid', 'Puts Ask', 'Volume'];
-    headers.forEach((header, index) => {
-        ctx.fillText(header, 50 + (index * 200), 120);
-    });
-    
-    // Options data
-    ctx.font = '16px monospace';
-    for (let i = 0; i < 20; i++) {
-        const strike = 420 + (i * 5);
-        const y = 160 + (i * 30);
-        
-        ctx.fillStyle = i % 2 === 0 ? '#f8f9fa' : '#ffffff';
-        ctx.fillRect(0, y - 20, canvas.width, 25);
-        
-        ctx.fillStyle = '#333';
-        ctx.fillText(strike.toString(), 50, y);
-        ctx.fillText((Math.random() * 10).toFixed(2), 250, y);
-        ctx.fillText((Math.random() * 10 + 0.5).toFixed(2), 450, y);
-        ctx.fillText((Math.random() * 8).toFixed(2), 650, y);
-        ctx.fillText((Math.random() * 8 + 0.3).toFixed(2), 850, y);
-        ctx.fillText(Math.floor(Math.random() * 1000).toString(), 1050, y);
-    }
-}
-
-// CRITICAL: Enhanced screen share handler that shows real content
-async function handleAdminScreenShare(stream, screenName) {
-    console.log('🚀 Admin handling screen share: ' + screenName);
-    
-    try {
-        // Store screen share info
-        currentAdminScreenShare = stream;
-        userStreamStates.screenSharing = true;
-        
-        // Store globally for viewers
-        window.currentAdminScreenShare = stream;
-        window.currentScreenShareName = screenName;
-        
-        // Update UI buttons
-        document.getElementById('userScreenIcon').textContent = 'stop_screen_share';
-        document.getElementById('userScreenBtn').classList.add('btn-success');
-        document.getElementById('userScreenBtn').classList.remove('btn-outline-light');
-        
-        // CRITICAL: Update the admin preview to show real screen share
-        const adminVideoGrid = document.getElementById('userVideoGrid');
-        if (adminVideoGrid) {
-            adminVideoGrid.innerHTML = ''; // Clear demo content
-            
-            const screenShareVideo = document.createElement('video');
-            screenShareVideo.id = 'adminScreenShareVideo';
-            screenShareVideo.style.width = '100%';
-            screenShareVideo.style.height = '100%';
-            screenShareVideo.style.objectFit = 'contain';
-            screenShareVideo.autoplay = true;
-            screenShareVideo.muted = true;
-            screenShareVideo.playsInline = true;
-            screenShareVideo.srcObject = stream;
-            
-            adminVideoGrid.appendChild(screenShareVideo);
-            adminVideoGrid.style.display = 'block';
-            
-            // Hide spinner
-            const spinner = document.getElementById('userStreamSpinner');
-            if (spinner) spinner.style.display = 'none';
-            
-            console.log('✅ Real screen share now displaying in admin preview');
-        }
-        
-        // CRITICAL: Set up BroadcastChannel for viewers
-        setupScreenShareBroadcast(stream, screenName);
-        
-        showToast('Admin screen sharing started: ' + screenName, 'success');
-        document.getElementById('stopAdminScreenShareBtn').style.display = 'inline-block';
-        
-        // Handle when screen share ends
-        stream.getVideoTracks().forEach(track => {
-            track.onended = () => {
-                console.log('🛑 Screen share ended by user');
-                stopUserScreenShare();
-            };
-        });
-        
-    } catch (error) {
-        console.error('❌ Failed to start admin screen share:', error);
-        showToast('Failed to start admin screen sharing', 'error');
-    }
-}
-
-// NEW: Set up BroadcastChannel for screen share
-function setupScreenShareBroadcast(stream, screenName) {
-    console.log('📡 Setting up screen share broadcast');
-    
-    // Create BroadcastChannel
-    window.screenShareChannel = new BroadcastChannel('screen-share-channel');
-    
-    // Create hidden video element to capture frames
-    const hiddenVideo = document.createElement('video');
-    hiddenVideo.style.display = 'none';
-    hiddenVideo.autoplay = true;
-    hiddenVideo.muted = true;
-    hiddenVideo.playsInline = true;
-    hiddenVideo.srcObject = stream;
-    document.body.appendChild(hiddenVideo);
-    
-    // Create canvas for frame capture
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    hiddenVideo.addEventListener('loadedmetadata', () => {
-        canvas.width = Math.min(hiddenVideo.videoWidth, 1280); // Limit size
-        canvas.height = Math.min(hiddenVideo.videoHeight, 720);
-        
-        console.log('📺 Broadcasting screen share at:', canvas.width, 'x', canvas.height);
-        
-        // Notify viewers that screen share is starting
-        window.screenShareChannel.postMessage({
-            type: 'SCREEN_SHARE_START',
-            name: screenName,
-            width: canvas.width,
-            height: canvas.height
-        });
-        
-        // Start broadcasting frames
-        let frameCount = 0;
-        const broadcastFrame = () => {
-            if (hiddenVideo.readyState >= 2 && userStreamStates.screenSharing) {
-                try {
-                    // Draw current frame to canvas
-                    ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
-                    
-                    // Only broadcast every 3rd frame to reduce bandwidth
-                    if (frameCount % 3 === 0) {
-                        // Convert to compressed image data
-                        const imageData = canvas.toDataURL('image/jpeg', 0.7);
-                        
-                        // Broadcast frame to viewers
-                        window.screenShareChannel.postMessage({
-                            type: 'SCREEN_SHARE_FRAME',
-                            imageData: imageData,
-                            timestamp: Date.now(),
-                            name: screenName
-                        });
-                    }
-                    
-                    frameCount++;
-                    
-                    // Continue at ~10 FPS (every 100ms)
-                    setTimeout(broadcastFrame, 100);
-                    
-                } catch (error) {
-                    console.error('Error broadcasting frame:', error);
-                    setTimeout(broadcastFrame, 200); // Retry with longer delay
-                }
-            }
-        };
-        
-        // Start broadcasting after video is ready
-        hiddenVideo.play().then(() => {
-            setTimeout(broadcastFrame, 500);
-        });
-    });
-    
-    // Store references for cleanup
-    window.screenShareCanvas = canvas;
-    window.screenShareVideo = hiddenVideo;
-}
-
-// UPDATE stopUserScreenShare function
-window.stopUserScreenShare = async function() {
-    console.log('🛑 Admin stopping screen share...');
-    
-    try {
-        // Stop the stream tracks
-        if (currentAdminScreenShare) {
-            currentAdminScreenShare.getTracks().forEach(track => track.stop());
-        }
-        
-        // Stop broadcasting
-        if (window.screenShareChannel) {
-            window.screenShareChannel.postMessage({
-                type: 'SCREEN_SHARE_STOP'
-            });
-            window.screenShareChannel.close();
-            window.screenShareChannel = null;
-        }
-        
-        // Clean up canvas and hidden video
-        if (window.screenShareVideo) {
-            window.screenShareVideo.remove();
-            window.screenShareVideo = null;
-        }
-        if (window.screenShareCanvas) {
-            window.screenShareCanvas = null;
-        }
-        
-        // Update UI
-        userStreamStates.screenSharing = false;
-        document.getElementById('userScreenIcon').textContent = 'screen_share';
-        document.getElementById('userScreenBtn').classList.remove('btn-success');
-        document.getElementById('userScreenBtn').classList.add('btn-outline-light');
-        
-        // Restore admin preview
-        const adminVideoGrid = document.getElementById('userVideoGrid');
-        if (adminVideoGrid) {
-            adminVideoGrid.innerHTML = '';
-            adminVideoGrid.style.display = 'none';
-            
-            const spinner = document.getElementById('userStreamSpinner');
-            if (spinner) {
-                spinner.style.display = 'flex';
-                spinner.innerHTML = 
-                    '<div class="text-center text-white">' +
-                        '<div class="spinner-border mb-3" style="color: #10B981;" role="status"></div>' +
-                        '<p>Your stream preview</p>' +
-                    '</div>';
-            }
-        }
-        
-        // Clear global variables
-        currentAdminScreenShare = null;
-        window.currentAdminScreenShare = null;
-        window.currentScreenShareName = null;
-        
-        showToast('Admin screen sharing stopped', 'info');
-        document.getElementById('stopAdminScreenShareBtn').style.display = 'none';
-        
-        // Hide modal if open
-        const modalElement = document.getElementById('adminScreenShareModal');
-        const modal = bootstrap.Modal.getInstance(modalElement);
-        if (modal) {
-            modal.hide();
-        }
-        
-    } catch (error) {
-        console.error('❌ Error stopping admin screen share:', error);
-        showToast('Error stopping admin screen share', 'error');
-    }
-};
-
-// Function to notify viewers about screen share
-function notifyViewersScreenShareStart(stream, screenName) {
-    // Post message to viewer pages
-    try {
-        // Use postMessage to communicate with viewer windows
-        localStorage.setItem('adminScreenShare', JSON.stringify({
-            active: true,
-            name: screenName,
-            timestamp: Date.now()
-        }));
-        
-        console.log('📡 Notified viewers about screen share start');
-    } catch (error) {
-        console.error('Error notifying viewers:', error);
-    }
-}
-
-window.stopUserScreenShare = async function() {
-    console.log('🛑 Admin stopping screen share...');
-    
-    try {
-        // Stop the stream tracks
-        if (currentAdminScreenShare) {
-            currentAdminScreenShare.getTracks().forEach(track => track.stop());
-        }
-        
-        // Update UI
-        userStreamStates.screenSharing = false;
-        document.getElementById('userScreenIcon').textContent = 'screen_share';
-        document.getElementById('userScreenBtn').classList.remove('btn-success');
-        document.getElementById('userScreenBtn').classList.add('btn-outline-light');
-        
-        // CRITICAL: Restore demo content in admin preview
-        const adminVideoGrid = document.getElementById('userVideoGrid');
-        if (adminVideoGrid) {
-            adminVideoGrid.innerHTML = '';
-            adminVideoGrid.style.display = 'none';
-            
-            // Show spinner again
-            const spinner = document.getElementById('userStreamSpinner');
-            if (spinner) {
-                spinner.style.display = 'flex';
-                spinner.innerHTML = 
-                    '<div class="text-center text-white">' +
-                        '<div class="spinner-border mb-3" style="color: #10B981;" role="status">' +
-                            '<span class="visually-hidden">Loading...</span>' +
-                        '</div>' +
-                        '<p>Your stream preview</p>' +
-                    '</div>';
-            }
-        }
-        
-        // Clear global variables
-        currentAdminScreenShare = null;
-        window.currentAdminScreenShare = null;
-        window.currentScreenShareName = null;
-        
-        // Notify viewers that screen share stopped
-        try {
-            localStorage.setItem('adminScreenShare', JSON.stringify({
-                active: false,
-                timestamp: Date.now()
-            }));
-        } catch (error) {
-            console.error('Error notifying viewers of stop:', error);
-        }
-        
-        showToast('Admin screen sharing stopped', 'info');
-        document.getElementById('stopAdminScreenShareBtn').style.display = 'none';
-        
-        // Hide modal if open
-        const modalElement = document.getElementById('adminScreenShareModal');
-        const modal = bootstrap.Modal.getInstance(modalElement);
-        if (modal) {
-            modal.hide();
-        }
-        
-    } catch (error) {
-        console.error('❌ Error stopping admin screen share:', error);
-        showToast('Error stopping admin screen share', 'error');
-    }
-};
-
 window.toggleUserRecording = async function() {
     if (!userActiveStream) return;
     
@@ -1124,12 +817,12 @@ window.toggleUserRecording = async function() {
                 recordingIcon.textContent = 'fiber_manual_record';
                 recordingBtn.innerHTML = '<span class="material-symbols-outlined me-2">fiber_manual_record</span>Record';
                 recordingBtn.className = 'btn btn-warning btn-sm';
-                showToast('Admin recording stopped', 'info');
+                showToast('Recording stopped', 'info');
             } else {
                 recordingIcon.textContent = 'stop';
                 recordingBtn.innerHTML = '<span class="material-symbols-outlined me-2">stop</span>Stop Rec';
                 recordingBtn.className = 'btn btn-danger btn-sm';
-                showToast('Admin recording started', 'success');
+                showToast('Recording started', 'success');
             }
         } else {
             throw new Error(data.error || 'Failed to toggle recording');
@@ -1172,14 +865,6 @@ async function updateStreamStats() {
             if (activeStreamCountEl) activeStreamCountEl.textContent = data.count;
             if (totalViewersCountEl) totalViewersCountEl.textContent = totalViewers;
             if (recordingStreamsCountEl) recordingStreamsCountEl.textContent = recordingCount;
-        } else {
-            const activeStreamCountEl = document.getElementById('activeStreamCount');
-            const totalViewersCountEl = document.getElementById('totalViewersCount');
-            const recordingStreamsCountEl = document.getElementById('recordingStreamsCount');
-            
-            if (activeStreamCountEl) activeStreamCountEl.textContent = '0';
-            if (totalViewersCountEl) totalViewersCountEl.textContent = '0';
-            if (recordingStreamsCountEl) recordingStreamsCountEl.textContent = '0';
         }
     } catch (error) {
         console.error('Error updating stream stats:', error);
@@ -1211,8 +896,12 @@ function showToast(message, type) {
     }, 4000);
 }
 
+// Initialize page
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📱 Admin control page loaded');
+    
+    // Initialize screen sharing
+    initializeScreenShareBroadcast();
     
     if (userActiveStream) {
         console.log('🎬 User has active stream:', userActiveStream);
@@ -1227,9 +916,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Poll for updates
     setInterval(updateStreamStats, 5000);
     updateStreamStats();
+    
+    console.log('✅ Enhanced admin stream control loaded');
 });
 
-console.log('✅ Enhanced admin stream control page loaded successfully');
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    if (userStreamStates.screenSharing) {
+        stopUserScreenShare();
+    }
+    if (screenShareBroadcastChannel) {
+        screenShareBroadcastChannel.close();
+    }
+});
 </script>
 
 <style>
@@ -1241,6 +940,16 @@ console.log('✅ Enhanced admin stream control page loaded successfully');
 .btn-outline-success:hover {
     background: #10B981;
     color: white;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
 }
 
 .spinner-border-sm {
@@ -1262,21 +971,6 @@ console.log('✅ Enhanced admin stream control page loaded successfully');
 
 .card:hover {
     transform: translateY(-1px);
-}
-
-.admin-screen-option:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.btn-success {
-    background-color: #28a745;
-    border-color: #28a745;
-}
-
-.btn-success:hover {
-    background-color: #218838;
-    border-color: #1e7e34;
 }
 
 @media (max-width: 768px) {
