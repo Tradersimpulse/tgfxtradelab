@@ -154,7 +154,7 @@
     
     <!-- Sidebar -->
     <div class="col-lg-4">
-        <!-- Next/Previous Videos - IMPROVED NAVIGATION -->
+        <!-- Course Navigation -->
         <div class="card mb-4">
             <div class="card-header">
                 <h6 class="mb-0">
@@ -162,134 +162,56 @@
                     Course Navigation
                 </h6>
             </div>
-            <div class="card-body p-3">
+            <div class="card-body">
                 {% set category_videos = video.category.videos|sort(attribute='order_index') %}
                 {% set current_index = category_videos.index(video) %}
                 
-                <!-- Previous Video -->
-                {% if current_index > 0 %}
-                {% set prev_video = category_videos[current_index - 1] %}
-                <div class="mb-3">
-                    <div class="d-flex align-items-center mb-2">
-                        <span class="material-symbols-outlined me-2 text-muted" style="font-size: 16px;">arrow_back</span>
-                        <small class="text-muted fw-medium">Previous</small>
-                    </div>
+                <div class="d-grid gap-2">
+                    <!-- Previous Video Button -->
+                    {% if current_index > 0 %}
+                    {% set prev_video = category_videos[current_index - 1] %}
                     <a href="{{ url_for('watch_video', video_id=prev_video.id) }}" 
-                       class="nav-video-card previous-video text-decoration-none">
-                        <div class="d-flex align-items-center p-3">
-                            <div class="nav-video-thumbnail me-3">
-                                {% if prev_video.thumbnail_url %}
-                                <img src="{{ prev_video.thumbnail_url }}" alt="{{ prev_video.title }}" 
-                                     class="w-100 h-100" style="object-fit: cover;">
-                                {% else %}
-                                <div class="w-100 h-100 bg-gradient-primary d-flex align-items-center justify-content-center">
-                                    <span class="material-symbols-outlined text-white" style="font-size: 16px;">play_circle</span>
-                                </div>
-                                {% endif %}
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1 text-white">{{ prev_video.title }}</h6>
-                                {% if prev_video.duration %}
-                                <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">schedule</span>
-                                    {{ (prev_video.duration // 60)|int }}:{{ "%02d"|format(prev_video.duration % 60) }}
-                                </small>
-                                {% endif %}
-                            </div>
-                            <span class="material-symbols-outlined text-primary nav-arrow">chevron_right</span>
-                        </div>
-                    </a>
-                </div>
-                {% endif %}
-                
-                <!-- Next Video -->
-                {% if current_index < category_videos|length - 1 %}
-                {% set next_video = category_videos[current_index + 1] %}
-                <div>
-                    <div class="d-flex align-items-center mb-2">
-                        <span class="material-symbols-outlined me-2 text-muted" style="font-size: 16px;">arrow_forward</span>
-                        <small class="text-muted fw-medium">Up Next</small>
-                    </div>
-                    
-                    {% if next_video.is_free or current_user.has_subscription %}
-                    <!-- Accessible Next Video -->
-                    <a href="{{ url_for('watch_video', video_id=next_video.id) }}" 
-                       class="nav-video-card next-video text-decoration-none mb-3">
-                        <div class="d-flex align-items-center p-3">
-                            <div class="nav-video-thumbnail me-3">
-                                {% if next_video.thumbnail_url %}
-                                <img src="{{ next_video.thumbnail_url }}" alt="{{ next_video.title }}" 
-                                     class="w-100 h-100" style="object-fit: cover;">
-                                {% else %}
-                                <div class="w-100 h-100 bg-gradient-primary d-flex align-items-center justify-content-center">
-                                    <span class="material-symbols-outlined text-white" style="font-size: 16px;">play_circle</span>
-                                </div>
-                                {% endif %}
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1 text-white">{{ next_video.title }}</h6>
-                                {% if next_video.duration %}
-                                <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">schedule</span>
-                                    {{ (next_video.duration // 60)|int }}:{{ "%02d"|format(next_video.duration % 60) }}
-                                </small>
-                                {% endif %}
-                            </div>
-                            <span class="material-symbols-outlined text-primary nav-arrow">chevron_right</span>
-                        </div>
-                    </a>
-                    
-                    <!-- Continue Button -->
-                    <a href="{{ url_for('watch_video', video_id=next_video.id) }}" 
-                       class="btn btn-success w-100 py-3 fw-medium btn-continue">
-                        <span class="material-symbols-outlined me-2">play_arrow</span>
-                        Continue to Next Video
-                    </a>
-                    
-                    {% else %}
-                    <!-- Locked Next Video -->
-                    <div class="nav-video-card locked-video mb-3">
-                        <div class="d-flex align-items-center p-3">
-                            <div class="nav-video-thumbnail me-3 position-relative">
-                                {% if next_video.thumbnail_url %}
-                                <img src="{{ next_video.thumbnail_url }}" alt="{{ next_video.title }}" 
-                                     class="w-100 h-100 locked-thumbnail" style="object-fit: cover;">
-                                {% else %}
-                                <div class="w-100 h-100 bg-secondary d-flex align-items-center justify-content-center">
-                                    <span class="material-symbols-outlined text-white" style="font-size: 16px;">play_circle</span>
-                                </div>
-                                {% endif %}
-                                <div class="lock-overlay">
-                                    <span class="material-symbols-outlined text-warning">lock</span>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1 text-muted">{{ next_video.title }}</h6>
-                                <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">workspace_premium</span>
-                                    Premium Required
-                                </small>
+                       class="btn btn-outline-primary d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <span class="material-symbols-outlined me-2">arrow_back</span>
+                            <div class="text-start">
+                                <div class="fw-medium">Previous Video</div>
+                                <small class="text-muted">{{ prev_video.title[:30] }}{% if prev_video.title|length > 30 %}...{% endif %}</small>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Upgrade Button -->
-                    <a href="{{ url_for('subscription') }}" 
-                       class="btn btn-warning w-100 py-3 fw-medium btn-upgrade">
-                        <span class="material-symbols-outlined me-2">workspace_premium</span>
-                        Upgrade to Continue
                     </a>
                     {% endif %}
+                    
+                    <!-- Next Video Button -->
+                    {% if current_index < category_videos|length - 1 %}
+                    {% set next_video = category_videos[current_index + 1] %}
+                    {% if next_video.is_free or current_user.has_subscription %}
+                    <a href="{{ url_for('watch_video', video_id=next_video.id) }}" 
+                       class="btn btn-primary d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <span class="material-symbols-outlined me-2">play_arrow</span>
+                            <div class="text-start">
+                                <div class="fw-medium">Next Video</div>
+                                <small class="opacity-75">{{ next_video.title[:30] }}{% if next_video.title|length > 30 %}...{% endif %}</small>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined">arrow_forward</span>
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('subscription') }}" 
+                       class="btn btn-warning d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <span class="material-symbols-outlined me-2">lock</span>
+                            <div class="text-start">
+                                <div class="fw-medium">Next Video (Premium)</div>
+                                <small class="opacity-75">{{ next_video.title[:30] }}{% if next_video.title|length > 30 %}...{% endif %}</small>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined">workspace_premium</span>
+                    </a>
+                    {% endif %}
+                    {% endif %}
                 </div>
-                {% endif %}
-                
-                <!-- Single Video Message -->
-                {% if current_index == 0 and current_index == category_videos|length - 1 %}
-                <div class="text-center py-4">
-                    <span class="material-symbols-outlined text-muted mb-2" style="font-size: 2rem;">video_library</span>
-                    <p class="text-muted mb-0">This is the only video in this category</p>
-                </div>
-                {% endif %}
             </div>
         </div>
         
@@ -547,135 +469,44 @@ window.addEventListener('beforeunload', function() {
     border-radius: 10px;
 }
 
-/* Navigation Video Cards */
-.nav-video-card {
-    display: block;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+/* Navigation Buttons */
+.btn {
     border-radius: 12px;
     transition: all 0.3s ease;
-    overflow: hidden;
+    padding: 0.75rem 1rem;
 }
 
-.nav-video-card:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: var(--primary-color);
+.btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
 }
 
-.nav-video-card:hover .nav-arrow {
-    transform: translateX(4px);
-}
-
-.nav-video-card.locked-video {
-    background: rgba(255, 255, 255, 0.02);
-    border-color: rgba(255, 255, 255, 0.05);
-    cursor: not-allowed;
-}
-
-/* Video Thumbnails */
-.nav-video-thumbnail {
-    width: 60px;
-    height: 34px;
-    border-radius: 8px;
-    overflow: hidden;
-    flex-shrink: 0;
-    position: relative;
-}
-
-.nav-video-thumbnail .lock-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.locked-thumbnail {
-    filter: grayscale(100%) brightness(0.5);
-}
-
-/* Navigation Arrow */
-.nav-arrow {
-    transition: transform 0.3s ease;
-    font-size: 20px !important;
-}
-
-/* Action Buttons */
-.btn-continue {
-    background: linear-gradient(135deg, #10B981, #059669) !important;
-    border: none;
-    border-radius: 12px;
-    font-size: 0.95rem;
-    transition: all 0.3s ease;
+.btn-outline-primary:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
     box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
 }
 
-.btn-continue:hover {
-    background: linear-gradient(135deg, #059669, #047857) !important;
-    transform: translateY(-2px);
+.btn-primary {
+    background: linear-gradient(135deg, #10B981, #059669);
+    border: none;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #059669, #047857);
     box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
 }
 
-.btn-upgrade {
-    background: linear-gradient(135deg, #F59E0B, #D97706) !important;
+.btn-warning {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
     border: none;
-    border-radius: 12px;
-    font-size: 0.95rem;
-    transition: all 0.3s ease;
+    color: white;
     box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
-    color: white !important;
 }
 
-.btn-upgrade:hover {
-    background: linear-gradient(135deg, #D97706, #B45309) !important;
-    transform: translateY(-2px);
+.btn-warning:hover {
+    background: linear-gradient(135deg, #D97706, #B45309);
     box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
-}
-
-/* Previous/Next Labels */
-.nav-video-card + .btn,
-.locked-video + .btn {
-    margin-top: 0.75rem;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-    .nav-video-thumbnail {
-        width: 50px;
-        height: 28px;
-    }
-    
-    .nav-video-card h6 {
-        font-size: 0.9rem;
-    }
-    
-    .btn-continue,
-    .btn-upgrade {
-        padding: 0.75rem 1rem;
-        font-size: 0.9rem;
-    }
-}
-
-/* Animation for loading */
-.nav-video-card {
-    animation: slideInUp 0.4s ease-out;
-}
-
-@keyframes slideInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 </style>
 {% endblock %}
