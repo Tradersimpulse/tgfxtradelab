@@ -462,26 +462,27 @@ def create_chime_attendee(meeting_id, external_user_id, user_name):
         print(f"Error creating Chime attendee: {e}")
         return None
 
-def get_recording_s3_key(stream_id, timestamp=None):
-    """Generate S3 key for stream recording"""
+def get_recording_s3_key(stream_id, streamer_name, timestamp=None):
+    """Generate S3 key for stream recording with streamer name"""
     if not timestamp:
         timestamp = datetime.utcnow()
     
     date_str = timestamp.strftime('%Y/%m/%d')
-    filename = f"stream-{stream_id}-{timestamp.strftime('%Y%m%d-%H%M%S')}.mp4"
+    # Include streamer name in filename
+    filename = f"{streamer_name}-stream-{stream_id}-{timestamp.strftime('%Y%m%d-%H%M%S')}.mp4"
     
     prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
     return f"{prefix}{date_str}/{filename}"
 
-def upload_recording_to_s3(local_file_path, stream_id):
-    """Upload recording file to S3"""
+def upload_recording_to_s3(local_file_path, stream_id, streamer_name):
+    """Upload recording file to S3 with streamer name"""
     s3_client = init_s3_client()
     if not s3_client:
         return None
     
     try:
         bucket = app.config['STREAM_RECORDINGS_BUCKET']
-        s3_key = get_recording_s3_key(stream_id)
+        s3_key = get_recording_s3_key(stream_id, streamer_name)
         
         s3_client.upload_file(
             local_file_path,
@@ -489,7 +490,11 @@ def upload_recording_to_s3(local_file_path, stream_id):
             s3_key,
             ExtraArgs={
                 'ContentType': 'video/mp4',
-                'ServerSideEncryption': 'AES256'
+                'ServerSideEncryption': 'AES256',
+                'Metadata': {
+                    'streamer': streamer_name,
+                    'stream_id': str(stream_id)
+                }
             }
         )
         
