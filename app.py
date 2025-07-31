@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
 import boto3
-from botocore.exceptions import NoCredentialsError ClientError
+from botocore.exceptions import NoCredentialsError, ClientError
 import stripe
 from config import get_config
 import re
