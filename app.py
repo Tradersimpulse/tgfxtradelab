@@ -47,15 +47,22 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(255), nullable=False)  # Increased length for MySQL
+    password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     has_subscription = db.Column(db.Boolean, default=False, nullable=False)
     subscription_expires = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     
+    # ADD THESE NEW FIELDS:
+    display_name = db.Column(db.String(100), nullable=True)  # For stream titles (Ray, Jordan)
+    can_stream = db.Column(db.Boolean, default=False, nullable=False)  # Who can create streams
+    stream_color = db.Column(db.String(7), default='#10B981', nullable=False)  # Color for their streams
+    
     # Relationships
     progress = db.relationship('UserProgress', backref='user', lazy=True, cascade='all, delete-orphan')
     favorites = db.relationship('UserFavorite', backref='user', lazy=True, cascade='all, delete-orphan')
+    created_streams = db.relationship('Stream', backref='creator', lazy=True, cascade='all, delete-orphan')
+    
 
 class Category(db.Model):
     __tablename__ = 'categories'
@@ -152,8 +159,8 @@ class Stream(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    meeting_id = db.Column(db.String(100), unique=True, nullable=True)  # Chime meeting ID
-    attendee_id = db.Column(db.String(100), nullable=True)  # Admin's attendee ID
+    meeting_id = db.Column(db.String(100), unique=True, nullable=True)
+    attendee_id = db.Column(db.String(100), nullable=True)
     external_meeting_id = db.Column(db.String(100), unique=True, nullable=True)
     media_region = db.Column(db.String(50), nullable=True)
     media_placement_audio_host_url = db.Column(db.String(500), nullable=True)
@@ -167,8 +174,12 @@ class Stream(db.Model):
     ended_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     
+    # ADD THESE NEW FIELDS:
+    streamer_name = db.Column(db.String(100), nullable=True)  # Ray, Jordan, etc.
+    stream_type = db.Column(db.String(50), default='general', nullable=False)  # general, trading, education
+    
     # Foreign Keys
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     
     # Relationships
     viewers = db.relationship('StreamViewer', backref='stream', lazy=True, cascade='all, delete-orphan')
@@ -228,6 +239,16 @@ class StreamForm(FlaskForm):
     title = StringField('Stream Title', validators=[DataRequired(), Length(min=3, max=200)])
     description = TextAreaField('Description', validators=[Optional()])
 
+class DualStreamForm(FlaskForm):
+    title = StringField('Stream Title', validators=[DataRequired(), Length(min=3, max=200)])
+    description = TextAreaField('Description', validators=[Optional()])
+    stream_type = SelectField('Stream Type', choices=[
+        ('general', 'General Discussion'),
+        ('trading', 'Live Trading'),
+        ('education', 'Educational Content'),
+        ('webinar', 'Webinar')
+    ], default='trading')
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -286,6 +307,42 @@ def process_video_tags(video, tags_string):
         if tag_name:
             tag = get_or_create_tag(tag_name)
             video.tags.append(tag)
+
+def initialize_streamers():
+    """Initialize Ray and Jordan as streamers - run this once after deployment"""
+    try:
+        # Update existing admin user (assuming username 'admin' is Ray)
+        ray = User.query.filter_by(username='admin').first()
+        if ray:
+            ray.display_name = 'Ray'
+            ray.can_stream = True
+            ray.stream_color = '#10B981'  # Green
+        
+        # Create or update Jordan
+        jordan = User.query.filter_by(username='jordan').first()
+        if not jordan:
+            jordan = User(
+                username='jwill24',
+                email='williamsjordan947@gmail.com',
+                password_hash=generate_password_hash('jordan123!secure'),
+                is_admin=True,
+                display_name='Jordan',
+                can_stream=True,
+                stream_color='#3B82F6'  # Blue
+            )
+            db.session.add(jordan)
+        else:
+            jordan.display_name = 'Jordan'
+            jordan.can_stream = True
+            jordan.stream_color = '#3B82F6'  # Blue
+            jordan.is_admin = True
+        
+        db.session.commit()
+        print("✅ Streamers initialized: Ray (Green) and Jordan (Blue)")
+        
+    except Exception as e:
+        print(f"❌ Error initializing streamers: {e}")
+        db.session.rollback()
 
 # Custom Jinja2 filters
 @app.template_filter('nl2br')
