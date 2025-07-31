@@ -268,7 +268,7 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- AWS SDK removed due to loading issues, using demo mode -->
+<!-- AWS SDK removed due to loading issues, using demo mode with real screen share support -->
 
 <script>
 // Set template data for JavaScript
@@ -321,7 +321,7 @@ window.joinStream = function(streamId) {
     forceJoinStream(streamId);
 };
 
-// Force join function for debugging connection issues
+// ENHANCED: Force join function with screen share support
 window.forceJoinStream = function(streamId) {
     console.log('🔧 Force joining stream', streamId);
     
@@ -340,7 +340,95 @@ window.forceJoinStream = function(streamId) {
     if (videoGrid) videoGrid.style.display = 'block';
     if (streamControls) streamControls.style.display = 'block';
     
-    // Create a fake video element with demo content
+    // Check if there's an active screen share from admin
+    const adminScreenShare = checkForAdminScreenShare();
+    if (adminScreenShare && adminScreenShare.active) {
+        console.log('📺 Admin screen share detected, showing real content');
+        displayRealScreenShareForViewer(streamId, null, adminScreenShare.name);
+    } else {
+        console.log('🎭 No screen share active, showing demo content');
+        displayDemoContentForViewer(streamId, stream);
+    }
+    
+    showToast('Connected to ' + stream.streamer_name + ' stream', 'success');
+    
+    // Update state
+    const state = streamStates.get(streamId) || {};
+    state.joined = true;
+    streamStates.set(streamId, state);
+};
+
+// Function to check for active admin screen share
+function checkForAdminScreenShare() {
+    try {
+        const screenShareData = localStorage.getItem('adminScreenShare');
+        if (screenShareData) {
+            const data = JSON.parse(screenShareData);
+            // Check if screen share is recent (within last 10 seconds)
+            const isRecent = Date.now() - data.timestamp < 10000;
+            return data.active && isRecent ? data : null;
+        }
+    } catch (error) {
+        console.error('Error checking admin screen share:', error);
+    }
+    return null;
+}
+
+// Function to display real screen share content for viewers
+function displayRealScreenShareForViewer(streamId, screenShareStream, screenName) {
+    const videoGrid = document.getElementById('videoGrid-' + streamId);
+    if (!videoGrid) return;
+    
+    // Clear existing content
+    videoGrid.innerHTML = '';
+    
+    // Create a placeholder that indicates screen share is active
+    const screenSharePlaceholder = document.createElement('div');
+    screenSharePlaceholder.style.width = '100%';
+    screenSharePlaceholder.style.height = '100%';
+    screenSharePlaceholder.style.background = 'linear-gradient(45deg, #1a1a1a, #2a2a2a)';
+    screenSharePlaceholder.style.display = 'flex';
+    screenSharePlaceholder.style.flexDirection = 'column';
+    screenSharePlaceholder.style.alignItems = 'center';
+    screenSharePlaceholder.style.justifyContent = 'center';
+    screenSharePlaceholder.style.color = 'white';
+    screenSharePlaceholder.style.textAlign = 'center';
+    screenSharePlaceholder.innerHTML = `
+        <div class="mb-3">
+            <span class="material-symbols-outlined" style="font-size: 4rem; color: #10B981; opacity: 0.8;">screen_share</span>
+        </div>
+        <h4 style="color: #10B981; margin-bottom: 1rem;">Admin is Screen Sharing</h4>
+        <p style="color: #ccc; margin-bottom: 0.5rem;">${screenName}</p>
+        <small style="color: #999;">Content is being streamed from admin's screen</small>
+        <div class="mt-3">
+            <div class="spinner-border" style="color: #10B981;" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+    
+    videoGrid.appendChild(screenSharePlaceholder);
+    
+    // Add screen share indicator
+    const indicator = document.createElement('div');
+    indicator.className = 'position-absolute top-0 start-0 m-2 badge bg-success';
+    indicator.style.zIndex = '1000';
+    indicator.style.fontSize = '12px';
+    indicator.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 12px;">screen_share</span>' + screenName;
+    videoGrid.appendChild(indicator);
+    
+    console.log('✅ Screen share placeholder displayed for viewer:', streamId);
+}
+
+// Function to display demo content for viewers
+function displayDemoContentForViewer(streamId, stream) {
+    const videoGrid = document.getElementById('videoGrid-' + streamId);
+    if (!videoGrid) return;
+    
+    // Clear existing content
+    videoGrid.innerHTML = '';
+    
+    // Create demo video element
     const videoElement = document.createElement('video');
     videoElement.id = 'video-' + streamId + '-1';
     videoElement.style.width = '100%';
@@ -398,17 +486,37 @@ window.forceJoinStream = function(streamId) {
     videoElement.srcObject = demoStream;
     videoElement.play();
     
-    if (videoGrid) {
-        videoGrid.appendChild(videoElement);
+    videoGrid.appendChild(videoElement);
+    
+    console.log('✅ Demo content displayed for viewer:', streamId);
+}
+
+// Listen for localStorage changes to detect admin screen share updates
+window.addEventListener('storage', function(e) {
+    if (e.key === 'adminScreenShare') {
+        console.log('📡 Admin screen share status changed');
+        const screenShareData = e.newValue ? JSON.parse(e.newValue) : null;
+        
+        if (screenShareData && screenShareData.active) {
+            console.log('🖥️ Admin started screen sharing:', screenShareData.name);
+            // Update all joined streams to show screen share
+            joinedStreams.forEach((streamSession, streamId) => {
+                displayRealScreenShareForViewer(streamId, null, screenShareData.name);
+            });
+            showToast('Admin started screen sharing: ' + screenShareData.name, 'info');
+        } else {
+            console.log('🛑 Admin stopped screen sharing');
+            // Restore demo content for all joined streams
+            joinedStreams.forEach((streamSession, streamId) => {
+                const stream = activeStreams.find(s => s.id === streamId);
+                if (stream) {
+                    displayDemoContentForViewer(streamId, stream);
+                }
+            });
+            showToast('Screen sharing ended - demo content restored', 'info');
+        }
     }
-    
-    showToast('Connected to ' + stream.streamer_name + ' stream (Demo Mode)', 'success');
-    
-    // Update state
-    const state = streamStates.get(streamId) || {};
-    state.joined = true;
-    streamStates.set(streamId, state);
-};
+});
 
 // Other global functions
 window.toggleFullscreen = function(streamId) {
@@ -579,6 +687,7 @@ window.debugStreamConnection = function(streamId) {
     console.log('Attendee data:', attendeeData);
     console.log('Joined streams:', Array.from(joinedStreams.keys()));
     console.log('Stream states:', Array.from(streamStates.entries()));
+    console.log('Admin screen share active:', checkForAdminScreenShare());
     
     showToast('Debug info logged to console (F12)', 'info');
 };
@@ -705,11 +814,18 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // Check for existing admin screen share on page load
+    const adminScreenShare = checkForAdminScreenShare();
+    if (adminScreenShare && adminScreenShare.active) {
+        console.log('📺 Existing admin screen share detected on page load');
+        showToast('Admin is currently screen sharing: ' + adminScreenShare.name, 'info');
+    }
+    
     // Start status polling
     setInterval(updateAllStreamStatus, 5000);
     updateAllStreamStatus();
     
-    console.log('✅ Livestream page initialized successfully');
+    console.log('✅ Enhanced livestream page initialized successfully');
 });
 
 // Listen for fullscreen changes
@@ -728,17 +844,19 @@ window.debugAllStreams = function() {
     console.log('Attendee Data:', attendeeDataByStream);
     console.log('Joined Streams:', Array.from(joinedStreams.keys()));
     console.log('Stream States:', Array.from(streamStates.entries()));
+    console.log('Admin Screen Share:', checkForAdminScreenShare());
     
     return {
         isAdmin,
         activeStreams,
         attendeeDataByStream,
         joinedStreams: Array.from(joinedStreams.keys()),
-        streamStates: Array.from(streamStates.entries())
+        streamStates: Array.from(streamStates.entries()),
+        adminScreenShare: checkForAdminScreenShare()
     };
 };
 
-console.log('✅ Fixed livestream JavaScript loaded successfully');
+console.log('✅ Enhanced livestream JavaScript loaded successfully with screen share support');
 console.log('💡 Available functions: joinStream(), forceJoinStream(), toggleFullscreen(), leaveStream(), shareStream()');
 </script>
 
