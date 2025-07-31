@@ -480,17 +480,17 @@ def create_chime_meeting(stream_title, external_meeting_id):
             ClientRequestToken=str(uuid.uuid4()),
             ExternalMeetingId=external_meeting_id,
             MediaRegion=app.config.get('AWS_CHIME_REGION', 'us-east-1'),
-            # Remove MeetingHostId - not supported in new API
-            Tags=[  # Correct - list format
+            Tags=[
                 {
                     'Key': 'StreamTitle',
                     'Value': stream_title
                 },
                 {
-                    'Key': 'CreatedBy', 
+                    'Key': 'CreatedBy',
                     'Value': current_user.username
                 }
             ]
+        )
         return response['Meeting']
     except ClientError as e:
         print(f"Error creating Chime meeting: {e}")
