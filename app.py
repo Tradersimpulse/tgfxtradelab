@@ -457,10 +457,10 @@ def courses():
                          total_videos=total_videos)
 
 def init_chime_client():
-    """Initialize AWS Chime client"""
+    """Initialize AWS Chime SDK Meetings client"""
     try:
         chime_client = boto3.client(
-            'chime',
+            'chime-sdk-meetings',  # ← NEW endpoint for meetings
             aws_access_key_id=app.config['AWS_ACCESS_KEY_ID'],
             aws_secret_access_key=app.config['AWS_SECRET_ACCESS_KEY'],
             region_name=app.config.get('AWS_CHIME_REGION', 'us-east-1')
@@ -480,17 +480,11 @@ def create_chime_meeting(stream_title, external_meeting_id):
             ClientRequestToken=str(uuid.uuid4()),
             ExternalMeetingId=external_meeting_id,
             MediaRegion=app.config.get('AWS_CHIME_REGION', 'us-east-1'),
-            MeetingHostId=f"host-{current_user.id}",
-            Tags=[
-                {
-                    'Key': 'StreamTitle',
-                    'Value': stream_title
-                },
-                {
-                    'Key': 'CreatedBy',
-                    'Value': current_user.username
-                }
-            ]
+            # Remove MeetingHostId - not supported in new API
+            Tags={  # Changed from list to dict
+                'StreamTitle': stream_title,
+                'CreatedBy': current_user.username
+            }
         )
         return response['Meeting']
     except ClientError as e:
