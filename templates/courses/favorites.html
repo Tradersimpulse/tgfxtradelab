@@ -10,7 +10,7 @@
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item">
-                            <a href="{{ url_for('courses') }}" class="text-primary text-decoration-none">
+                            <a href="{{ url_for('courses') }}" class="text-success text-decoration-none">
                                 <span class="material-symbols-outlined me-1" style="font-size: 16px;">school</span>
                                 All Courses
                             </a>
@@ -444,6 +444,28 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
+/* Breadcrumb Styling */
+.breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin-bottom: 1rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "›";
+    color: var(--text-muted);
+}
+
+.breadcrumb-item a {
+    color: #10B981 !important;
+    transition: color 0.3s ease;
+}
+
+.breadcrumb-item a:hover {
+    color: #059669 !important;
+}
+
+/* Video Styling */
 .video-thumbnail {
     width: 120px;
     height: 68px;
@@ -583,17 +605,6 @@ document.addEventListener('DOMContentLoaded', function() {
 .play-button:hover {
     transform: scale(1.1);
     box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
-}
-
-.breadcrumb {
-    background: transparent;
-    padding: 0;
-    margin-bottom: 1rem;
-}
-
-.breadcrumb-item + .breadcrumb-item::before {
-    content: "›";
-    color: var(--text-muted);
 }
 </style>
 {% endblock %}
