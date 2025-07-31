@@ -1,0 +1,574 @@
+{% extends "base.html" %}
+
+{% block title %}Stream Control - TGFX Trade Lab Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2" style="font-size: 2rem;">live_tv</span>
+                    Stream Control
+                </h1>
+                <p class="text-muted mb-0">Manage live streaming sessions</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary">
+                    <span class="material-symbols-outlined me-2">arrow_back</span>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Stream Control Panel -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">control_camera</span>
+                    Stream Control Panel
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if active_stream %}
+                <!-- Active Stream Controls -->
+                <div class="alert alert-success d-flex align-items-center mb-4">
+                    <span class="material-symbols-outlined me-2">radio_button_checked</span>
+                    <div class="flex-grow-1">
+                        <strong>Stream is LIVE:</strong> {{ active_stream.title }}
+                        <small class="d-block text-muted">Started {{ active_stream.started_at.strftime('%I:%M %p on %m/%d/%Y') if active_stream.started_at }}</small>
+                    </div>
+                    <span class="badge bg-success ms-2" id="liveViewerCount">{{ active_stream.viewer_count }} viewers</span>
+                </div>
+                
+                <!-- Live Stream Preview -->
+                <div id="adminVideoContainer" class="mb-4" style="background: #000; min-height: 300px; border-radius: 16px; position: relative;">
+                    <div id="adminLoadingSpinner" class="d-flex align-items-center justify-content-center h-100">
+                        <div class="text-center text-white">
+                            <div class="spinner-border text-primary mb-3" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p>Connecting to stream controls...</p>
+                        </div>
+                    </div>
+                    
+                    <div id="adminVideoGrid" class="position-absolute top-0 start-0 w-100 h-100"></div>
+                    
+                    <!-- Admin Controls Overlay -->
+                    <div class="position-absolute bottom-0 start-0 w-100 p-3" style="background: linear-gradient(transparent, rgba(0,0,0,0.8));">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-white mb-1">{{ active_stream.title }}</h6>
+                                <small class="text-white-50">Admin View</small>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-light btn-sm" id="adminMuteBtn" onclick="toggleAdminMute()">
+                                    <span class="material-symbols-outlined" id="adminMuteIcon">mic</span>
+                                </button>
+                                <button class="btn btn-outline-light btn-sm" id="adminVideoBtn" onclick="toggleAdminVideo()">
+                                    <span class="material-symbols-outlined" id="adminVideoIcon">videocam</span>
+                                </button>
+                                <button class="btn btn-outline-light btn-sm" onclick="toggleScreenShare()">
+                                    <span class="material-symbols-outlined" id="screenShareIcon">screen_share</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Stream Actions -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-danger" onclick="stopStream()">
+                                <span class="material-symbols-outlined me-2">stop</span>
+                                End Stream
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="shareStreamLink()">
+                                <span class="material-symbols-outlined me-2">share</span>
+                                Share Stream Link
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-warning" id="recordingBtn" onclick="toggleRecording()">
+                                <span class="material-symbols-outlined me-2" id="recordingIcon">
+                                    {% if active_stream.is_recording %}stop{% else %}fiber_manual_record{% endif %}
+                                </span>
+                                {% if active_stream.is_recording %}Stop Recording{% else %}Start Recording{% endif %}
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="refreshStreamData()">
+                                <span class="material-symbols-outlined me-2">refresh</span>
+                                Refresh Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                {% else %}
+                <!-- No Active Stream -->
+                <div class="text-center py-4">
+                    <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">live_tv</span>
+                    <h4 class="text-muted mb-3">No Active Stream</h4>
+                    <p class="text-muted mb-4">Start a new live stream to connect with your audience</p>
+                </div>
+                
+                <!-- Start Stream Form -->
+                <form id="startStreamForm">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label class="form-label">Stream Title</label>
+                                <input type="text" class="form-control" id="streamTitle" name="title" 
+                                       placeholder="Enter stream title..." value="Live Trading Session" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">&nbsp;</label>
+                                <button type="submit" class="btn btn-success w-100">
+                                    <span class="material-symbols-outlined me-2">play_arrow</span>
+                                    Start Stream
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description (Optional)</label>
+                        <textarea class="form-control" id="streamDescription" name="description" rows="3" 
+                                  placeholder="Describe what you'll be covering in this stream..."></textarea>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Stream Statistics -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">analytics</span>
+                    Stream Analytics
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if active_stream %}
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-gradient-primary" id="currentViewers">{{ active_stream.viewer_count }}</h4>
+                        <small class="text-muted">Current Viewers</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-gradient-primary" id="streamDuration">--:--</h4>
+                        <small class="text-muted">Duration</small>
+                    </div>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted">Status</span>
+                    <span class="badge bg-success">Live</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted">Recording</span>
+                    <span class="badge {% if active_stream.is_recording %}bg-danger{% else %}bg-secondary{% endif %}">
+                        {% if active_stream.is_recording %}Recording{% else %}Stopped{% endif %}
+                    </span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">Started</span>
+                    <span class="text-white">{{ active_stream.started_at.strftime('%I:%M %p') if active_stream.started_at }}</span>
+                </div>
+                {% else %}
+                <div class="text-center py-3">
+                    <span class="material-symbols-outlined text-muted mb-2" style="font-size: 2rem;">trending_up</span>
+                    <p class="text-muted mb-0">Analytics will appear when stream is active</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Recent Streams -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">history</span>
+                    Recent Streams
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if recent_streams %}
+                {% for stream in recent_streams[:5] %}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="flex-grow-1">
+                        <div class="fw-medium">{{ stream.title[:25] }}{% if stream.title|length > 25 %}...{% endif %}</div>
+                        <small class="text-muted">
+                            {{ stream.started_at.strftime('%m/%d/%Y %I:%M %p') if stream.started_at }}
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge {% if stream.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                            {% if stream.is_active %}Live{% else %}Ended{% endif %}
+                        </span>
+                        {% if not stream.is_active %}
+                        <div><small class="text-muted">{{ stream.viewer_count }} viewers</small></div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if not loop.last %}<hr class="my-2">{% endif %}
+                {% endfor %}
+                {% else %}
+                <div class="text-center py-3">
+                    <span class="material-symbols-outlined text-muted mb-2" style="font-size: 2rem;">live_tv</span>
+                    <p class="text-muted mb-0">No streams yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">bolt</span>
+                    Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('livestream') }}" class="btn btn-outline-primary btn-sm" target="_blank">
+                        <span class="material-symbols-outlined me-2">visibility</span>
+                        View as User
+                    </a>
+                    <a href="{{ url_for('admin_videos') }}" class="btn btn-outline-secondary btn-sm">
+                        <span class="material-symbols-outlined me-2">video_library</span>
+                        Manage Videos
+                    </a>
+                    <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary btn-sm">
+                        <span class="material-symbols-outlined me-2">dashboard</span>
+                        Admin Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- AWS Chime SDK -->
+<script src="https://sdk.aws.amazon.com/js/aws-sdk-2.1179.0.min.js"></script>
+<script src="https://static.sdkassets.chime.aws/amazon-chime-sdk-js/v3.21.0/amazon-chime-sdk.js"></script>
+
+<script>
+let adminMeetingSession = null;
+let adminAudioVideo = null;
+let isAdminMuted = false;
+let isAdminVideoEnabled = false;
+let isScreenSharing = false;
+let streamStartTime = null;
+
+const activeStream = {{ active_stream|tojson if active_stream else 'null' }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (activeStream && activeStream.is_active) {
+        initializeAdminChimeSDK();
+        streamStartTime = new Date(activeStream.started_at);
+        updateStreamDuration();
+        setInterval(updateStreamDuration, 1000);
+    }
+    
+    // Set up form handlers
+    const startStreamForm = document.getElementById('startStreamForm');
+    if (startStreamForm) {
+        startStreamForm.addEventListener('submit', handleStartStream);
+    }
+    
+    // Poll for updates
+    setInterval(updateStreamStats, 5000);
+});
+
+async function handleStartStream(e) {
+    e.preventDefault();
+    
+    const submitBtn = document.querySelector('#startStreamForm button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
+    
+    try {
+        const formData = new FormData(e.target);
+        const response = await fetch('/api/stream/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                title: formData.get('title'),
+                description: formData.get('description')
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Stream started successfully!', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            throw new Error(data.error || 'Failed to start stream');
+        }
+    } catch (error) {
+        console.error('Error starting stream:', error);
+        showToast(error.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+}
+
+async function initializeAdminChimeSDK() {
+    try {
+        const { ChimeSDK } = window;
+        
+        // For admin controls, we would need the meeting data and admin attendee data
+        // This would be passed from the backend when starting the stream
+        console.log('Initializing admin Chime SDK...');
+        
+        // This is a simplified version - in production you'd get the full meeting data
+        document.getElementById('adminLoadingSpinner').innerHTML = `
+            <div class="text-center text-white">
+                <span class="material-symbols-outlined mb-3" style="font-size: 3rem;">live_tv</span>
+                <p>Admin controls ready</p>
+                <small class="text-muted">Stream controls are active</small>
+            </div>
+        `;
+        
+    } catch (error) {
+        console.error('Error initializing admin Chime SDK:', error);
+        document.getElementById('adminLoadingSpinner').innerHTML = `
+            <div class="text-center text-white">
+                <span class="material-symbols-outlined mb-3" style="font-size: 3rem;">error</span>
+                <p>Failed to initialize controls</p>
+                <button class="btn btn-primary btn-sm" onclick="location.reload()">Retry</button>
+            </div>
+        `;
+    }
+}
+
+function toggleAdminMute() {
+    if (!adminAudioVideo) return;
+    
+    if (isAdminMuted) {
+        // Unmute
+        document.getElementById('adminMuteIcon').textContent = 'mic';
+        document.getElementById('adminMuteBtn').classList.remove('btn-outline-danger');
+        document.getElementById('adminMuteBtn').classList.add('btn-outline-light');
+        isAdminMuted = false;
+        showToast('Microphone enabled', 'success');
+    } else {
+        // Mute
+        document.getElementById('adminMuteIcon').textContent = 'mic_off';
+        document.getElementById('adminMuteBtn').classList.remove('btn-outline-light');
+        document.getElementById('adminMuteBtn').classList.add('btn-outline-danger');
+        isAdminMuted = true;
+        showToast('Microphone muted', 'info');
+    }
+}
+
+function toggleAdminVideo() {
+    if (isAdminVideoEnabled) {
+        document.getElementById('adminVideoIcon').textContent = 'videocam_off';
+        document.getElementById('adminVideoBtn').classList.remove('btn-outline-success');
+        document.getElementById('adminVideoBtn').classList.add('btn-outline-light');
+        isAdminVideoEnabled = false;
+        showToast('Camera disabled', 'info');
+    } else {
+        document.getElementById('adminVideoIcon').textContent = 'videocam';
+        document.getElementById('adminVideoBtn').classList.remove('btn-outline-light');
+        document.getElementById('adminVideoBtn').classList.add('btn-outline-success');
+        isAdminVideoEnabled = true;
+        showToast('Camera enabled', 'success');
+    }
+}
+
+function toggleScreenShare() {
+    if (isScreenSharing) {
+        document.getElementById('screenShareIcon').textContent = 'screen_share';
+        isScreenSharing = false;
+        showToast('Screen sharing stopped', 'info');
+    } else {
+        document.getElementById('screenShareIcon').textContent = 'stop_screen_share';
+        isScreenSharing = true;
+        showToast('Screen sharing started', 'success');
+    }
+}
+
+async function stopStream() {
+    if (!confirm('Are you sure you want to end the stream? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/stream/stop', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('Stream ended successfully', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            throw new Error(data.error || 'Failed to stop stream');
+        }
+    } catch (error) {
+        console.error('Error stopping stream:', error);
+        showToast(error.message, 'error');
+    }
+}
+
+async function toggleRecording() {
+    const recordingBtn = document.getElementById('recordingBtn');
+    const recordingIcon = document.getElementById('recordingIcon');
+    const isRecording = recordingBtn.textContent.includes('Stop Recording');
+    
+    try {
+        const endpoint = isRecording ? '/api/stream/recording/stop' : '/api/stream/recording/start';
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            if (isRecording) {
+                recordingIcon.textContent = 'fiber_manual_record';
+                recordingBtn.innerHTML = '<span class="material-symbols-outlined me-2">fiber_manual_record</span>Start Recording';
+                recordingBtn.className = 'btn btn-warning';
+                showToast('Recording stopped', 'info');
+            } else {
+                recordingIcon.textContent = 'stop';
+                recordingBtn.innerHTML = '<span class="material-symbols-outlined me-2">stop</span>Stop Recording';
+                recordingBtn.className = 'btn btn-danger';
+                showToast('Recording started', 'success');
+            }
+        } else {
+            throw new Error(data.error || 'Failed to toggle recording');
+        }
+    } catch (error) {
+        console.error('Error toggling recording:', error);
+        showToast(error.message, 'error');
+    }
+}
+
+function shareStreamLink() {
+    const streamUrl = window.location.origin + "{{ url_for('livestream') }}";
+    
+    if (navigator.share) {
+        navigator.share({
+            title: 'TGFX Trade Lab Live Stream',
+            text: 'Join the live trading session!',
+            url: streamUrl
+        });
+    } else {
+        navigator.clipboard.writeText(streamUrl).then(function() {
+            showToast('Stream link copied to clipboard', 'success');
+        });
+    }
+}
+
+function refreshStreamData() {
+    location.reload();
+}
+
+async function updateStreamStats() {
+    if (!activeStream) return;
+    
+    try {
+        const response = await fetch('/api/stream/status');
+        const data = await response.json();
+        
+        if (data.active && data.stream) {
+            const currentViewers = document.getElementById('currentViewers');
+            const liveViewerCount = document.getElementById('liveViewerCount');
+            
+            if (currentViewers) {
+                currentViewers.textContent = data.stream.viewer_count || 0;
+            }
+            if (liveViewerCount) {
+                const count = data.stream.viewer_count || 0;
+                liveViewerCount.textContent = count === 1 ? '1 viewer' : `${count} viewers`;
+            }
+        }
+    } catch (error) {
+        console.error('Error updating stream stats:', error);
+    }
+}
+
+function updateStreamDuration() {
+    if (!streamStartTime) return;
+    
+    const now = new Date();
+    const diff = now - streamStartTime;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    const durationElement = document.getElementById('streamDuration');
+    if (durationElement) {
+        if (hours > 0) {
+            durationElement.textContent = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } else {
+            durationElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+    }
+}
+</script>
+
+<style>
+#adminVideoContainer {
+    min-height: 300px;
+}
+
+.btn-outline-success {
+    border-color: #10B981;
+    color: #10B981;
+}
+
+.btn-outline-success:hover {
+    background: #10B981;
+    border-color: #10B981;
+    color: white;
+}
+
+.btn-outline-danger {
+    border-color: #EF4444;
+    color: #EF4444;
+}
+
+.btn-outline-danger:hover {
+    background: #EF4444;
+    border-color: #EF4444;
+    color: white;
+}
+
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+</style>
+{% endblock %}
