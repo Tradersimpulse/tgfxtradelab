@@ -1213,8 +1213,12 @@ def livestream():
                 db.session.commit()
                 attendee_data_by_stream[stream.id] = attendee
     
+    # Convert Stream objects to dictionaries for JSON serialization
+    active_streams_dict = [stream.to_dict() for stream in active_streams] if active_streams else []
+    
     return render_template('livestream.html', 
-                         active_streams=active_streams,
+                         active_streams=active_streams,  # For template loops
+                         active_streams_dict=active_streams_dict,  # For JavaScript
                          streams_by_streamer=streams_by_streamer,
                          attendee_data_by_stream=attendee_data_by_stream)
 
