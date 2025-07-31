@@ -1312,7 +1312,7 @@ def api_start_stream():
         delete_chime_meeting(meeting_data['MeetingId'])
         return jsonify({'error': 'Failed to create admin attendee'}), 500
     
-    # Create stream record
+    # Create stream record with proper field mapping for new API
     stream = Stream(
         title=title,
         description=description,
@@ -1320,6 +1320,7 @@ def api_start_stream():
         attendee_id=admin_attendee['AttendeeId'],
         external_meeting_id=external_meeting_id,
         media_region=meeting_data['MediaRegion'],
+        # New API structure - MediaPlacement is directly under Meeting
         media_placement_audio_host_url=meeting_data['MediaPlacement']['AudioHostUrl'],
         media_placement_screen_sharing_url=meeting_data['MediaPlacement']['ScreenSharingUrl'],
         media_placement_screen_data_url=meeting_data['MediaPlacement']['ScreenDataUrl'],
@@ -1329,6 +1330,11 @@ def api_start_stream():
         streamer_name=streamer_name,
         stream_type=stream_type
     )
+    
+    # Handle missing SignalingUrl for backwards compatibility
+    if 'SignalingUrl' in meeting_data['MediaPlacement']:
+        # Store SignalingUrl in description field temporarily (or add a new field)
+        stream.description = f"{description}\n__SIGNALING_URL__:{meeting_data['MediaPlacement']['SignalingUrl']}"
     
     db.session.add(stream)
     db.session.commit()
