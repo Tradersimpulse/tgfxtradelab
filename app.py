@@ -480,7 +480,7 @@ def create_chime_meeting(stream_title, external_meeting_id):
             ClientRequestToken=str(uuid.uuid4()),
             ExternalMeetingId=external_meeting_id,
             MediaRegion=app.config.get('AWS_CHIME_REGION', 'us-east-1'),
-            MeetingHostId=str(current_user.id),
+            MeetingHostId=f"host-{current_user.id}",
             Tags=[
                 {
                     'Key': 'StreamTitle',
