@@ -622,63 +622,7 @@ window.joinStream = function(streamId) {
     forceJoinStream(streamId);
 };
 
-// LOW LATENCY: Force refresh screen share button for immediate updates
-function addMobileRefreshButton(streamId) {
-    if (!isMobileDevice()) return;
-    
-    const videoContainer = document.getElementById('videoContainer-' + streamId);
-    if (!videoContainer) return;
-    
-    // Check if button already exists
-    if (videoContainer.querySelector('.mobile-refresh-btn')) return;
-    
-    const refreshBtn = document.createElement('button');
-    refreshBtn.className = 'btn btn-outline-info btn-sm position-absolute mobile-refresh-btn';
-    refreshBtn.style.top = '50px';
-    refreshBtn.style.right = '10px';
-    refreshBtn.style.zIndex = '1001';
-    refreshBtn.title = 'Refresh screen share (Mobile)';
-    refreshBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px;">refresh</span>';
-    
-    refreshBtn.onclick = function() {
-        console.log('⚡ LOW LATENCY: Mobile manual refresh');
-        showToast('Refreshing screen share...', 'info');
-        
-        // IMMEDIATE checks for low latency
-        checkLocalStorageForScreenShare();
-        
-        // Request fresh status from admin
-        if (window.screenShareChannel) {
-            window.screenShareChannel.postMessage({
-                type: 'REQUEST_SCREEN_SHARE_STATUS'
-            });
-        }
-        
-        // Force frame update if screen share is active
-        const frameData = localStorage.getItem('adminScreenShareFrame');
-        if (frameData && window.activeScreenShareStreams.has(streamId)) {
-            try {
-                const frame = JSON.parse(frameData);
-                if (frame.imageData) {
-                    updateScreenShareFrame(streamId, frame.imageData);
-                }
-            } catch (error) {
-                console.error('Error forcing frame update:', error);
-            }
-        }
-        
-        // Visual feedback
-        refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-        setTimeout(() => {
-            refreshBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px;">refresh</span>';
-            showToast('Refresh complete', 'success');
-        }, 1000);
-    };
-    
-    videoContainer.appendChild(refreshBtn);
-}
-
-// UPDATED: Force join function with low latency enhancements
+// DEBUGGING: Add immediate detection on join
 window.forceJoinStream = function(streamId) {
     console.log('⚡ LOW LATENCY: Force joining stream', streamId);
     
@@ -702,15 +646,27 @@ window.forceJoinStream = function(streamId) {
         addMobileRefreshButton(streamId);
     }
     
-    // IMMEDIATE screen share status check
+    // IMMEDIATE: Multiple detection methods
+    console.log('🔍 Running immediate detection...');
+    
+    // 1. BroadcastChannel request
     if (window.screenShareChannel) {
         window.screenShareChannel.postMessage({
             type: 'REQUEST_SCREEN_SHARE_STATUS'
         });
+        console.log('📡 BroadcastChannel status request sent');
     }
     
-    // IMMEDIATE localStorage check
-    setTimeout(checkLocalStorageForScreenShare, 50);
+    // 2. Immediate localStorage check
+    setTimeout(() => {
+        console.log('🔍 Manual localStorage check...');
+        checkLocalStorageForScreenShare();
+    }, 100);
+    
+    // 3. Force check multiple times
+    setTimeout(checkLocalStorageForScreenShare, 500);
+    setTimeout(checkLocalStorageForScreenShare, 1000);
+    setTimeout(checkLocalStorageForScreenShare, 2000);
     
     // Show demo content initially
     displayDemoContentForViewer(streamId, stream);
@@ -718,12 +674,43 @@ window.forceJoinStream = function(streamId) {
     // Add to joined streams
     joinedStreams.set(streamId, { connected: true });
     
-    // Shorter timeout for low latency detection
+    // Debug: Log current localStorage state
+    setTimeout(() => {
+        console.log('🔍 DEBUG: Current localStorage state:');
+        try {
+            const screenShare = localStorage.getItem('adminScreenShare');
+            const frameData = localStorage.getItem('adminScreenShareFrame');
+            const audioData = localStorage.getItem('adminAudio');
+            const realAudio = localStorage.getItem('adminRealAudio');
+            
+            console.log('- Screen Share:', screenShare ? JSON.parse(screenShare) : null);
+            console.log('- Frame Data:', frameData ? 'Present (' + frameData.length + ' chars)' : 'None');
+            console.log('- Audio Data:', audioData ? JSON.parse(audioData) : null);
+            console.log('- Real Audio:', realAudio ? 'Present' : 'None');
+            console.log('- Active streams:', window.activeScreenShareStreams.size);
+            console.log('- Joined streams:', joinedStreams.size);
+        } catch (e) {
+            console.log('- Error reading localStorage:', e);
+        }
+    }, 1500);
+    
+    // Enhanced detection timeout
     setTimeout(() => {
         if (!window.activeScreenShareStreams.has(streamId)) {
-            console.log('🎭 No active screen share detected (low latency check)');
+            console.log('⚠️ No active screen share detected after 3 seconds');
+            console.log('🔍 Final localStorage debug:');
+            
+            // Force one more check
+            checkLocalStorageForScreenShare();
+            
+            if (isMobileDevice()) {
+                console.log('📱 Mobile: Try the refresh button (🔄) if screen sharing should be active');
+                showToast('💡 Tip: Tap the refresh button (🔄) if you don\'t see screen sharing', 'info');
+            }
+        } else {
+            console.log('✅ Screen share detected and active');
         }
-    }, 1000); // Reduced from 3000ms to 1000ms
+    }, 3000);
     
     showToast('Connected to ' + stream.streamer_name + ' stream', 'success');
     
