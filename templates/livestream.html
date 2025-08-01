@@ -74,71 +74,65 @@
                             <div class="spinner-border mb-3" style="color: {{ stream.creator.stream_color }};" role="status">
                                 <span class="visually-hidden">Loading...</span>
                             </div>
-                            <p>Connecting to {{ stream.streamer_name }}'s stream...</p>
-                            <button class="btn btn-primary btn-sm" onclick="joinStream({{ stream.id }})">
+                            <p>{{ stream.streamer_name }} is Live!</p>
+                            <button class="btn btn-success btn-sm" onclick="joinStream({{ stream.id }})">
+                                <span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>
                                 Join Stream
                             </button>
                         </div>
                     </div>
                     
-                    <!-- Video grid for this stream -->
-                    <div id="videoGrid-{{ stream.id }}" class="position-absolute top-0 start-0 w-100 h-100" style="display: none;"></div>
+                    <!-- Video display area -->
+                    <div id="streamDisplay-{{ stream.id }}" class="position-absolute top-0 start-0 w-100 h-100" style="display: none;">
+                        <!-- Screen share canvas -->
+                        <canvas id="screenCanvas-{{ stream.id }}" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
+                        
+                        <!-- Status indicators -->
+                        <div class="position-absolute top-0 start-0 m-3">
+                            <div class="d-flex gap-2">
+                                <span class="badge bg-success" id="screenStatus-{{ stream.id }}" style="display: none;">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">screen_share</span>
+                                    Screen Sharing
+                                </span>
+                                <span class="badge bg-info" id="audioStatus-{{ stream.id }}" style="display: none;">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">volume_up</span>
+                                    Audio Live
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- Audio visualization -->
+                        <div class="position-absolute bottom-0 start-0 m-3">
+                            <div class="audio-display" id="audioDisplay-{{ stream.id }}" style="display: none;">
+                                <div class="d-flex align-items-center gap-2 p-2 rounded" style="background: rgba(0,0,0,0.7);">
+                                    <span class="material-symbols-outlined text-success">mic</span>
+                                    <div class="audio-bars">
+                                        <div class="audio-bar" data-bar="0"></div>
+                                        <div class="audio-bar" data-bar="1"></div>
+                                        <div class="audio-bar" data-bar="2"></div>
+                                        <div class="audio-bar" data-bar="3"></div>
+                                        <div class="audio-bar" data-bar="4"></div>
+                                    </div>
+                                    <small class="text-white">{{ stream.streamer_name }}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     
                     <!-- Fullscreen toggle button -->
                     <button class="btn btn-outline-light btn-sm position-absolute" 
                             style="top: 10px; right: 10px; z-index: 1000;" 
                             onclick="toggleFullscreen({{ stream.id }})"
-                            title="Toggle Fullscreen (Double-click video)">
+                            title="Toggle Fullscreen">
                         <span class="material-symbols-outlined" id="fullscreenIcon-{{ stream.id }}">fullscreen</span>
                     </button>
                     
                     <!-- Stream controls overlay -->
-                    <div class="position-absolute bottom-0 start-0 w-100 p-3 stream-controls" 
-                         id="streamControls-{{ stream.id }}" style="background: linear-gradient(transparent, rgba(0,0,0,0.8)); display: none;">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="d-flex align-items-center">
-                                <div class="me-3">
-                                    <h6 class="text-white mb-1">{{ stream.streamer_name }}'s Stream</h6>
-                                    <small class="text-white-50">{{ stream.stream_type|title }} • Started {{ stream.started_at.strftime('%I:%M %p') if stream.started_at }}</small>
-                                </div>
-                                <!-- Audio Status Indicator for Viewers -->
-                                <div class="audio-indicator viewer-audio-display" id="audioIndicator-{{ stream.id }}" style="display: none;">
-                                    <span class="material-symbols-outlined mic-indicator" id="micIndicator-{{ stream.id }}" style="font-size: 16px;">mic_off</span>
-                                    <div class="audio-visualizer">
-                                        <div class="audio-bar"></div>
-                                        <div class="audio-bar"></div>
-                                        <div class="audio-bar"></div>
-                                        <div class="audio-bar"></div>
-                                        <div class="audio-bar"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="d-flex gap-1">
-                                {% if current_user.is_admin %}
-                                <!-- Admin Controls -->
-                                <button class="btn btn-outline-light btn-sm" id="muteBtn-{{ stream.id }}" onclick="toggleMute({{ stream.id }})" title="Toggle Microphone">
-                                    <span class="material-symbols-outlined" id="muteIcon-{{ stream.id }}">mic_off</span>
-                                </button>
-                                <button class="btn btn-outline-light btn-sm" id="videoBtn-{{ stream.id }}" onclick="toggleVideo({{ stream.id }})" title="Toggle Camera">
-                                    <span class="material-symbols-outlined" id="videoIcon-{{ stream.id }}">videocam_off</span>
-                                </button>
-                                <button class="btn btn-outline-light btn-sm" id="screenShareBtn-{{ stream.id }}" onclick="toggleScreenShare({{ stream.id }})" title="Share Screen">
-                                    <span class="material-symbols-outlined" id="screenShareIcon-{{ stream.id }}">screen_share</span>
-                                </button>
-                                {% else %}
-                                <!-- Viewer Info -->
-                                <span class="badge bg-primary me-2">
-                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">visibility</span>
-                                    Watching
-                                </span>
-                                {% endif %}
-                                
-                                <!-- Leave button -->
-                                <button class="btn btn-danger btn-sm" onclick="leaveStream({{ stream.id }})" title="Leave Stream">
-                                    <span class="material-symbols-outlined me-1">call_end</span>
-                                    Leave
-                                </button>
-                            </div>
+                    <div class="position-absolute bottom-0 end-0 p-3" id="streamControls-{{ stream.id }}" style="display: none;">
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-danger btn-sm" onclick="leaveStream({{ stream.id }})" title="Leave Stream">
+                                <span class="material-symbols-outlined">call_end</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -221,692 +215,291 @@
     </div>
 </div>
 {% endif %}
-
-<!-- Connection Status Toast -->
-<div id="connectionToast" class="toast position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index: 9999;">
-    <div class="toast-header">
-        <span class="material-symbols-outlined me-2 text-info">info</span>
-        <strong class="me-auto">Connection Status</strong>
-        <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-    <div class="toast-body" id="connectionToastBody">
-        Connecting to stream...
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Set template data for JavaScript
+// Global variables
 window.isAdminUser = {{ 'true' if current_user.is_admin else 'false' }};
 window.activeStreamsData = {{ active_streams_dict|tojson if active_streams_dict else '[]' }};
-window.attendeeDataByStream = {{ attendee_data_by_stream|tojson if attendee_data_by_stream else '{}' }};
 
-console.log('🚀 Starting enhanced livestream page...');
-
-// Check if user is admin
 const isAdmin = window.isAdminUser || false;
-console.log('👤 User is admin:', isAdmin);
-
-// Global variables for managing multiple streams
 const activeStreams = window.activeStreamsData || [];
-const attendeeDataByStream = window.attendeeDataByStream || {};
-const joinedStreams = new Map(); // streamId -> meetingSession
-const streamStates = new Map(); // streamId -> {muted, videoEnabled, screenSharing}
+const joinedStreams = new Set();
 
-// Screen sharing state management
-let currentScreenShareStream = null;
-let currentScreenShareStreamId = null;
-window.currentScreenShareName = null;
-window.screenShareCanvas = null;
-window.activeScreenShareStreams = new Set();
+console.log('🚀 Starting simplified livestream viewer...');
+console.log('👤 User is admin:', isAdmin);
+console.log('📊 Active streams:', activeStreams.length);
 
-// Enhanced BroadcastChannel + localStorage communication system
-let screenShareCommunication = {
-    channel: null,
-    isAdmin: isAdmin,
-    
-    init: function() {
-        // Initialize BroadcastChannel
-        try {
-            this.channel = new BroadcastChannel('tgfx-screen-share');
-            console.log('✅ Viewer BroadcastChannel initialized');
-            
-            this.channel.addEventListener('message', (event) => {
-                this.handleMessage(event.data);
-            });
-        } catch (error) {
-            console.error('BroadcastChannel failed:', error);
-        }
-        
-        // Enhanced localStorage listener
-        window.addEventListener('storage', (e) => {
-            if (e.key === 'tgfx_screen_share_status') {
-                this.handleStorageChange(e.newValue);
-            } else if (e.key === 'tgfx_screen_share_frame') {
-                this.handleFrameUpdate(e.newValue);
-            }
-        });
-        
-        // Periodic sync for reliability
-        setInterval(() => {
-            this.syncState();
-        }, 1000);
-        
-        console.log('📡 Enhanced viewer screen share communication initialized');
-    },
-    
-    // Handle incoming messages
-    handleMessage: function(data) {
-        console.log('📡 Viewer received message:', data.type);
-        
-        switch(data.type) {
-            case 'SCREEN_SHARE_START':
-                if (!this.isAdmin) {
-                    this.onScreenShareStart(data);
-                }
-                break;
-            case 'SCREEN_SHARE_FRAME':
-                if (!this.isAdmin) {
-                    this.onScreenShareFrame(data);
-                }
-                break;
-            case 'SCREEN_SHARE_STOP':
-                if (!this.isAdmin) {
-                    this.onScreenShareStop();
-                }
-                break;
-        }
-    },
-    
-    // Handle localStorage changes
-    handleStorageChange: function(newValue) {
-        if (!newValue || this.isAdmin) return;
-        
-        try {
-            const data = JSON.parse(newValue);
-            
-            if (data.admin) {
-                if (data.active) {
-                    this.onScreenShareStart(data);
-                } else {
-                    this.onScreenShareStop();
-                }
-            }
-        } catch (error) {
-            console.error('Error parsing storage data:', error);
-        }
-    },
-    
-    // Handle frame updates from localStorage
-    handleFrameUpdate: function(newValue) {
-        if (!newValue || this.isAdmin) return;
-        
-        try {
-            const frameData = JSON.parse(newValue);
-            if (frameData.admin && frameData.imageData) {
-                this.onScreenShareFrame(frameData);
-            }
-        } catch (error) {
-            console.error('Error parsing frame data:', error);
-        }
-    },
-    
-    // Sync state periodically
-    syncState: function() {
-        if (!this.isAdmin) {
-            // Viewers request status updates
-            this.requestStatus();
-            
-            // Check for stale data
-            const statusData = localStorage.getItem('tgfx_screen_share_status');
-            if (statusData) {
-                try {
-                    const data = JSON.parse(statusData);
-                    const isStale = Date.now() - data.timestamp > 10000; // 10 seconds
-                    
-                    if (data.active && !isStale) {
-                        // Ensure we're showing screen share
-                        if (window.activeScreenShareStreams.size === 0) {
-                            this.onScreenShareStart(data);
-                        }
-                    } else if (isStale && window.activeScreenShareStreams.size > 0) {
-                        // Clean up stale screen share
-                        this.onScreenShareStop();
-                    }
-                } catch (error) {
-                    console.error('Error syncing state:', error);
-                }
-            }
-        }
-    },
-    
-    // Request current status (viewers call this)
-    requestStatus: function() {
-        if (this.channel) {
-            this.channel.postMessage({
-                type: 'REQUEST_STATUS',
-                timestamp: Date.now()
-            });
-        }
-    },
-    
-    // Screen share start handler for viewers
-    onScreenShareStart: function(data) {
-        console.log('🖥️ Screen share started:', data.name);
-        
-        // Update all joined streams
-        if (window.joinedStreams) {
-            window.joinedStreams.forEach((streamSession, streamId) => {
-                displayRealScreenShareForViewer(streamId, data.name, data.width, data.height);
-                window.activeScreenShareStreams.add(streamId);
-            });
-            showToast('Screen sharing started: ' + data.name, 'info');
-        }
-    },
-    
-    onScreenShareFrame: function(data) {
-        if (window.activeScreenShareStreams && data.imageData) {
-            window.activeScreenShareStreams.forEach(streamId => {
-                updateScreenShareFrame(streamId, data.imageData);
-            });
-        }
-    },
-    
-    onScreenShareStop: function() {
-        console.log('🛑 Screen share stopped');
-        
-        if (window.activeScreenShareStreams && window.activeStreams) {
-            window.activeScreenShareStreams.forEach(streamId => {
-                const stream = window.activeStreams.find(s => s.id === streamId);
-                if (stream) {
-                    displayDemoContentForViewer(streamId, stream);
-                }
-            });
-            window.activeScreenShareStreams.clear();
-            showToast('Screen sharing ended', 'info');
-        }
-    }
-};
+// Stream state tracking
+window.streamStates = new Map();
 
-// Enhanced Audio Streaming System for Viewers
-let audioStreaming = {
-    isAdmin: isAdmin,
-    channel: null,
-    
-    // Initialize audio system
-    init: function() {
-        // Initialize communication channel
-        try {
-            this.channel = new BroadcastChannel('tgfx-audio-stream');
-            this.channel.addEventListener('message', (event) => {
-                this.handleAudioMessage(event.data);
-            });
-            console.log('🎤 Viewer audio BroadcastChannel initialized');
-        } catch (error) {
-            console.error('Audio BroadcastChannel failed:', error);
-        }
-        
-        // Listen for localStorage changes
-        window.addEventListener('storage', (e) => {
-            if (e.key === 'tgfx_audio_status') {
-                this.handleAudioStorageChange(e.newValue);
-            } else if (e.key === 'tgfx_audio_data') {
-                this.handleAudioDataUpdate(e.newValue);
-            }
-        });
-        
-        console.log('🎤 Audio streaming system initialized for viewer');
-    },
-    
-    // Handle audio messages
-    handleAudioMessage: function(message) {
-        if (this.isAdmin) return; // Only viewers handle messages
-        
-        switch(message.type) {
-            case 'AUDIO_STATUS':
-                this.updateAudioStatus(message.data);
-                break;
-            case 'AUDIO_DATA':
-                this.updateAudioVisualization(message.data);
-                break;
-        }
-    },
-    
-    // Handle localStorage audio changes
-    handleAudioStorageChange: function(newValue) {
-        if (this.isAdmin || !newValue) return;
-        
-        try {
-            const statusData = JSON.parse(newValue);
-            if (statusData.admin) {
-                this.updateAudioStatus(statusData);
-            }
-        } catch (error) {
-            console.error('Error parsing audio status:', error);
-        }
-    },
-    
-    // Handle audio data updates
-    handleAudioDataUpdate: function(newValue) {
-        if (this.isAdmin || !newValue) return;
-        
-        try {
-            const audioData = JSON.parse(newValue);
-            if (audioData.admin) {
-                this.updateAudioVisualization(audioData);
-            }
-        } catch (error) {
-            console.error('Error parsing audio data:', error);
-        }
-    },
-    
-    // Update audio status for viewers
-    updateAudioStatus: function(statusData) {
-        const audioIndicators = document.querySelectorAll('.audio-indicator');
-        
-        audioIndicators.forEach(indicator => {
-            if (statusData.active) {
-                indicator.classList.add('active');
-                indicator.classList.remove('muted');
-                indicator.style.display = 'flex';
-            } else {
-                indicator.classList.remove('active');
-                indicator.classList.add('muted');
-            }
-        });
-        
-        // Show toast notification
-        if (statusData.active) {
-            showToast('🎤 Admin microphone is live - Audio streaming started', 'success');
-            this.showAudioEnabledIndicator();
-        } else {
-            showToast('🔇 Admin microphone muted - Audio stopped', 'info');
-            this.hideAudioEnabledIndicator();
-        }
-    },
-    
-    // Update audio visualization for viewers
-    updateAudioVisualization: function(audioData) {
-        // Update all audio visualizers
-        const visualizers = document.querySelectorAll('.audio-visualizer');
-        
-        visualizers.forEach(visualizer => {
-            const bars = visualizer.querySelectorAll('.audio-bar');
-            
-            if (bars.length > 0 && audioData.frequency) {
-                // Update bars based on frequency data
-                bars.forEach((bar, index) => {
-                    const frequencyValue = audioData.frequency[index * 4] || 0;
-                    const height = Math.max(20, (frequencyValue / 255) * 100);
-                    
-                    bar.style.height = height + '%';
-                    
-                    // Color based on intensity
-                    if (frequencyValue > 100) {
-                        bar.style.backgroundColor = '#10B981'; // Green for high
-                    } else if (frequencyValue > 50) {
-                        bar.style.backgroundColor = '#fbbf24'; // Yellow for medium
-                    } else {
-                        bar.style.backgroundColor = '#6b7280'; // Gray for low
-                    }
-                });
-            }
-        });
-        
-        // Update microphone indicators
-        const micIndicators = document.querySelectorAll('.mic-indicator');
-        micIndicators.forEach(indicator => {
-            if (audioData.level > 10) {
-                indicator.classList.add('active');
-                indicator.style.color = '#10B981';
-            } else {
-                indicator.classList.remove('active');
-                indicator.style.color = '#6b7280';
-            }
-        });
-    },
-    
-    // Show audio enabled indicator
-    showAudioEnabledIndicator: function() {
-        let indicator = document.getElementById('audioEnabledIndicator');
-        
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.id = 'audioEnabledIndicator';
-            indicator.className = 'position-fixed top-0 start-50 translate-middle-x mt-3';
-            indicator.style.zIndex = '9998';
-            indicator.innerHTML = 
-                '<div class="alert alert-success d-flex align-items-center">' +
-                    '<span class="material-symbols-outlined me-2">volume_up</span>' +
-                    '<span>🎤 Admin audio is live</span>' +
-                '</div>';
-            
-            document.body.appendChild(indicator);
-            
-            // Auto-hide after 3 seconds
-            setTimeout(() => {
-                if (indicator.parentNode) {
-                    indicator.remove();
-                }
-            }, 3000);
-        }
-    },
-    
-    // Hide audio enabled indicator
-    hideAudioEnabledIndicator: function() {
-        const indicator = document.getElementById('audioEnabledIndicator');
-        if (indicator) {
-            indicator.remove();
-        }
-    },
-    
-    // Toggle admin audio (for admin users)
-    toggleAudio: async function() {
-        if (!this.isAdmin) return false;
-        
-        // This would be implemented in the admin page
-        return false;
-    }
-};
-
-// Debug: Log the data we received from the server
-console.log('📊 Debug Info:');
-console.log('- Active Streams:', activeStreams);
-console.log('- Attendee Data:', attendeeDataByStream);
-console.log('- Stream Count:', activeStreams.length);
-
-// FPS Counter for monitoring performance
-let fpsCounters = new Map();
-
-function initializeFPSCounter(streamId) {
-    fpsCounters.set(streamId, {
-        frames: 0,
-        lastTime: Date.now(),
-        fps: 0
+// Initialize stream states
+activeStreams.forEach(stream => {
+    window.streamStates.set(stream.id, {
+        joined: false,
+        screenActive: false,
+        audioActive: false,
+        canvas: null,
+        context: null
     });
-    
-    // Update FPS display every second
-    setInterval(() => {
-        updateFPSDisplay(streamId);
-    }, 1000);
-}
+});
 
-function updateFPSDisplay(streamId) {
-    const counter = fpsCounters.get(streamId);
-    const fpsElement = document.getElementById('fps-' + streamId);
-    
-    if (counter && fpsElement) {
-        const now = Date.now();
-        const deltaTime = (now - counter.lastTime) / 1000;
+// Simple polling system to check for admin updates
+window.streamMonitor = {
+    init: function() {
+        console.log('🔄 Starting stream monitor...');
         
-        if (deltaTime >= 1) {
-            counter.fps = Math.round(counter.frames / deltaTime);
-            counter.frames = 0;
-            counter.lastTime = now;
-            
-            // Color-code FPS for performance indication
-            const fpsColor = counter.fps >= 10 ? '#10B981' : counter.fps >= 5 ? '#fbbf24' : '#ef4444';
-            fpsElement.style.color = fpsColor;
-            fpsElement.textContent = `FPS: ${counter.fps}`;
-        }
-    }
-}
-
-// Track frame updates for FPS counter
-function trackFrameUpdate(streamId) {
-    const counter = fpsCounters.get(streamId);
-    if (counter) {
-        counter.frames++;
-    }
-}
-
-// Function to display real screen share content for viewers with FPS counter
-function displayRealScreenShareForViewer(streamId, screenName, width = 1280, height = 720) {
-    const videoGrid = document.getElementById('videoGrid-' + streamId);
-    if (!videoGrid) return;
+        // Check for updates every 500ms
+        setInterval(() => {
+            this.checkForUpdates();
+        }, 500);
+    },
     
-    console.log('🖼️ Setting up screen share display for viewer:', streamId);
-    
-    // Clear existing content
-    videoGrid.innerHTML = '';
-    
-    // Create container for screen share
-    const screenShareContainer = document.createElement('div');
-    screenShareContainer.style.width = '100%';
-    screenShareContainer.style.height = '100%';
-    screenShareContainer.style.position = 'relative';
-    screenShareContainer.style.background = '#000';
-    screenShareContainer.style.display = 'flex';
-    screenShareContainer.style.alignItems = 'center';
-    screenShareContainer.style.justifyContent = 'center';
-    
-    // Create canvas to display screen share frames
-    const canvas = document.createElement('canvas');
-    canvas.id = 'screenShareCanvas-' + streamId;
-    canvas.width = width;
-    canvas.height = height;
-    canvas.style.maxWidth = '100%';
-    canvas.style.maxHeight = '100%';
-    canvas.style.objectFit = 'contain';
-    canvas.style.background = '#1a1a1a';
-    
-    screenShareContainer.appendChild(canvas);
-    videoGrid.appendChild(screenShareContainer);
-    
-    // Add screen share indicator
-    const indicator = document.createElement('div');
-    indicator.className = 'position-absolute top-0 start-0 m-2 badge bg-success';
-    indicator.style.zIndex = '1000';
-    indicator.style.fontSize = '12px';
-    indicator.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 12px;">screen_share</span>' + screenName;
-    screenShareContainer.appendChild(indicator);
-    
-    // Add FPS indicator
-    const fpsIndicator = document.createElement('div');
-    fpsIndicator.className = 'fps-indicator';
-    fpsIndicator.id = 'fps-' + streamId;
-    fpsIndicator.textContent = 'FPS: --';
-    screenShareContainer.appendChild(fpsIndicator);
-    
-    // Add loading message initially
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'loading-indicator position-absolute';
-    loadingDiv.style.top = '50%';
-    loadingDiv.style.left = '50%';
-    loadingDiv.style.transform = 'translate(-50%, -50%)';
-    loadingDiv.style.textAlign = 'center';
-    loadingDiv.style.color = 'white';
-    loadingDiv.style.zIndex = '999';
-    loadingDiv.innerHTML = `
-        <div class="mb-3">
-            <span class="material-symbols-outlined" style="font-size: 3rem; color: #10B981;">screen_share</span>
-        </div>
-        <h5 style="color: #10B981; margin-bottom: 1rem;">Loading Screen Share</h5>
-        <p style="color: #ccc;">${screenName}</p>
-        <div class="mt-2">
-            <div class="spinner-border" style="color: #10B981;" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-    `;
-    screenShareContainer.appendChild(loadingDiv);
-    
-    // Initialize FPS counter
-    initializeFPSCounter(streamId);
-    
-    console.log('✅ Screen share viewer setup complete for stream:', streamId);
-}
-
-// LOW LATENCY: Optimized frame update function
-let frameUpdateQueue = new Map(); // streamId -> latest frame data
-
-function updateScreenShareFrame(streamId, imageData) {
-    // Queue the latest frame to avoid blocking
-    frameUpdateQueue.set(streamId, imageData);
-    
-    // Process frame update immediately
-    requestAnimationFrame(() => processFrameUpdate(streamId));
-}
-
-function processFrameUpdate(streamId) {
-    const imageData = frameUpdateQueue.get(streamId);
-    if (!imageData) return;
-    
-    const canvas = document.getElementById('screenShareCanvas-' + streamId);
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    
-    // Create image with optimized loading
-    const img = new Image();
-    
-    img.onload = function() {
+    checkForUpdates: function() {
+        // Check admin stream status
         try {
-            // Clear canvas efficiently
+            const statusData = localStorage.getItem('admin_stream_status');
+            if (statusData) {
+                const status = JSON.parse(statusData);
+                this.handleStatusUpdate(status);
+            }
+        } catch (error) {
+            // Ignore parsing errors
+        }
+        
+        // Check for screen frames
+        try {
+            const frameData = localStorage.getItem('admin_screen_frame');
+            if (frameData) {
+                const frame = JSON.parse(frameData);
+                this.handleScreenFrame(frame);
+            }
+        } catch (error) {
+            // Ignore parsing errors
+        }
+        
+        // Check for audio data
+        try {
+            const audioData = localStorage.getItem('admin_audio_data');
+            if (audioData) {
+                const audio = JSON.parse(audioData);
+                this.handleAudioData(audio);
+            }
+        } catch (error) {
+            // Ignore parsing errors
+        }
+    },
+    
+    handleStatusUpdate: function(status) {
+        joinedStreams.forEach(streamId => {
+            const state = window.streamStates.get(streamId);
+            if (!state) return;
+            
+            // Update screen sharing status
+            if (status.screen !== state.screenActive) {
+                state.screenActive = status.screen;
+                this.updateScreenStatus(streamId, status.screen);
+            }
+            
+            // Update audio status
+            if (status.audio !== state.audioActive) {
+                state.audioActive = status.audio;
+                this.updateAudioStatus(streamId, status.audio);
+            }
+        });
+    },
+    
+    updateScreenStatus: function(streamId, isActive) {
+        const screenStatus = document.getElementById('screenStatus-' + streamId);
+        
+        if (screenStatus) {
+            if (isActive) {
+                screenStatus.style.display = 'inline-flex';
+                console.log('🖥️ Screen sharing started for stream', streamId);
+            } else {
+                screenStatus.style.display = 'none';
+                this.clearScreen(streamId);
+                console.log('🛑 Screen sharing stopped for stream', streamId);
+            }
+        }
+    },
+    
+    updateAudioStatus: function(streamId, isActive) {
+        const audioStatus = document.getElementById('audioStatus-' + streamId);
+        const audioDisplay = document.getElementById('audioDisplay-' + streamId);
+        
+        if (audioStatus && audioDisplay) {
+            if (isActive) {
+                audioStatus.style.display = 'inline-flex';
+                audioDisplay.style.display = 'block';
+                console.log('🎤 Audio started for stream', streamId);
+                showToast('🎤 ' + this.getStreamerName(streamId) + ' audio is now live!', 'success');
+            } else {
+                audioStatus.style.display = 'none';
+                audioDisplay.style.display = 'none';
+                this.clearAudioBars(streamId);
+                console.log('🔇 Audio stopped for stream', streamId);
+                showToast('🔇 Audio ended', 'info');
+            }
+        }
+    },
+    
+    handleScreenFrame: function(frame) {
+        if (!frame.imageData) return;
+        
+        joinedStreams.forEach(streamId => {
+            const state = window.streamStates.get(streamId);
+            if (!state || !state.screenActive) return;
+            
+            this.displayScreenFrame(streamId, frame.imageData);
+        });
+    },
+    
+    displayScreenFrame: function(streamId, imageData) {
+        const canvas = document.getElementById('screenCanvas-' + streamId);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        img.onload = function() {
+            // Set canvas size to match container
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            
+            // Clear and draw the new frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        
+        img.onerror = function() {
+            console.warn('⚠️ Failed to load screen frame for stream', streamId);
+        };
+        
+        img.src = imageData;
+    },
+    
+    handleAudioData: function(audio) {
+        if (!audio.frequency || !audio.level) return;
+        
+        joinedStreams.forEach(streamId => {
+            const state = window.streamStates.get(streamId);
+            if (!state || !state.audioActive) return;
+            
+            this.updateAudioVisualization(streamId, audio);
+        });
+    },
+    
+    updateAudioVisualization: function(streamId, audioData) {
+        const audioDisplay = document.getElementById('audioDisplay-' + streamId);
+        if (!audioDisplay) return;
+        
+        const bars = audioDisplay.querySelectorAll('.audio-bar');
+        
+        bars.forEach((bar, index) => {
+            const value = audioData.frequency[index * 6] || 0;
+            const height = Math.max(10, (value / 255) * 100);
+            
+            bar.style.height = height + '%';
+            
+            // Color based on intensity
+            if (value > 100) {
+                bar.style.backgroundColor = '#10B981'; // Green for high
+            } else if (value > 50) {
+                bar.style.backgroundColor = '#fbbf24'; // Yellow for medium
+            } else {
+                bar.style.backgroundColor = '#6b7280'; // Gray for low
+            }
+        });
+    },
+    
+    clearScreen: function(streamId) {
+        const canvas = document.getElementById('screenCanvas-' + streamId);
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // High-quality rendering
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            
-            // Draw the frame
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            
-            // Track frame for FPS counter
-            trackFrameUpdate(streamId);
-            
-            // Remove loading indicator if it exists (only once)
-            const container = canvas.parentElement;
-            const loadingDiv = container.querySelector('.loading-indicator');
-            if (loadingDiv) {
-                loadingDiv.remove();
-                console.log('⚡ First frame loaded for stream', streamId);
-            }
-            
-        } catch (error) {
-            console.error('❌ Error rendering frame:', error);
+            // Show demo content
+            this.showDemoContent(streamId);
         }
-    };
+    },
     
-    img.onerror = function() {
-        console.warn('⚠️ Frame load failed for stream', streamId);
-    };
+    clearAudioBars: function(streamId) {
+        const audioDisplay = document.getElementById('audioDisplay-' + streamId);
+        if (!audioDisplay) return;
+        
+        const bars = audioDisplay.querySelectorAll('.audio-bar');
+        bars.forEach(bar => {
+            bar.style.height = '10%';
+            bar.style.backgroundColor = '#6b7280';
+        });
+    },
     
-    // Load image with cross-origin support
-    img.crossOrigin = 'anonymous';
-    img.src = imageData;
-    
-    // Clear the queue for this stream
-    frameUpdateQueue.delete(streamId);
-}
-
-// Function to display demo content for viewers
-function displayDemoContentForViewer(streamId, stream) {
-    const videoGrid = document.getElementById('videoGrid-' + streamId);
-    if (!videoGrid) return;
-    
-    // Clear existing content
-    videoGrid.innerHTML = '';
-    
-    // Create demo video element
-    const videoElement = document.createElement('video');
-    videoElement.id = 'video-' + streamId + '-1';
-    videoElement.style.width = '100%';
-    videoElement.style.height = '100%';
-    videoElement.style.objectFit = 'cover';
-    videoElement.autoplay = true;
-    videoElement.muted = true;
-    videoElement.playsInline = true;
-    
-    // Create demo video stream
-    const canvas = document.createElement('canvas');
-    canvas.width = 1280;
-    canvas.height = 720;
-    const ctx = canvas.getContext('2d');
-    
-    let frame = 0;
-    const animate = () => {
-        // Demo trading content
-        ctx.fillStyle = '#0a0a0a';
+    showDemoContent: function(streamId) {
+        const canvas = document.getElementById('screenCanvas-' + streamId);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const stream = activeStreams.find(s => s.id === streamId);
+        
+        // Set canvas size
+        canvas.width = 1280;
+        canvas.height = 720;
+        
+        // Draw demo content
+        ctx.fillStyle = '#1a1a1a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         ctx.fillStyle = '#10B981';
-        ctx.font = 'bold 32px Arial';
+        ctx.font = 'bold 48px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(stream.streamer_name + ' Live Stream (Demo)', 640, 100);
-        
-        // Animated chart line
-        ctx.strokeStyle = '#10B981';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        for (let i = 100; i < 1180; i += 5) {
-            const y = 360 + Math.sin((i + frame * 2) * 0.01) * 100;
-            if (i === 100) ctx.moveTo(i, y);
-            else ctx.lineTo(i, y);
-        }
-        ctx.stroke();
-        
-        // Live indicator
-        ctx.fillStyle = '#ff0000';
-        ctx.beginPath();
-        ctx.arc(100, 50, 8, 0, 2 * Math.PI);
-        ctx.fill();
+        ctx.fillText((stream ? stream.streamer_name : 'Live') + ' Stream', 640, 200);
         
         ctx.fillStyle = '#ffffff';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText('● LIVE DEMO', 120, 55);
+        ctx.font = '24px Arial';
+        ctx.fillText('Waiting for screen share...', 640, 250);
         
-        frame++;
-        requestAnimationFrame(animate);
-    };
-    animate();
+        // Animated chart
+        let frame = 0;
+        function animate() {
+            const state = window.streamStates.get(streamId);
+            if (state && state.screenActive) return; // Stop if screen sharing starts
+            
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 600, canvas.width, 120);
+            
+            ctx.strokeStyle = '#10B981';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 100; i < 1180; i += 10) {
+                const y = 650 + Math.sin((i + frame * 2) * 0.01) * 30;
+                if (i === 100) ctx.moveTo(i, y);
+                else ctx.lineTo(i, y);
+            }
+            ctx.stroke();
+            
+            frame++;
+            setTimeout(animate, 100);
+        }
+        animate();
+    },
     
-    const demoStream = canvas.captureStream(30);
-    videoElement.srcObject = demoStream;
-    videoElement.play();
-    
-    videoGrid.appendChild(videoElement);
-    
-    console.log('✅ Demo content displayed for viewer:', streamId);
-}
-
-// Add audio indicator to stream controls
-function addAudioIndicatorToStream(streamId) {
-    const streamControls = document.getElementById('streamControls-' + streamId);
-    if (!streamControls) return;
-    
-    // Show the existing audio indicator
-    const audioIndicator = document.getElementById('audioIndicator-' + streamId);
-    if (audioIndicator) {
-        audioIndicator.style.display = 'flex';
+    getStreamerName: function(streamId) {
+        const stream = activeStreams.find(s => s.id === streamId);
+        return stream ? stream.streamer_name : 'Streamer';
     }
-}
-
-// CRITICAL: Define functions at the global scope
-window.joinStream = function(streamId) {
-    console.log((isAdmin ? 'Admin' : 'Viewer') + ' joining stream ' + streamId + '...');
-    
-    const stream = activeStreams.find(s => s.id === streamId);
-    if (!stream || joinedStreams.has(streamId)) {
-        console.log('❌ Stream not found or already joined');
-        return;
-    }
-    
-    const attendeeData = attendeeDataByStream[streamId];
-    if (!attendeeData) {
-        showToast('Unable to join stream - no attendee data', 'error');
-        return;
-    }
-    
-    // Force join since AWS SDK isn't loading
-    console.log('🔄 AWS SDK not available, using demo mode');
-    forceJoinStream(streamId);
 };
 
-window.forceJoinStream = function(streamId) {
-    console.log('⚡ Force joining stream', streamId);
+// Stream interaction functions
+window.joinStream = function(streamId) {
+    console.log('🎬 Joining stream', streamId);
+    
+    if (joinedStreams.has(streamId)) {
+        console.log('Already joined stream', streamId);
+        return;
+    }
     
     const stream = activeStreams.find(s => s.id === streamId);
     if (!stream) {
@@ -914,37 +507,78 @@ window.forceJoinStream = function(streamId) {
         return;
     }
     
-    // Immediate UI updates
+    // Update UI
     const spinner = document.getElementById('loadingSpinner-' + streamId);
-    const videoGrid = document.getElementById('videoGrid-' + streamId);
+    const streamDisplay = document.getElementById('streamDisplay-' + streamId);
     const streamControls = document.getElementById('streamControls-' + streamId);
     
     if (spinner) spinner.style.display = 'none';
-    if (videoGrid) videoGrid.style.display = 'block';
+    if (streamDisplay) streamDisplay.style.display = 'block';
     if (streamControls) streamControls.style.display = 'block';
     
-    // Add audio indicator to this stream
-    addAudioIndicatorToStream(streamId);
+    // Add to joined streams
+    joinedStreams.add(streamId);
+    
+    // Initialize stream state
+    const state = window.streamStates.get(streamId);
+    if (state) {
+        state.joined = true;
+    }
     
     // Show demo content initially
-    displayDemoContentForViewer(streamId, stream);
+    window.streamMonitor.showDemoContent(streamId);
     
-    // Add to joined streams
-    joinedStreams.set(streamId, { connected: true });
+    showToast('✅ Connected to ' + stream.streamer_name + '\'s stream', 'success');
     
-    // Request current status from admin
-    screenShareCommunication.requestStatus();
+    console.log('✅ Successfully joined stream', streamId);
+};
+
+window.leaveStream = function(streamId) {
+    console.log('👋 Leaving stream', streamId);
     
-    showToast('Connected to ' + stream.streamer_name + ' stream', 'success');
+    if (!joinedStreams.has(streamId)) {
+        console.log('Not joined to stream', streamId);
+        return;
+    }
     
-    // Update state
-    const state = streamStates.get(streamId) || {};
-    state.joined = true;
-    streamStates.set(streamId, state);
+    // Update UI
+    const spinner = document.getElementById('loadingSpinner-' + streamId);
+    const streamDisplay = document.getElementById('streamDisplay-' + streamId);
+    const streamControls = document.getElementById('streamControls-' + streamId);
+    
+    if (spinner) {
+        spinner.style.display = 'flex';
+        spinner.innerHTML = 
+            '<div class="text-center text-white">' +
+                '<span class="material-symbols-outlined mb-3" style="font-size: 3rem;">live_tv</span>' +
+                '<p>Left stream</p>' +
+                '<button class="btn btn-primary btn-sm" onclick="joinStream(' + streamId + ')">' +
+                    '<span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>' +
+                    'Rejoin Stream' +
+                '</button>' +
+            '</div>';
+    }
+    if (streamDisplay) streamDisplay.style.display = 'none';
+    if (streamControls) streamControls.style.display = 'none';
+    
+    // Remove from joined streams
+    joinedStreams.delete(streamId);
+    
+    // Update stream state
+    const state = window.streamStates.get(streamId);
+    if (state) {
+        state.joined = false;
+        state.screenActive = false;
+        state.audioActive = false;
+    }
+    
+    showToast('👋 Left stream', 'info');
+    
+    console.log('✅ Successfully left stream', streamId);
 };
 
 window.toggleFullscreen = function(streamId) {
-    console.log('🖼️ Toggling fullscreen for stream ' + streamId);
+    console.log('🖼️ Toggling fullscreen for stream', streamId);
     
     const videoContainer = document.getElementById('videoContainer-' + streamId);
     if (!videoContainer) return;
@@ -967,141 +601,38 @@ window.toggleFullscreen = function(streamId) {
     }
 };
 
-window.leaveStream = function(streamId) {
-    console.log('👋 ' + (isAdmin ? 'Admin' : 'Viewer') + ' leaving stream ' + streamId + '...');
-    
-    // Remove from active screen share streams
-    window.activeScreenShareStreams.delete(streamId);
-    
-    const streamSession = joinedStreams.get(streamId);
-    if (streamSession && streamSession.audioVideo) {
-        streamSession.audioVideo.stop();
-    }
-    joinedStreams.delete(streamId);
-    
-    // Reset UI
-    const spinner = document.getElementById('loadingSpinner-' + streamId);
-    const videoGrid = document.getElementById('videoGrid-' + streamId);
-    const streamControls = document.getElementById('streamControls-' + streamId);
-    
-    if (spinner) {
-        spinner.style.display = 'flex';
-        spinner.innerHTML = 
-            '<div class="text-center text-white">' +
-                '<span class="material-symbols-outlined mb-3" style="font-size: 3rem;">live_tv</span>' +
-                '<p>Left stream</p>' +
-                '<button class="btn btn-primary btn-sm" onclick="joinStream(' + streamId + ')">Rejoin Stream</button>' +
-            '</div>';
-    }
-    if (videoGrid) videoGrid.style.display = 'none';
-    if (streamControls) streamControls.style.display = 'none';
-    
-    const state = streamStates.get(streamId);
-    if (state) {
-        state.joined = false;
-        state.screenSharing = false;
-        streamStates.set(streamId, state);
-    }
-    
-    showToast((isAdmin ? 'Admin' : 'Viewer') + ' left stream', 'info');
-};
-
 window.shareStream = function(streamId) {
     const streamUrl = window.location.origin + '/livestream';
     const stream = activeStreams.find(s => s.id === streamId);
     
     if (navigator.share) {
         navigator.share({
-            title: stream.streamer_name + ' Live Stream - TGFX Trade Lab',
-            text: 'Join ' + stream.streamer_name + ' live trading session!',
+            title: (stream ? stream.streamer_name : 'Live') + ' Stream - TGFX Trade Lab',
+            text: 'Join the live trading session!',
             url: streamUrl
         });
     } else {
         navigator.clipboard.writeText(streamUrl).then(function() {
-            showToast('Stream link copied to clipboard', 'success');
+            showToast('📋 Stream link copied to clipboard', 'success');
         });
     }
 };
 
-// Admin-only functions
-window.toggleMute = async function(streamId) {
-    if (!isAdmin) {
-        showToast('Only admins can control microphone', 'info');
-        return;
-    }
-    
-    const success = await audioStreaming.toggleAudio();
-    
-    // Update UI for this stream
-    const muteIcon = document.getElementById('muteIcon-' + streamId);
-    const muteBtn = document.getElementById('muteBtn-' + streamId);
-    const state = streamStates.get(streamId) || {};
-    
-    if (success || audioStreaming.isAudioActive()) {
-        muteIcon.textContent = 'mic';
-        muteBtn.classList.add('btn-outline-success');
-        state.muted = false;
-        showToast('Admin microphone enabled', 'success');
-    } else {
-        muteIcon.textContent = 'mic_off';
-        muteBtn.classList.remove('btn-outline-success');
-        state.muted = true;
-        showToast('Admin microphone muted', 'info');
-    }
-    
-    streamStates.set(streamId, state);
-};
-
-window.toggleVideo = function(streamId) {
-    if (!isAdmin) {
-        showToast('Only admins can control camera', 'info');
-        return;
-    }
-    
-    const streamSession = joinedStreams.get(streamId);
-    if (!streamSession) return;
-    
-    const state = streamStates.get(streamId) || {};
-    
-    if (state.videoEnabled) {
-        document.getElementById('videoIcon-' + streamId).textContent = 'videocam_off';
-        document.getElementById('videoBtn-' + streamId).classList.remove('btn-outline-success');
-        state.videoEnabled = false;
-        showToast('Admin camera disabled', 'info');
-    } else {
-        document.getElementById('videoIcon-' + streamId).textContent = 'videocam';
-        document.getElementById('videoBtn-' + streamId).classList.add('btn-outline-success');
-        state.videoEnabled = true;
-        showToast('Admin camera enabled', 'success');
-    }
-    
-    streamStates.set(streamId, state);
-};
-
-window.toggleScreenShare = function(streamId) {
-    if (!isAdmin) {
-        showToast('Only admins can screen share', 'warning');
-        return;
-    }
-    
-    // This functionality is controlled from the admin page
-    showToast('Screen sharing is controlled from the admin stream page', 'info');
-};
-
 window.debugStreamConnection = function(streamId) {
-    const stream = activeStreams.find(s => s.id === streamId);
-    const attendeeData = attendeeDataByStream[streamId];
-    
     console.log('=== 🔍 DEBUG STREAM CONNECTION ===');
     console.log('Stream ID:', streamId);
-    console.log('Stream data:', stream);
-    console.log('Attendee data:', attendeeData);
-    console.log('Joined streams:', Array.from(joinedStreams.keys()));
-    console.log('Stream states:', Array.from(streamStates.entries()));
-    console.log('Active screen share streams:', Array.from(window.activeScreenShareStreams));
-    console.log('BroadcastChannel available:', !!screenShareCommunication.channel);
+    console.log('Is Admin:', isAdmin);
+    console.log('Joined Streams:', Array.from(joinedStreams));
+    console.log('Stream States:', Array.from(window.streamStates.entries()));
+    console.log('Active Streams:', activeStreams);
     
-    showToast('Debug info logged to console (F12)', 'info');
+    // Check localStorage
+    console.log('LocalStorage Data:');
+    console.log('- Status:', localStorage.getItem('admin_stream_status'));
+    console.log('- Screen Frame:', localStorage.getItem('admin_screen_frame') ? 'Present' : 'None');
+    console.log('- Audio Data:', localStorage.getItem('admin_audio_data') ? 'Present' : 'None');
+    
+    showToast('🔍 Debug info logged to console (F12)', 'info');
 };
 
 // Helper functions
@@ -1149,18 +680,14 @@ async function updateAllStreamStatus() {
 function showToast(message, type) {
     const toast = document.createElement('div');
     const alertType = type === 'error' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
-    const iconType = type === 'error' ? 'error' : type === 'success' ? 'check_circle' : type === 'warning' ? 'warning' : 'info';
     
     toast.className = 'alert alert-' + alertType + ' position-fixed';
     toast.style.top = '20px';
     toast.style.right = '20px';
     toast.style.zIndex = '9999';
-    toast.style.minWidth = '300px';
-    toast.innerHTML = 
-        '<div class="d-flex align-items-center">' +
-            '<span class="material-symbols-outlined me-2">' + iconType + '</span>' +
-            '<span>' + message + '</span>' +
-        '</div>';
+    toast.style.minWidth = '320px';
+    toast.style.fontSize = '14px';
+    toast.innerHTML = '<div>' + message + '</div>';
     
     document.body.appendChild(toast);
     
@@ -1171,64 +698,6 @@ function showToast(message, type) {
     }, 4000);
 }
 
-// MOBILE DETECTION
-function isMobileDevice() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-           window.innerWidth <= 768;
-}
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 DOM loaded for ' + (isAdmin ? 'admin' : 'viewer') + ' user...');
-    console.log('📱 Mobile device detected:', isMobileDevice());
-    
-    // Initialize enhanced communication systems
-    screenShareCommunication.init();
-    audioStreaming.init();
-    
-    // Initialize stream states
-    activeStreams.forEach(stream => {
-        streamStates.set(stream.id, {
-            muted: true,
-            videoEnabled: false,
-            screenSharing: false,
-            joined: false
-        });
-        
-        // Update spinners with connection options
-        const spinner = document.getElementById('loadingSpinner-' + stream.id);
-        if (spinner) {
-            const streamColor = (stream.creator && stream.creator.stream_color) ? stream.creator.stream_color : '#10B981';
-            setTimeout(() => {
-                if (!joinedStreams.has(stream.id)) {
-                    spinner.innerHTML = 
-                        '<div class="text-center text-white">' +
-                            '<span class="material-symbols-outlined mb-3" style="color: ' + streamColor + '; font-size: 3rem;">live_tv</span>' +
-                            '<p>' + stream.streamer_name + ' is Live!</p>' +
-                            '<button class="btn btn-success btn-sm me-2" onclick="forceJoinStream(' + stream.id + ')">' +
-                                '<span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>' +
-                                'Join Stream' +
-                            '</button>' +
-                        '</div>';
-                }
-            }, 2000);
-        }
-    });
-    
-    // Enhanced polling
-    if (isMobileDevice()) {
-        console.log('📱 Setting up mobile polling');
-        setInterval(updateAllStreamStatus, 2000);
-    } else {
-        console.log('💻 Setting up desktop polling');
-        setInterval(updateAllStreamStatus, 1000);
-    }
-    
-    updateAllStreamStatus();
-    
-    console.log('✅ Enhanced livestream page initialized');
-});
-
 // Listen for fullscreen changes
 document.addEventListener('fullscreenchange', function() {
     const isFullscreen = !!document.fullscreenElement;
@@ -1237,93 +706,24 @@ document.addEventListener('fullscreenchange', function() {
     });
 });
 
-// Debug helpers
-window.debugAllStreams = function() {
-    console.log('=== 🔍 GLOBAL STREAM DEBUG ===');
-    console.log('Is Admin:', isAdmin);
-    console.log('Is Mobile:', isMobileDevice());
-    console.log('Active Streams:', activeStreams);
-    console.log('Attendee Data:', attendeeDataByStream);
-    console.log('Joined Streams:', Array.from(joinedStreams.keys()));
-    console.log('Stream States:', Array.from(streamStates.entries()));
-    console.log('Active Screen Share Streams:', Array.from(window.activeScreenShareStreams));
-    console.log('BroadcastChannel:', !!screenShareCommunication.channel);
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📱 DOM loaded for viewer...');
     
-    return {
-        isAdmin,
-        isMobile: isMobileDevice(),
-        activeStreams,
-        attendeeDataByStream,
-        joinedStreams: Array.from(joinedStreams.keys()),
-        streamStates: Array.from(streamStates.entries()),
-        activeScreenShareStreams: Array.from(window.activeScreenShareStreams),
-        broadcastChannel: !!screenShareCommunication.channel
-    };
-};
+    // Initialize stream monitor
+    window.streamMonitor.init();
+    
+    // Update stream stats
+    setInterval(updateAllStreamStatus, 5000);
+    updateAllStreamStatus();
+    
+    console.log('✅ Simplified livestream viewer loaded');
+});
 
-console.log('✅ Enhanced livestream JavaScript loaded successfully');
-console.log('💡 Available functions: joinStream(), forceJoinStream(), toggleFullscreen(), leaveStream(), shareStream()');
+console.log('💡 Available functions: joinStream(), leaveStream(), toggleFullscreen(), shareStream()');
 </script>
 
 <style>
-/* Audio Visualization Styles */
-.audio-indicator {
-    background: rgba(0, 0, 0, 0.6);
-    padding: 6px 10px;
-    border-radius: 8px;
-    backdrop-filter: blur(4px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: all 0.3s ease;
-}
-
-.audio-indicator.active {
-    border-color: #10B981;
-    background: rgba(16, 185, 129, 0.1);
-    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
-}
-
-.audio-indicator.muted {
-    border-color: #6b7280;
-    background: rgba(107, 114, 128, 0.1);
-}
-
-.audio-visualizer {
-    display: flex;
-    align-items: end;
-    gap: 2px;
-    width: 40px;
-    height: 20px;
-}
-
-.audio-bar {
-    width: 4px;
-    min-height: 4px;
-    background-color: #374151;
-    border-radius: 2px;
-    transition: height 0.1s ease, background-color 0.1s ease;
-}
-
-.audio-bar:nth-child(1) { height: 20%; }
-.audio-bar:nth-child(2) { height: 40%; }
-.audio-bar:nth-child(3) { height: 60%; }
-.audio-bar:nth-child(4) { height: 80%; }
-.audio-bar:nth-child(5) { height: 100%; }
-
-.mic-indicator {
-    color: #6b7280;
-    transition: color 0.3s ease;
-}
-
-.mic-indicator.active {
-    color: #10B981;
-    animation: pulse 2s infinite;
-}
-
-.viewer-audio-display {
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid #10B981;
-}
-
 .stream-card {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
@@ -1347,20 +747,6 @@ console.log('💡 Available functions: joinStream(), forceJoinStream(), toggleFu
     justify-content: center;
 }
 
-.stream-video-container video {
-    border-radius: 0;
-}
-
-.btn-outline-success {
-    border-color: #10B981;
-    color: #10B981;
-}
-
-.btn-outline-success:hover {
-    background: #10B981;
-    color: white;
-}
-
 .spinner-border {
     width: 2rem;
     height: 2rem;
@@ -1380,146 +766,37 @@ console.log('💡 Available functions: joinStream(), forceJoinStream(), toggleFu
     color: white;
 }
 
-.modal-content {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
+/* Audio visualization */
+.audio-bars {
+    display: flex;
+    align-items: end;
+    gap: 2px;
+    width: 40px;
+    height: 20px;
 }
 
-.modal-header, .modal-body, .modal-footer {
-    border-color: var(--border-color);
+.audio-bar {
+    width: 4px;
+    min-height: 4px;
+    height: 10%;
+    background-color: #6b7280;
+    border-radius: 2px;
+    transition: height 0.1s ease, background-color 0.1s ease;
 }
 
-/* Frame rate indicator */
-.fps-indicator {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    background: rgba(0, 0, 0, 0.7);
-    color: #10B981;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: monospace;
-    z-index: 1000;
+.audio-display {
     backdrop-filter: blur(4px);
 }
 
-/* Loading indicators */
-.loading-indicator {
-    background: rgba(0, 0, 0, 0.9);
-    border-radius: 8px;
-    padding: 2rem;
-    backdrop-filter: blur(10px);
+/* Canvas styling */
+#screenCanvas-1, #screenCanvas-2 {
+    background-color: #1a1a1a;
+    border-radius: 4px;
 }
 
-/* Audio enabled indicator */
-#audioEnabledIndicator {
-    animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translate(-50%, -100%);
-    }
-    to {
-        opacity: 1;
-        transform: translate(-50%, 0);
-    }
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-
-/* Mobile optimizations */
-@media (max-width: 768px) {
-    .stream-video-container {
-        min-height: 200px;
-    }
-    
-    .col-lg-6 {
-        margin-bottom: 1rem;
-    }
-    
-    .stream-controls .d-flex {
-        flex-wrap: wrap;
-        gap: 0.25rem;
-    }
-    
-    .stream-controls .btn {
-        padding: 0.25rem 0.4rem;
-    }
-    
-    .audio-indicator {
-        padding: 4px 6px;
-        flex-direction: row;
-        gap: 4px;
-        align-items: center;
-    }
-    
-    .audio-visualizer {
-        width: 30px;
-        height: 16px;
-    }
-    
-    .audio-bar {
-        width: 3px;
-    }
-    
-    .mic-indicator {
-        font-size: 14px;
-    }
-}
-
-/* Performance optimizations */
-.stream-video-container canvas {
-    /* Hardware acceleration for better performance */
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    perspective: 1000;
-}
-
-/* Stream controls styling */
-.stream-controls .btn {
-    border-radius: 6px;
-    padding: 0.375rem 0.5rem;
-}
-
-.stream-controls .material-symbols-outlined {
-    font-size: 18px;
-}
-
-/* Video grid styling */
-#videoGrid-1, #videoGrid-2 {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Responsive video elements */
-.stream-video-container video {
-    max-width: 100%;
-    max-height: 100%;
-    width: auto;
-    height: auto;
-}
-
-/* Fullscreen styles */
-.stream-video-container:fullscreen .stream-controls {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-}
-
-.stream-video-container:fullscreen #videoGrid-1,
-.stream-video-container:fullscreen #videoGrid-2 {
-    width: 100vw;
-    height: 100vh;
+/* Status badges */
+.badge {
+    font-size: 11px;
 }
 
 /* Fullscreen button */
@@ -1532,32 +809,50 @@ console.log('💡 Available functions: joinStream(), forceJoinStream(), toggleFu
     opacity: 1;
 }
 
-/* Connection status toast */
-.toast {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .stream-video-container {
+        min-height: 200px;
+    }
+    
+    .col-lg-6 {
+        margin-bottom: 1rem;
+    }
+    
+    .audio-bars {
+        width: 30px;
+        height: 16px;
+    }
+    
+    .audio-bar {
+        width: 3px;
+    }
 }
 
-.toast-header {
-    background-color: var(--card-bg);
-    border-bottom: 1px solid var(--border-color);
+/* Responsive canvas */
+canvas {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
 }
 
-/* Enhanced animations */
-.stream-card[data-status="live"] .badge {
+/* Fullscreen styles */
+.stream-video-container:fullscreen canvas {
+    width: 100vw;
+    height: 100vh;
+    object-fit: contain;
+}
+
+/* Loading and status animations */
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.badge.bg-success {
     animation: pulse 2s infinite;
-}
-
-/* Loading shimmer effect */
-@keyframes shimmer {
-    0% { background-position: -468px 0; }
-    100% { background-position: 468px 0; }
-}
-
-.loading-shimmer {
-    background: linear-gradient(90deg, #f0f0f0 25%, transparent 37%, #f0f0f0 63%);
-    background-size: 400% 100%;
-    animation: shimmer 1.4s ease-in-out infinite;
 }
 </style>
 {% endblock %}
