@@ -460,9 +460,11 @@ async function handleAdminScreenShare(stream, screenName) {
     }
 }
 
-// CRITICAL: Set up broadcasting
+// MOBILE-OPTIMIZED: Set up broadcasting with LOW LATENCY
 async function setupScreenShareBroadcasting(stream, screenName) {
-    console.log('📡 Setting up screen share broadcasting');
+    console.log('📡 Setting up LOW LATENCY screen share broadcasting');
+    
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
     // Notify viewers that screen share is starting
     if (screenShareBroadcastChannel) {
@@ -472,14 +474,16 @@ async function setupScreenShareBroadcasting(stream, screenName) {
             width: 1280,
             height: 720
         });
+        console.log('📡 BroadcastChannel message sent');
     }
     
-    // Also use localStorage as fallback
+    // CRITICAL: Always use localStorage for mobile compatibility
     localStorage.setItem('adminScreenShare', JSON.stringify({
         active: true,
         name: screenName,
         timestamp: Date.now()
     }));
+    console.log('📱 localStorage updated for mobile devices');
     
     // Create hidden video for frame capture
     const hiddenVideo = document.createElement('video');
@@ -497,9 +501,9 @@ async function setupScreenShareBroadcasting(stream, screenName) {
         canvas.width = Math.min(hiddenVideo.videoWidth, 1280);
         canvas.height = Math.min(hiddenVideo.videoHeight, 720);
         
-        console.log('📺 Broadcasting frames at:', canvas.width, 'x', canvas.height);
+        console.log('📺 LOW LATENCY broadcasting at:', canvas.width, 'x', canvas.height);
         
-        // Start frame broadcasting
+        // HIGH FREQUENCY frame broadcasting for low latency
         let frameCount = 0;
         const broadcastFrame = () => {
             if (hiddenVideo.readyState >= 2 && userStreamStates.screenSharing) {
@@ -507,11 +511,16 @@ async function setupScreenShareBroadcasting(stream, screenName) {
                     // Draw frame to canvas
                     ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
                     
-                    // Broadcast every 5th frame (about 3 FPS) to reduce bandwidth
-                    if (frameCount % 5 === 0) {
-                        const imageData = canvas.toDataURL('image/jpeg', 0.6);
+                    // LOW LATENCY: Broadcast every 2nd frame (about 15 FPS)
+                    // Mobile: Every 3rd frame (about 10 FPS) 
+                    const frameSkip = isMobile ? 3 : 2;
+                    
+                    if (frameCount % frameSkip === 0) {
+                        // Higher quality for low latency
+                        const quality = isMobile ? 0.7 : 0.8;
+                        const imageData = canvas.toDataURL('image/jpeg', quality);
                         
-                        // Broadcast via BroadcastChannel
+                        // Broadcast via BroadcastChannel immediately
                         if (screenShareBroadcastChannel) {
                             screenShareBroadcastChannel.postMessage({
                                 type: 'SCREEN_SHARE_FRAME',
@@ -519,26 +528,37 @@ async function setupScreenShareBroadcasting(stream, screenName) {
                                 timestamp: Date.now()
                             });
                         }
+                        
+                        // HIGH FREQUENCY localStorage updates for mobile
+                        localStorage.setItem('adminScreenShareFrame', JSON.stringify({
+                            imageData: imageData,
+                            timestamp: Date.now(),
+                            name: screenName
+                        }));
                     }
                     
                     frameCount++;
                     
                     if (userStreamStates.screenSharing) {
-                        screenShareFrameInterval = setTimeout(broadcastFrame, 100); // 10 FPS capture
+                        // LOW LATENCY: Much faster intervals
+                        // Desktop: 33ms (30 FPS capture, 15 FPS broadcast)
+                        // Mobile: 50ms (20 FPS capture, 10 FPS broadcast)
+                        const captureInterval = isMobile ? 50 : 33;
+                        screenShareFrameInterval = setTimeout(broadcastFrame, captureInterval);
                     }
                     
                 } catch (error) {
                     console.error('Error broadcasting frame:', error);
                     if (userStreamStates.screenSharing) {
-                        screenShareFrameInterval = setTimeout(broadcastFrame, 200);
+                        screenShareFrameInterval = setTimeout(broadcastFrame, isMobile ? 100 : 50);
                     }
                 }
             }
         };
         
-        // Start broadcasting
+        // Start broadcasting immediately
         hiddenVideo.play().then(() => {
-            setTimeout(broadcastFrame, 500);
+            setTimeout(broadcastFrame, 100); // Start quickly
         });
     });
     
@@ -663,18 +683,26 @@ window.stopUserScreenShare = async function() {
             spinner.style.display = 'flex';
         }
         
-        // Notify viewers
+        // Notify viewers via BroadcastChannel
         if (screenShareBroadcastChannel) {
             screenShareBroadcastChannel.postMessage({
                 type: 'SCREEN_SHARE_STOP'
             });
         }
         
-        // Update localStorage
+        // MOBILE: Clear all localStorage screen share data
         localStorage.setItem('adminScreenShare', JSON.stringify({
             active: false,
             timestamp: Date.now()
         }));
+        
+        // Clear frame data for mobile
+        localStorage.removeItem('adminScreenShareFrame');
+        
+        // Clear audio data as well when stopping stream
+        localStorage.removeItem('adminAudioLevel');
+        
+        console.log('📱 Mobile localStorage cleared (screen share + audio)');
         
         showToast('Screen sharing stopped', 'info');
         
@@ -763,19 +791,218 @@ window.stopUserStream = async function() {
     }
 };
 
-window.toggleUserMute = function() {
+// Audio streaming state
+let currentAudioStream = null;
+let audioContext = null;
+let audioWorkletNode = null;
+let audioStreamActive = false;
+
+// Initialize audio context for streaming
+function initializeAudioStreaming() {
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        console.log('🎤 Audio context initialized');
+        return true;
+    } catch (error) {
+        console.error('Failed to initialize audio context:', error);
+        return false;
+    }
+}
+
+// Enhanced toggleUserMute with real audio streaming
+window.toggleUserMute = async function() {
     if (userStreamStates.muted) {
+        // Unmute - start audio streaming
+        await startAudioStreaming();
+    } else {
+        // Mute - stop audio streaming
+        await stopAudioStreaming();
+    }
+};
+
+// Start audio streaming to viewers
+async function startAudioStreaming() {
+    try {
+        console.log('🎤 Starting admin audio streaming...');
+        
+        // Request microphone access
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 44100
+            } 
+        });
+        
+        currentAudioStream = stream;
+        audioStreamActive = true;
+        
+        // Initialize audio context if needed
+        if (!audioContext) {
+            initializeAudioStreaming();
+        }
+        
+        // Set up real-time audio broadcasting
+        await setupAudioBroadcasting(stream);
+        
+        // Update UI
         document.getElementById('userMuteIcon').textContent = 'mic';
         document.getElementById('userMuteBtn').classList.add('btn-outline-success');
         userStreamStates.muted = false;
-        showToast('Admin microphone enabled', 'success');
-    } else {
+        
+        // Notify viewers about audio
+        if (screenShareBroadcastChannel) {
+            screenShareBroadcastChannel.postMessage({
+                type: 'AUDIO_START',
+                timestamp: Date.now()
+            });
+        }
+        
+        // Also use localStorage for mobile
+        localStorage.setItem('adminAudio', JSON.stringify({
+            active: true,
+            timestamp: Date.now()
+        }));
+        
+        showToast('🎤 Admin microphone enabled - Viewers can now hear you', 'success');
+        
+    } catch (error) {
+        console.error('Failed to start audio streaming:', error);
+        
+        if (error.name === 'NotAllowedError') {
+            showToast('Microphone access denied. Please allow microphone permissions.', 'warning');
+        } else {
+            showToast('Failed to start microphone: ' + error.message, 'error');
+        }
+    }
+}
+
+// Stop audio streaming
+async function stopAudioStreaming() {
+    try {
+        console.log('🔇 Stopping admin audio streaming...');
+        
+        // Stop audio tracks
+        if (currentAudioStream) {
+            currentAudioStream.getTracks().forEach(track => track.stop());
+            currentAudioStream = null;
+        }
+        
+        // Clean up audio processing
+        if (audioWorkletNode) {
+            audioWorkletNode.disconnect();
+            audioWorkletNode = null;
+        }
+        
+        audioStreamActive = false;
+        
+        // Update UI
         document.getElementById('userMuteIcon').textContent = 'mic_off';
         document.getElementById('userMuteBtn').classList.remove('btn-outline-success');
         userStreamStates.muted = true;
-        showToast('Admin microphone muted', 'info');
+        
+        // Notify viewers
+        if (screenShareBroadcastChannel) {
+            screenShareBroadcastChannel.postMessage({
+                type: 'AUDIO_STOP',
+                timestamp: Date.now()
+            });
+        }
+        
+        // Update localStorage
+        localStorage.setItem('adminAudio', JSON.stringify({
+            active: false,
+            timestamp: Date.now()
+        }));
+        
+        // Clear audio level data
+        localStorage.removeItem('adminAudioLevel');
+        
+        showToast('🔇 Admin microphone muted', 'info');
+        
+    } catch (error) {
+        console.error('Error stopping audio streaming:', error);
     }
-};
+}
+
+// Set up audio broadcasting using Web Audio API
+async function setupAudioBroadcasting(stream) {
+    try {
+        console.log('🎵 Setting up audio broadcasting...');
+        
+        if (!audioContext) {
+            initializeAudioStreaming();
+        }
+        
+        // Create audio source from microphone
+        const source = audioContext.createMediaStreamSource(stream);
+        
+        // Create gain node for volume control
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 1.0;
+        
+        // Create analyser for audio visualization
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        
+        // Connect nodes
+        source.connect(gainNode);
+        gainNode.connect(analyser);
+        
+        // Set up real-time audio data broadcasting
+        broadcastAudioData(analyser);
+        
+        console.log('✅ Audio broadcasting setup complete');
+        
+    } catch (error) {
+        console.error('Failed to setup audio broadcasting:', error);
+    }
+}
+
+// Broadcast audio data to viewers
+function broadcastAudioData(analyser) {
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    let frameCount = 0;
+    
+    const broadcastAudio = () => {
+        if (!audioStreamActive) return;
+        
+        analyser.getByteFrequencyData(dataArray);
+        
+        // Broadcast audio data every 10th frame (about 4.4 times per second)
+        if (frameCount % 10 === 0) {
+            const audioLevel = Array.from(dataArray).reduce((a, b) => a + b) / bufferLength;
+            
+            // Only broadcast if there's significant audio
+            if (audioLevel > 10) {
+                if (screenShareBroadcastChannel) {
+                    screenShareBroadcastChannel.postMessage({
+                        type: 'AUDIO_DATA',
+                        level: audioLevel,
+                        timestamp: Date.now()
+                    });
+                }
+                
+                // Also store in localStorage for mobile
+                localStorage.setItem('adminAudioLevel', JSON.stringify({
+                    level: audioLevel,
+                    timestamp: Date.now()
+                }));
+            }
+        }
+        
+        frameCount++;
+        
+        if (audioStreamActive) {
+            requestAnimationFrame(broadcastAudio);
+        }
+    };
+    
+    broadcastAudio();
+}
 
 window.toggleUserVideo = function() {
     if (userStreamStates.videoEnabled) {
