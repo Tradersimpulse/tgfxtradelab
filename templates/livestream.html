@@ -412,12 +412,12 @@ function handleScreenShareStatusRequest() {
     }
 }
 
-// Function to display real screen share content for viewers
+// Function to display real screen share content for viewers with FPS counter
 function displayRealScreenShareForViewer(streamId, screenName, width = 1280, height = 720) {
     const videoGrid = document.getElementById('videoGrid-' + streamId);
     if (!videoGrid) return;
     
-    console.log('🖼️ Setting up real screen share display for viewer:', streamId);
+    console.log('🖼️ Setting up LOW LATENCY screen share display for viewer:', streamId);
     
     // Clear existing content
     videoGrid.innerHTML = '';
@@ -453,6 +453,13 @@ function displayRealScreenShareForViewer(streamId, screenName, width = 1280, hei
     indicator.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 12px;">screen_share</span>' + screenName;
     screenShareContainer.appendChild(indicator);
     
+    // Add FPS indicator for low latency monitoring
+    const fpsIndicator = document.createElement('div');
+    fpsIndicator.className = 'fps-indicator';
+    fpsIndicator.id = 'fps-' + streamId;
+    fpsIndicator.textContent = 'FPS: --';
+    screenShareContainer.appendChild(fpsIndicator);
+    
     // Add loading message initially
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'loading-indicator position-absolute';
@@ -466,7 +473,7 @@ function displayRealScreenShareForViewer(streamId, screenName, width = 1280, hei
         <div class="mb-3">
             <span class="material-symbols-outlined" style="font-size: 3rem; color: #10B981;">screen_share</span>
         </div>
-        <h5 style="color: #10B981; margin-bottom: 1rem;">Loading Screen Share</h5>
+        <h5 style="color: #10B981; margin-bottom: 1rem;">⚡ LOW LATENCY Loading</h5>
         <p style="color: #ccc;">${screenName}</p>
         <div class="mt-2">
             <div class="spinner-border" style="color: #10B981;" role="status">
@@ -476,38 +483,122 @@ function displayRealScreenShareForViewer(streamId, screenName, width = 1280, hei
     `;
     screenShareContainer.appendChild(loadingDiv);
     
-    console.log('✅ Screen share viewer setup complete for stream:', streamId);
+    // Initialize FPS counter
+    initializeFPSCounter(streamId);
+    
+    console.log('✅ LOW LATENCY screen share viewer setup complete for stream:', streamId);
 }
 
-// Function to update screen share frame
+// FPS Counter for monitoring performance
+let fpsCounters = new Map();
+
+function initializeFPSCounter(streamId) {
+    fpsCounters.set(streamId, {
+        frames: 0,
+        lastTime: Date.now(),
+        fps: 0
+    });
+    
+    // Update FPS display every second
+    setInterval(() => {
+        updateFPSDisplay(streamId);
+    }, 1000);
+}
+
+function updateFPSDisplay(streamId) {
+    const counter = fpsCounters.get(streamId);
+    const fpsElement = document.getElementById('fps-' + streamId);
+    
+    if (counter && fpsElement) {
+        const now = Date.now();
+        const deltaTime = (now - counter.lastTime) / 1000;
+        
+        if (deltaTime >= 1) {
+            counter.fps = Math.round(counter.frames / deltaTime);
+            counter.frames = 0;
+            counter.lastTime = now;
+            
+            // Color-code FPS for performance indication
+            const fpsColor = counter.fps >= 10 ? '#10B981' : counter.fps >= 5 ? '#fbbf24' : '#ef4444';
+            fpsElement.style.color = fpsColor;
+            fpsElement.textContent = `FPS: ${counter.fps}`;
+        }
+    }
+}
+
+// Track frame updates for FPS counter
+function trackFrameUpdate(streamId) {
+    const counter = fpsCounters.get(streamId);
+    if (counter) {
+        counter.frames++;
+    }
+}
+
+// LOW LATENCY: Optimized frame update function
+let frameUpdateQueue = new Map(); // streamId -> latest frame data
+
 function updateScreenShareFrame(streamId, imageData) {
+    // Queue the latest frame to avoid blocking
+    frameUpdateQueue.set(streamId, imageData);
+    
+    // Process frame update immediately
+    requestAnimationFrame(() => processFrameUpdate(streamId));
+}
+
+function processFrameUpdate(streamId) {
+    const imageData = frameUpdateQueue.get(streamId);
+    if (!imageData) return;
+    
     const canvas = document.getElementById('screenShareCanvas-' + streamId);
     if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
+    
+    // Create image with optimized loading
     const img = new Image();
     
     img.onload = function() {
-        // Clear canvas
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw the new frame
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        // Remove loading indicator if it exists
-        const container = canvas.parentElement;
-        const loadingDiv = container.querySelector('.loading-indicator');
-        if (loadingDiv) {
-            loadingDiv.remove();
+        try {
+            // Clear canvas efficiently
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // High-quality rendering for low latency
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            // Draw the frame
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // Track frame for FPS counter
+            trackFrameUpdate(streamId);
+            
+            // Remove loading indicator if it exists (only once)
+            const container = canvas.parentElement;
+            const loadingDiv = container.querySelector('.loading-indicator');
+            if (loadingDiv) {
+                loadingDiv.remove();
+                console.log('⚡ LOW LATENCY: First frame loaded for stream', streamId);
+            }
+            
+        } catch (error) {
+            console.error('❌ Error rendering frame:', error);
         }
     };
     
     img.onerror = function() {
-        console.error('Failed to load screen share frame');
+        console.warn('⚠️ Frame load failed for stream', streamId);
+        // Don't show error on mobile to avoid spam
+        if (!isMobileDevice()) {
+            console.error('Failed to load screen share frame');
+        }
     };
     
+    // Load image with cross-origin support
+    img.crossOrigin = 'anonymous';
     img.src = imageData;
+    
+    // Clear the queue for this stream
+    frameUpdateQueue.delete(streamId);
 }
 
 // CRITICAL: Define functions at the global scope first
@@ -531,9 +622,65 @@ window.joinStream = function(streamId) {
     forceJoinStream(streamId);
 };
 
-// UPDATED: Force join function with better screen share detection
+// LOW LATENCY: Force refresh screen share button for immediate updates
+function addMobileRefreshButton(streamId) {
+    if (!isMobileDevice()) return;
+    
+    const videoContainer = document.getElementById('videoContainer-' + streamId);
+    if (!videoContainer) return;
+    
+    // Check if button already exists
+    if (videoContainer.querySelector('.mobile-refresh-btn')) return;
+    
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'btn btn-outline-info btn-sm position-absolute mobile-refresh-btn';
+    refreshBtn.style.top = '50px';
+    refreshBtn.style.right = '10px';
+    refreshBtn.style.zIndex = '1001';
+    refreshBtn.title = 'Refresh screen share (Mobile)';
+    refreshBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px;">refresh</span>';
+    
+    refreshBtn.onclick = function() {
+        console.log('⚡ LOW LATENCY: Mobile manual refresh');
+        showToast('Refreshing screen share...', 'info');
+        
+        // IMMEDIATE checks for low latency
+        checkLocalStorageForScreenShare();
+        
+        // Request fresh status from admin
+        if (window.screenShareChannel) {
+            window.screenShareChannel.postMessage({
+                type: 'REQUEST_SCREEN_SHARE_STATUS'
+            });
+        }
+        
+        // Force frame update if screen share is active
+        const frameData = localStorage.getItem('adminScreenShareFrame');
+        if (frameData && window.activeScreenShareStreams.has(streamId)) {
+            try {
+                const frame = JSON.parse(frameData);
+                if (frame.imageData) {
+                    updateScreenShareFrame(streamId, frame.imageData);
+                }
+            } catch (error) {
+                console.error('Error forcing frame update:', error);
+            }
+        }
+        
+        // Visual feedback
+        refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        setTimeout(() => {
+            refreshBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px;">refresh</span>';
+            showToast('Refresh complete', 'success');
+        }, 1000);
+    };
+    
+    videoContainer.appendChild(refreshBtn);
+}
+
+// UPDATED: Force join function with low latency enhancements
 window.forceJoinStream = function(streamId) {
-    console.log('🔧 Force joining stream', streamId);
+    console.log('⚡ LOW LATENCY: Force joining stream', streamId);
     
     const stream = activeStreams.find(s => s.id === streamId);
     if (!stream) {
@@ -541,7 +688,7 @@ window.forceJoinStream = function(streamId) {
         return;
     }
     
-    // Simulate immediate connection
+    // Immediate UI updates
     const spinner = document.getElementById('loadingSpinner-' + streamId);
     const videoGrid = document.getElementById('videoGrid-' + streamId);
     const streamControls = document.getElementById('streamControls-' + streamId);
@@ -550,27 +697,33 @@ window.forceJoinStream = function(streamId) {
     if (videoGrid) videoGrid.style.display = 'block';
     if (streamControls) streamControls.style.display = 'block';
     
-    // Check if admin is currently screen sharing
-    // Send a request for current screen share status
+    // Add mobile refresh button immediately
+    if (isMobileDevice()) {
+        addMobileRefreshButton(streamId);
+    }
+    
+    // IMMEDIATE screen share status check
     if (window.screenShareChannel) {
         window.screenShareChannel.postMessage({
             type: 'REQUEST_SCREEN_SHARE_STATUS'
         });
     }
     
-    // Show demo content initially (will be replaced if screen share is active)
+    // IMMEDIATE localStorage check
+    setTimeout(checkLocalStorageForScreenShare, 50);
+    
+    // Show demo content initially
     displayDemoContentForViewer(streamId, stream);
     
     // Add to joined streams
     joinedStreams.set(streamId, { connected: true });
     
-    // If admin is screen sharing, this will be updated shortly via BroadcastChannel
+    // Shorter timeout for low latency detection
     setTimeout(() => {
-        // If no screen share started in 2 seconds, viewer sees demo content
         if (!window.activeScreenShareStreams.has(streamId)) {
-            console.log('🎭 No active screen share, showing demo content');
+            console.log('🎭 No active screen share detected (low latency check)');
         }
-    }, 2000);
+    }, 1000); // Reduced from 3000ms to 1000ms
     
     showToast('Connected to ' + stream.streamer_name + ' stream', 'success');
     
@@ -974,9 +1127,56 @@ function showToast(message, type) {
     }, 4000);
 }
 
+// MOBILE DETECTION
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           window.innerWidth <= 768;
+}
+
+// ENHANCED: Mobile-friendly BroadcastChannel setup for LOW LATENCY
+function setupMobileBroadcastChannel() {
+    console.log('📡 Setting up LOW LATENCY BroadcastChannel');
+    
+    // Enhanced BroadcastChannel with mobile fallbacks
+    try {
+        window.screenShareChannel = new BroadcastChannel('screen-share-channel');
+        console.log('✅ BroadcastChannel created successfully');
+        
+        // LOW LATENCY event listener - no delays
+        window.screenShareChannel.addEventListener('message', function(event) {
+            const data = event.data;
+            console.log('⚡ LOW LATENCY: Received message:', data.type);
+            
+            // Process immediately for low latency
+            switch(data.type) {
+                case 'SCREEN_SHARE_START':
+                    handleScreenShareStart(data);
+                    break;
+                case 'SCREEN_SHARE_FRAME':
+                    handleScreenShareFrame(data);
+                    break;
+                case 'SCREEN_SHARE_STOP':
+                    handleScreenShareStop();
+                    break;
+                case 'REQUEST_SCREEN_SHARE_STATUS':
+                    handleScreenShareStatusRequest();
+                    break;
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ BroadcastChannel failed, using localStorage only:', error);
+        window.screenShareChannel = null;
+    }
+}
+
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📱 DOM loaded for ' + (isAdmin ? 'admin' : 'viewer') + ' user...');
+    console.log('📱 Mobile device detected:', isMobileDevice());
+    
+    // Initialize mobile-friendly BroadcastChannel
+    setupMobileBroadcastChannel();
     
     // Initialize stream states
     activeStreams.forEach(stream => {
@@ -1007,12 +1207,85 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Start status polling
-    setInterval(updateAllStreamStatus, 5000);
+    // LOW LATENCY: High frequency polling for real-time updates
+    if (isMobileDevice()) {
+        console.log('📱 Setting up LOW LATENCY mobile polling');
+        setInterval(updateAllStreamStatus, 2000); // 2 seconds on mobile
+        setInterval(checkLocalStorageForScreenShare, 250); // Check every 250ms on mobile!
+    } else {
+        console.log('💻 Setting up LOW LATENCY desktop polling');
+        setInterval(updateAllStreamStatus, 1000); // 1 second on desktop
+        setInterval(checkLocalStorageForScreenShare, 100); // Check every 100ms on desktop!
+    }
+    
     updateAllStreamStatus();
     
-    console.log('✅ Enhanced livestream page initialized with BroadcastChannel support');
+    console.log('✅ LOW LATENCY livestream page initialized');
 });
+
+// LOW LATENCY: Enhanced localStorage checker
+let lastFrameTimestamp = 0;
+let lastStatusTimestamp = 0;
+
+function checkLocalStorageForScreenShare() {
+    try {
+        // Check for screen share status changes
+        const screenShareData = localStorage.getItem('adminScreenShare');
+        if (screenShareData) {
+            const data = JSON.parse(screenShareData);
+            const isRecent = Date.now() - data.timestamp < 2000; // 2 second window
+            
+            // Only process if timestamp is newer than last check
+            if (data.timestamp > lastStatusTimestamp) {
+                lastStatusTimestamp = data.timestamp;
+                
+                if (data.active && isRecent) {
+                    // Check if we're not already showing screen share
+                    const hasActiveScreenShare = window.activeScreenShareStreams.size > 0;
+                    
+                    if (!hasActiveScreenShare && joinedStreams.size > 0) {
+                        console.log('⚡ LOW LATENCY: Screen share start detected');
+                        joinedStreams.forEach((streamSession, streamId) => {
+                            displayRealScreenShareForViewer(streamId, data.name || 'Admin Screen Share');
+                            window.activeScreenShareStreams.add(streamId);
+                        });
+                        showToast('Screen sharing started: ' + (data.name || 'Admin'), 'info');
+                    }
+                } else if (!data.active && window.activeScreenShareStreams.size > 0) {
+                    console.log('⚡ LOW LATENCY: Screen share stop detected');
+                    window.activeScreenShareStreams.forEach(streamId => {
+                        const stream = activeStreams.find(s => s.id === streamId);
+                        if (stream) {
+                            displayDemoContentForViewer(streamId, stream);
+                        }
+                    });
+                    window.activeScreenShareStreams.clear();
+                    showToast('Screen sharing ended', 'info');
+                }
+            }
+        }
+        
+        // HIGH FREQUENCY: Check for new frames
+        const frameData = localStorage.getItem('adminScreenShareFrame');
+        if (frameData && window.activeScreenShareStreams.size > 0) {
+            const frame = JSON.parse(frameData);
+            const frameIsRecent = Date.now() - frame.timestamp < 1000; // 1 second window for frames
+            
+            // Only update if this is a newer frame
+            if (frame.timestamp > lastFrameTimestamp && frameIsRecent && frame.imageData) {
+                lastFrameTimestamp = frame.timestamp;
+                
+                // Update all active screen share streams with the latest frame
+                window.activeScreenShareStreams.forEach(streamId => {
+                    updateScreenShareFrame(streamId, frame.imageData);
+                });
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error in localStorage check:', error);
+    }
+}
 
 // Listen for fullscreen changes
 document.addEventListener('fullscreenchange', function() {
@@ -1026,6 +1299,7 @@ document.addEventListener('fullscreenchange', function() {
 window.debugAllStreams = function() {
     console.log('=== 🔍 GLOBAL STREAM DEBUG ===');
     console.log('Is Admin:', isAdmin);
+    console.log('Is Mobile:', isMobileDevice());
     console.log('Active Streams:', activeStreams);
     console.log('Attendee Data:', attendeeDataByStream);
     console.log('Joined Streams:', Array.from(joinedStreams.keys()));
@@ -1033,14 +1307,89 @@ window.debugAllStreams = function() {
     console.log('Active Screen Share Streams:', Array.from(window.activeScreenShareStreams));
     console.log('BroadcastChannel:', !!window.screenShareChannel);
     
+    // Mobile-specific debug info
+    if (isMobileDevice()) {
+        console.log('=== 📱 MOBILE DEBUG INFO ===');
+        try {
+            const screenShareData = localStorage.getItem('adminScreenShare');
+            const frameData = localStorage.getItem('adminScreenShareFrame');
+            console.log('localStorage screenShare:', screenShareData ? JSON.parse(screenShareData) : null);
+            console.log('localStorage frameData:', frameData ? 'Present (size: ' + frameData.length + ')' : 'None');
+        } catch (e) {
+            console.log('localStorage error:', e);
+        }
+    }
+    
     return {
         isAdmin,
+        isMobile: isMobileDevice(),
         activeStreams,
         attendeeDataByStream,
         joinedStreams: Array.from(joinedStreams.keys()),
         streamStates: Array.from(streamStates.entries()),
         activeScreenShareStreams: Array.from(window.activeScreenShareStreams),
         broadcastChannel: !!window.screenShareChannel
+    };
+};
+
+// Enhanced debugging function with LOW LATENCY info
+window.debugMobile = function() {
+    console.log('=== ⚡ LOW LATENCY DEBUG ===');
+    console.log('Mobile device:', isMobileDevice());
+    console.log('BroadcastChannel support:', typeof BroadcastChannel !== 'undefined');
+    console.log('Screen share channel:', !!window.screenShareChannel);
+    console.log('Active screen share streams:', window.activeScreenShareStreams.size);
+    console.log('Joined streams:', joinedStreams.size);
+    console.log('Last frame timestamp:', lastFrameTimestamp);
+    console.log('Last status timestamp:', lastStatusTimestamp);
+    
+    // Check localStorage with timing
+    const startTime = Date.now();
+    try {
+        const screenShare = localStorage.getItem('adminScreenShare');
+        const frameData = localStorage.getItem('adminScreenShareFrame');
+        
+        console.log('localStorage access time:', Date.now() - startTime, 'ms');
+        console.log('localStorage adminScreenShare:', screenShare);
+        console.log('localStorage frame data size:', frameData ? frameData.length : 0);
+        
+        if (screenShare) {
+            const data = JSON.parse(screenShare);
+            console.log('Screen share active:', data.active);
+            console.log('Time since status update:', Date.now() - data.timestamp, 'ms');
+        }
+        
+        if (frameData) {
+            const frame = JSON.parse(frameData);
+            console.log('Time since frame update:', Date.now() - frame.timestamp, 'ms');
+        }
+        
+    } catch (error) {
+        console.log('localStorage error:', error);
+    }
+    
+    // Polling frequencies
+    if (isMobileDevice()) {
+        console.log('📱 Mobile polling: Status every 2s, Frames every 250ms');
+    } else {
+        console.log('💻 Desktop polling: Status every 1s, Frames every 100ms');
+    }
+    
+    // Force immediate check
+    console.log('🔄 Running immediate checks...');
+    const checkStart = Date.now();
+    checkLocalStorageForScreenShare();
+    console.log('Check completed in:', Date.now() - checkStart, 'ms');
+    
+    return {
+        isMobile: isMobileDevice(),
+        hasChannel: !!window.screenShareChannel,
+        activeStreams: window.activeScreenShareStreams.size,
+        joinedStreams: joinedStreams.size,
+        lastFrame: lastFrameTimestamp,
+        lastStatus: lastStatusTimestamp,
+        timeSinceLastFrame: lastFrameTimestamp ? Date.now() - lastFrameTimestamp : null,
+        timeSinceLastStatus: lastStatusTimestamp ? Date.now() - lastStatusTimestamp : null
     };
 };
 
@@ -1120,6 +1469,7 @@ console.log('💡 Available functions: joinStream(), forceJoinStream(), toggleFu
     border-color: var(--border-color);
 }
 
+/* LOW LATENCY optimizations and mobile styles */
 @media (max-width: 768px) {
     .stream-video-container {
         min-height: 200px;
@@ -1137,6 +1487,264 @@ console.log('💡 Available functions: joinStream(), forceJoinStream(), toggleFu
     .stream-controls .btn {
         padding: 0.25rem 0.4rem;
     }
+    
+    /* Mobile refresh button with low latency styling */
+    .mobile-refresh-btn {
+        opacity: 0.9;
+        backdrop-filter: blur(4px);
+        background: rgba(16, 185, 129, 0.3) !important;
+        border-color: #10B981 !important;
+        color: #10B981 !important;
+        transition: all 0.2s ease;
+    }
+    
+    .mobile-refresh-btn:hover {
+        opacity: 1;
+        background: rgba(16, 185, 129, 0.5) !important;
+        transform: scale(1.05);
+    }
+    
+    /* Mobile canvas optimizations for low latency */
+    .stream-video-container canvas {
+        image-rendering: auto;
+        image-rendering: -webkit-optimize-contrast;
+        will-change: transform;
+    }
+    
+    /* Mobile audio controls */
+    .audio-indicator {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .audio-visualizer {
+        width: 30px;
+        height: 16px;
+    }
+}
+
+/* LOW LATENCY performance optimizations */
+.stream-video-container canvas {
+    /* Hardware acceleration for better performance */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000;
+}
+
+/* Frame rate indicator */
+.fps-indicator {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #10B981;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+/* Audio visualization */
+.audio-indicator {
+    background: rgba(0, 0, 0, 0.6);
+    padding: 4px 8px;
+    border-radius: 6px;
+    backdrop-filter: blur(4px);
+}
+
+.audio-visualizer {
+    display: flex;
+    align-items: end;
+    gap: 2px;
+    width: 40px;
+    height: 20px;
+}
+
+.audio-bar {
+    width: 3px;
+    min-height: 4px;
+    background-color: #374151;
+    border-radius: 1px;
+    transition: height 0.1s ease, background-color 0.1s ease;
+}
+
+.audio-bar:nth-child(1) { height: 20%; }
+.audio-bar:nth-child(2) { height: 40%; }
+.audio-bar:nth-child(3) { height: 60%; }
+.audio-bar:nth-child(4) { height: 80%; }
+.audio-bar:nth-child(5) { height: 100%; }
+
+/* Audio controls */
+.audio-indicator .btn {
+    padding: 0.2rem 0.4rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.audio-indicator .btn:hover {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: #10B981;
+}
+
+/* Audio active state */
+.audio-indicator.active {
+    border: 1px solid #10B981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+/* Low latency loading indicators */
+.loading-indicator {
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 8px;
+    padding: 2rem;
+    backdrop-filter: blur(10px);
+}
+
+/* Real-time status indicators */
+.stream-status-live {
+    animation: pulse-green 1s infinite;
+}
+
+@keyframes pulse-green {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* High refresh rate optimizations */
+.stream-card[data-low-latency="true"] {
+    border-color: #10B981 !important;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.stream-card[data-low-latency="true"] .stream-controls {
+    background: linear-gradient(transparent, rgba(16, 185, 129, 0.1));
+}
+
+/* Audio muted state */
+.audio-indicator.muted .audio-bar {
+    background-color: #ef4444 !important;
+    opacity: 0.5;
+}
+
+/* Microphone indicator */
+.mic-indicator {
+    color: #10B981;
+    animation: pulse 2s infinite;
+}
+
+.mic-indicator.muted {
+    color: #6b7280;
+    animation: none;
+}
+
+/* Audio level animation */
+@keyframes audioLevel {
+    0% { height: 20%; }
+    50% { height: 100%; }
+    100% { height: 20%; }
+}
+
+.audio-bar.active {
+    animation: audioLevel 0.5s ease-in-out;
+}
+
+/* Volume control hints */
+.audio-indicator:hover::after {
+    content: "Click to mute/unmute";
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 1001;
+}
+
+/* Audio enable prompt */
+#audioEnablePrompt {
+    transition: all 0.3s ease;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+    animation: audioPromptFadeIn 0.3s ease;
+}
+
+@keyframes audioPromptFadeIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+#audioEnablePrompt .btn {
+    transition: all 0.2s ease;
+}
+
+#audioEnablePrompt .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Audio status indicators */
+.stream-controls.audio-enabled {
+    border-bottom: 2px solid #10B981;
+}
+
+.stream-controls.audio-disabled {
+    border-bottom: 2px solid #6b7280;
+}
+
+/* Mobile audio prompt adjustments */
+@media (max-width: 768px) {
+    #audioEnablePrompt {
+        max-width: 280px;
+        margin: 1rem;
+    }
+    
+    #audioEnablePrompt h5 {
+        font-size: 1.1rem;
+    }
+    
+    #audioEnablePrompt p {
+        font-size: 0.9rem;
+    }
+    
+    .audio-indicator {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .audio-visualizer {
+        margin: 0 auto;
+    }
+}
+
+/* Audio context state indicators */
+.audio-context-suspended::before {
+    content: "🔇";
+    position: absolute;
+    top: 5px;
+    right: 50px;
+    font-size: 14px;
+    z-index: 1001;
+}
+
+.audio-context-running::before {
+    content: "🔊";
+    position: absolute;
+    top: 5px;
+    right: 50px;
+    font-size: 14px;
+    z-index: 1001;
+    color: #10B981;
 }
 
 /* Loading and error states */
