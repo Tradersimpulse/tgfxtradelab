@@ -429,13 +429,18 @@ def process_video_tags(video, tags_string):
 
 def create_user_activity(user_id, activity_type, description):
     """Create a new user activity record"""
-    activity = UserActivity(
-        user_id=user_id,
-        activity_type=activity_type,
-        description=description
-    )
-    db.session.add(activity)
-    db.session.commit()
+    try:
+        activity = UserActivity(
+            user_id=user_id,
+            activity_type=activity_type,
+            description=description,
+            timestamp=datetime.utcnow()
+        )
+        db.session.add(activity)
+        db.session.commit()
+    except Exception as e:
+        print(f"Error creating user activity: {e}")
+        db.session.rollback()
 
 def convert_empty_strings_to_none(data, integer_fields):
     """Convert empty strings to None for integer fields"""
@@ -777,6 +782,76 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
+@app.route('/api/admin/video-stats')
+@login_required
+def get_video_completion_stats():
+    """Get video completion statistics for admin dashboard"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        # Overall stats
+        total_videos = Video.query.count()
+        total_users = User.query.count()
+        total_progress_records = UserProgress.query.count()
+        total_completions = UserProgress.query.filter_by(completed=True).count()
+        
+        # Completion rate
+        completion_rate = (total_completions / total_progress_records * 100) if total_progress_records > 0 else 0
+        
+        # Most popular videos (by view count)
+        popular_videos = db.session.query(
+            Video.title,
+            Video.id,
+            db.func.count(UserProgress.id).label('view_count'),
+            db.func.count(db.case([(UserProgress.completed == True, 1)])).label('completion_count')
+        ).join(UserProgress).group_by(Video.id, Video.title)\
+         .order_by(db.desc('view_count')).limit(10).all()
+        
+        # Videos with highest completion rates
+        high_completion_videos = db.session.query(
+            Video.title,
+            Video.id,
+            db.func.count(UserProgress.id).label('view_count'),
+            db.func.count(db.case([(UserProgress.completed == True, 1)])).label('completion_count'),
+            (db.func.count(db.case([(UserProgress.completed == True, 1)])).cast(db.Float) / 
+             db.func.count(UserProgress.id) * 100).label('completion_rate')
+        ).join(UserProgress).group_by(Video.id, Video.title)\
+         .having(db.func.count(UserProgress.id) >= 5)\
+         .order_by(db.desc('completion_rate')).limit(10).all()
+        
+        return jsonify({
+            'success': True,
+            'overall_stats': {
+                'total_videos': total_videos,
+                'total_users': total_users,
+                'total_progress_records': total_progress_records,
+                'total_completions': total_completions,
+                'completion_rate': round(completion_rate, 2)
+            },
+            'popular_videos': [
+                {
+                    'title': v.title,
+                    'id': v.id,
+                    'view_count': v.view_count,
+                    'completion_count': v.completion_count,
+                    'completion_rate': round((v.completion_count / v.view_count * 100), 2) if v.view_count > 0 else 0
+                } for v in popular_videos
+            ],
+            'high_completion_videos': [
+                {
+                    'title': v.title,
+                    'id': v.id,
+                    'view_count': v.view_count,
+                    'completion_count': v.completion_count,
+                    'completion_rate': round(float(v.completion_rate), 2)
+                } for v in high_completion_videos
+            ]
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # NEW SETTINGS ROUTE
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
@@ -882,6 +957,133 @@ def watch_video(video_id):
                          is_favorited=is_favorited,
                          user_progress=user_progress)
 
+@app.route('/api/video/completion', methods=['POST'])
+@login_required
+def toggle_video_completion():
+    """Manually toggle video completion status"""
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        completed = data.get('completed', False)
+        
+        if not video_id:
+            return jsonify({'error': 'Video ID is required'}), 400
+        
+        # Check if video exists
+        video = Video.query.get(video_id)
+        if not video:
+            return jsonify({'error': 'Video not found'}), 404
+        
+        # Get or create progress record
+        progress = UserProgress.query.filter_by(
+            user_id=current_user.id, 
+            video_id=video_id
+        ).first()
+        
+        if not progress:
+            progress = UserProgress(
+                user_id=current_user.id,
+                video_id=video_id,
+                watched_duration=0
+            )
+            db.session.add(progress)
+        
+        # Update completion status
+        old_completed = progress.completed
+        progress.completed = completed
+        progress.last_watched = datetime.utcnow()
+        
+        # If marking as complete and no previous watch time, set to full duration
+        if completed and progress.watched_duration == 0 and video.duration:
+            progress.watched_duration = video.duration
+        elif completed and video.duration:
+            # Ensure watched duration is at least 90% when manually completing
+            min_duration = int(video.duration * 0.9)
+            if progress.watched_duration < min_duration:
+                progress.watched_duration = video.duration
+        elif not completed:
+            # When marking as incomplete, keep the actual watched duration
+            pass
+        
+        db.session.commit()
+        
+        # Create activity if status changed
+        if old_completed != completed:
+            if completed:
+                create_user_activity(
+                    current_user.id, 
+                    'video_completed', 
+                    f'Completed "{video.title}"'
+                )
+            else:
+                create_user_activity(
+                    current_user.id, 
+                    'video_progress_reset', 
+                    f'Marked "{video.title}" as incomplete'
+                )
+        
+        return jsonify({
+            'success': True,
+            'completed': progress.completed,
+            'watched_duration': progress.watched_duration,
+            'message': 'Completion status updated successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/video/reset-progress', methods=['POST'])
+@login_required
+def reset_video_progress():
+    """Reset video progress to 0 and mark as incomplete"""
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        
+        if not video_id:
+            return jsonify({'error': 'Video ID is required'}), 400
+        
+        # Check if video exists
+        video = Video.query.get(video_id)
+        if not video:
+            return jsonify({'error': 'Video not found'}), 404
+        
+        # Get progress record
+        progress = UserProgress.query.filter_by(
+            user_id=current_user.id, 
+            video_id=video_id
+        ).first()
+        
+        if progress:
+            # Reset progress
+            progress.watched_duration = 0
+            progress.completed = False
+            progress.last_watched = datetime.utcnow()
+            
+            db.session.commit()
+            
+            # Create activity
+            create_user_activity(
+                current_user.id, 
+                'video_progress_reset', 
+                f'Reset progress for "{video.title}"'
+            )
+            
+            return jsonify({
+                'success': True,
+                'message': 'Progress reset successfully'
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': 'No progress to reset'
+            })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/recommendations')
 @login_required
 def recommendations():
@@ -957,30 +1159,67 @@ def donate():
 @app.route('/api/video/progress', methods=['POST'])
 @login_required
 def update_progress():
-    data = request.get_json()
-    video_id = data.get('video_id')
-    watched_duration = data.get('watched_duration')
-    total_duration = data.get('total_duration')
-    
-    progress = UserProgress.query.filter_by(user_id=current_user.id, video_id=video_id).first()
-    if not progress:
-        progress = UserProgress(user_id=current_user.id, video_id=video_id)
-        db.session.add(progress)
-    
-    progress.watched_duration = watched_duration
-    progress.last_watched = datetime.utcnow()
-    
-    # Mark as completed if watched 90% or more
-    if total_duration and watched_duration >= (total_duration * 0.9):
-        if not progress.completed:
+    """Update video watch progress"""
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        watched_duration = data.get('watched_duration', 0)
+        total_duration = data.get('total_duration', 0)
+        force_complete = data.get('force_complete', False)
+        
+        if not video_id:
+            return jsonify({'error': 'Video ID is required'}), 400
+        
+        # Get or create progress record
+        progress = UserProgress.query.filter_by(
+            user_id=current_user.id, 
+            video_id=video_id
+        ).first()
+        
+        if not progress:
+            progress = UserProgress(
+                user_id=current_user.id,
+                video_id=video_id
+            )
+            db.session.add(progress)
+        
+        # Update watched duration
+        progress.watched_duration = max(progress.watched_duration, watched_duration)
+        progress.last_watched = datetime.utcnow()
+        
+        # Handle completion logic
+        was_completed = progress.completed
+        
+        if force_complete:
             progress.completed = True
-            # Create completion activity
+        elif total_duration > 0:
+            # Auto-complete if watched 90% or more
+            completion_threshold = total_duration * 0.9
+            if progress.watched_duration >= completion_threshold:
+                progress.completed = True
+        
+        db.session.commit()
+        
+        # Create activity if newly completed
+        if not was_completed and progress.completed:
             video = Video.query.get(video_id)
-            create_user_activity(current_user.id, 'video_completed', f'Completed "{video.title}"')
-    
-    db.session.commit()
-    
-    return jsonify({'success': True})
+            if video:
+                create_user_activity(
+                    current_user.id, 
+                    'video_completed', 
+                    f'Completed "{video.title}"'
+                )
+        
+        return jsonify({
+            'success': True,
+            'completed': progress.completed,
+            'watched_duration': progress.watched_duration,
+            'progress_percentage': (progress.watched_duration / total_duration * 100) if total_duration > 0 else 0
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/video/favorite', methods=['POST'])
 @login_required
