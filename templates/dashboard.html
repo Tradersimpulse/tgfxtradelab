@@ -447,47 +447,100 @@ function checkStreamStatus() {
 function updateSessionTimes() {
     const now = new Date();
     
-    // Trading session times (EST/EDT)
+    // Get current time in EST/EDT (adjust for your timezone)
+    const estOffset = -5; // EST is UTC-5, EDT is UTC-4 (adjust as needed)
+    const currentTime = new Date(now.getTime() + (estOffset * 60 * 60 * 1000));
+    
+    // Trading session times (in EST/EDT hours, 24-hour format)
     const sessions = {
-        sydney: { open: 17, close: 2 }, // 5 PM - 2 AM EST
-        tokyo: { open: 19, close: 4 },  // 7 PM - 4 AM EST
-        london: { open: 3, close: 12 }, // 3 AM - 12 PM EST
-        newYork: { open: 8, close: 17 } // 8 AM - 5 PM EST
+        sydney: { 
+            open: { hour: 17, minute: 0 }, 
+            close: { hour: 2, minute: 0 }, 
+            name: 'Sydney'
+        },
+        tokyo: { 
+            open: { hour: 19, minute: 0 }, 
+            close: { hour: 4, minute: 0 }, 
+            name: 'Tokyo'
+        },
+        london: { 
+            open: { hour: 3, minute: 0 }, 
+            close: { hour: 12, minute: 0 }, 
+            name: 'London'
+        },
+        newYork: { 
+            open: { hour: 8, minute: 0 }, 
+            close: { hour: 17, minute: 0 }, 
+            name: 'New York'
+        }
     };
     
-    // This is a simplified version - you'd want to implement proper timezone handling
-    const currentHour = now.getHours();
-    
-    updateSessionStatus('nyStatus', 'nyTime', currentHour, sessions.newYork);
-    updateSessionStatus('londonStatus', 'londonTime', currentHour, sessions.london);
-    updateSessionStatus('tokyoStatus', 'tokyoTime', currentHour, sessions.tokyo);
-    updateSessionStatus('sydneyStatus', 'sydneyTime', currentHour, sessions.sydney);
+    updateSessionStatus('sydneyStatus', 'sydneyTime', currentTime, sessions.sydney);
+    updateSessionStatus('tokyoStatus', 'tokyoTime', currentTime, sessions.tokyo);
+    updateSessionStatus('londonStatus', 'londonTime', currentTime, sessions.london);
+    updateSessionStatus('nyStatus', 'nyTime', currentTime, sessions.newYork);
 }
 
-function updateSessionStatus(statusId, timeId, currentHour, session) {
+function updateSessionStatus(statusId, timeId, currentTime, session) {
     const statusElement = document.getElementById(statusId);
     const timeElement = document.getElementById(timeId);
     
+    if (!statusElement || !timeElement) return;
+    
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+    const currentSecond = currentTime.getSeconds();
+    
     let isOpen = false;
-    let nextEventHour = 0;
+    let nextEventTime = null;
     let nextEventType = '';
     
-    if (session.open < session.close) {
-        // Same day session
-        isOpen = currentHour >= session.open && currentHour < session.close;
-        nextEventHour = isOpen ? session.close : session.open;
-        nextEventType = isOpen ? 'close' : 'open';
-    } else {
-        // Overnight session
-        isOpen = currentHour >= session.open || currentHour < session.close;
-        if (currentHour >= session.open) {
-            nextEventHour = session.close + 24;
+    // Create time objects for comparison
+    const currentTimeMinutes = currentHour * 60 + currentMinute;
+    const openTimeMinutes = session.open.hour * 60 + session.open.minute;
+    const closeTimeMinutes = session.close.hour * 60 + session.close.minute;
+    
+    if (openTimeMinutes < closeTimeMinutes) {
+        // Same day session (e.g., London: 3 AM - 12 PM)
+        isOpen = currentTimeMinutes >= openTimeMinutes && currentTimeMinutes < closeTimeMinutes;
+        
+        if (isOpen) {
+            // Currently open, next event is close
+            nextEventTime = new Date(currentTime);
+            nextEventTime.setHours(session.close.hour, session.close.minute, 0, 0);
             nextEventType = 'close';
-        } else if (currentHour < session.close) {
-            nextEventHour = session.close;
+        } else if (currentTimeMinutes < openTimeMinutes) {
+            // Before opening today
+            nextEventTime = new Date(currentTime);
+            nextEventTime.setHours(session.open.hour, session.open.minute, 0, 0);
+            nextEventType = 'open';
+        } else {
+            // After closing today, next open is tomorrow
+            nextEventTime = new Date(currentTime);
+            nextEventTime.setDate(currentTime.getDate() + 1);
+            nextEventTime.setHours(session.open.hour, session.open.minute, 0, 0);
+            nextEventType = 'open';
+        }
+    } else {
+        // Overnight session (e.g., Sydney: 5 PM - 2 AM next day)
+        isOpen = currentTimeMinutes >= openTimeMinutes || currentTimeMinutes < closeTimeMinutes;
+        
+        if (isOpen) {
+            if (currentTimeMinutes >= openTimeMinutes) {
+                // Opened today, closes tomorrow
+                nextEventTime = new Date(currentTime);
+                nextEventTime.setDate(currentTime.getDate() + 1);
+                nextEventTime.setHours(session.close.hour, session.close.minute, 0, 0);
+            } else {
+                // Opened yesterday, closes today
+                nextEventTime = new Date(currentTime);
+                nextEventTime.setHours(session.close.hour, session.close.minute, 0, 0);
+            }
             nextEventType = 'close';
         } else {
-            nextEventHour = session.open;
+            // Currently closed
+            nextEventTime = new Date(currentTime);
+            nextEventTime.setHours(session.open.hour, session.open.minute, 0, 0);
             nextEventType = 'open';
         }
     }
@@ -501,10 +554,90 @@ function updateSessionStatus(statusId, timeId, currentHour, session) {
         statusElement.textContent = 'Closed';
     }
     
-    // Calculate time until next event (simplified)
-    const hoursUntil = Math.abs(nextEventHour - currentHour);
-    timeElement.textContent = `${hoursUntil}h until ${nextEventType}`;
+    // Calculate time difference with hours, minutes, and seconds
+    if (nextEventTime) {
+        const timeDiff = nextEventTime.getTime() - currentTime.getTime();
+        
+        if (timeDiff > 0) {
+            const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+            const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+            
+            // Format the time display
+            let timeDisplay = '';
+            if (hours > 0) {
+                timeDisplay = `${hours}h ${minutes}m ${seconds}s until ${nextEventType}`;
+            } else if (minutes > 0) {
+                timeDisplay = `${minutes}m ${seconds}s until ${nextEventType}`;
+            } else {
+                timeDisplay = `${seconds}s until ${nextEventType}`;
+            }
+            
+            timeElement.textContent = timeDisplay;
+            
+            // Add urgency styling for last minute
+            if (hours === 0 && minutes === 0 && seconds <= 60) {
+                timeElement.style.color = '#ef4444'; // Red color for urgency
+                timeElement.style.fontWeight = 'bold';
+            } else if (hours === 0 && minutes <= 5) {
+                timeElement.style.color = '#f59e0b'; // Orange color for warning
+                timeElement.style.fontWeight = 'bold';
+            } else {
+                timeElement.style.color = '';
+                timeElement.style.fontWeight = '';
+            }
+        } else {
+            timeElement.textContent = `${nextEventType === 'open' ? 'Opening' : 'Closing'} now...`;
+            timeElement.style.color = '#10b981'; // Green for active change
+            timeElement.style.fontWeight = 'bold';
+        }
+    }
 }
+
+// Enhanced initialization with better error handling
+document.addEventListener('DOMContentLoaded', function() {
+    // Check stream status
+    checkStreamStatus();
+    
+    // Update session times immediately
+    updateSessionTimes();
+    
+    // Set up intervals with error handling
+    const streamInterval = setInterval(() => {
+        try {
+            checkStreamStatus();
+        } catch (error) {
+            console.error('Error checking stream status:', error);
+        }
+    }, 5000); // Check every 5 seconds for more responsiveness
+    
+    const sessionInterval = setInterval(() => {
+        try {
+            updateSessionTimes();
+        } catch (error) {
+            console.error('Error updating session times:', error);
+        }
+    }, 1000); // Update every second for smooth countdown
+    
+    // Animate dashboard cards
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+    
+    // Clean up intervals when page unloads
+    window.addEventListener('beforeunload', () => {
+        clearInterval(streamInterval);
+        clearInterval(sessionInterval);
+    });
+});
 
 // Add pulsing animation for live indicator
 const style = document.createElement('style');
