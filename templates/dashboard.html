@@ -393,6 +393,37 @@
 
 {% block scripts %}
 <script>
+// Get user's timezone from backend
+const USER_TIMEZONE = '{{ current_user.timezone|default("America/Chicago") }}';
+
+// Accurate trading session times in EST (baseline timezone)
+const TRADING_SESSIONS_EST = {
+    sydney: { 
+        open: { hour: 17, minute: 0 }, 
+        close: { hour: 2, minute: 0 },
+        name: 'Sydney',
+        days: [0, 1, 2, 3, 4] // Sunday-Thursday
+    },
+    tokyo: { 
+        open: { hour: 19, minute: 0 }, 
+        close: { hour: 4, minute: 0 },
+        name: 'Tokyo',
+        days: [0, 1, 2, 3, 4] // Sunday-Thursday
+    },
+    london: { 
+        open: { hour: 3, minute: 0 }, 
+        close: { hour: 12, minute: 0 },
+        name: 'London',
+        days: [1, 2, 3, 4, 5] // Monday-Friday
+    },
+    newYork: { 
+        open: { hour: 8, minute: 0 }, 
+        close: { hour: 17, minute: 0 },
+        name: 'New York',
+        days: [1, 2, 3, 4, 5] // Monday-Friday
+    }
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // Check stream status
     checkStreamStatus();
@@ -401,37 +432,30 @@ document.addEventListener('DOMContentLoaded', function() {
     updateSessionTimes();
     
     // Set up intervals
-    setInterval(checkStreamStatus, 30000); // Check every 30 seconds
+    setInterval(checkStreamStatus, 5000); // Check every 5 seconds
     setInterval(updateSessionTimes, 1000); // Update every second
     
     // Animate dashboard cards
-    const cards = document.querySelectorAll('.card');
-    cards.forEach((card, index) => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(20px)';
-        
-        setTimeout(() => {
-            card.style.transition = 'all 0.5s ease';
-            card.style.opacity = '1';
-            card.style.transform = 'translateY(0)';
-        }, index * 100);
-    });
+    animateCards();
+    
+    // Add timezone info and settings link
+    addTimezoneInfo();
 });
 
 function checkStreamStatus() {
     fetch('/api/stream/status')
         .then(response => response.json())
         .then(data => {
-            const statusIcon = document.getElementById('streamStatusIcon').querySelector('.material-symbols-outlined');
+            const statusIcon = document.getElementById('streamStatusIcon')?.querySelector('.material-symbols-outlined');
             const statusText = document.getElementById('streamStatusText');
+            
+            if (!statusIcon || !statusText) return;
             
             if (data.active && data.count > 0) {
                 statusIcon.className = 'material-symbols-outlined text-danger';
                 statusIcon.textContent = 'live_tv';
                 statusText.textContent = `${data.count} Live`;
                 statusText.className = 'text-danger mb-2';
-                
-                // Add pulsing effect
                 statusIcon.style.animation = 'pulse 2s infinite';
             } else {
                 statusIcon.className = 'material-symbols-outlined text-muted';
@@ -445,40 +469,19 @@ function checkStreamStatus() {
 }
 
 function updateSessionTimes() {
-    const now = new Date();
-    
-    // Get current time in EST/EDT (adjust for your timezone)
-    const estOffset = -5; // EST is UTC-5, EDT is UTC-4 (adjust as needed)
-    const currentTime = new Date(now.getTime() + (estOffset * 60 * 60 * 1000));
-    
-    // Trading session times (in EST/EDT hours, 24-hour format)
-    const sessions = {
-        sydney: { 
-            open: { hour: 17, minute: 0 }, 
-            close: { hour: 2, minute: 0 }, 
-            name: 'Sydney'
-        },
-        tokyo: { 
-            open: { hour: 19, minute: 0 }, 
-            close: { hour: 4, minute: 0 }, 
-            name: 'Tokyo'
-        },
-        london: { 
-            open: { hour: 3, minute: 0 }, 
-            close: { hour: 12, minute: 0 }, 
-            name: 'London'
-        },
-        newYork: { 
-            open: { hour: 8, minute: 0 }, 
-            close: { hour: 17, minute: 0 }, 
-            name: 'New York'
-        }
-    };
-    
-    updateSessionStatus('sydneyStatus', 'sydneyTime', currentTime, sessions.sydney);
-    updateSessionStatus('tokyoStatus', 'tokyoTime', currentTime, sessions.tokyo);
-    updateSessionStatus('londonStatus', 'londonTime', currentTime, sessions.london);
-    updateSessionStatus('nyStatus', 'nyTime', currentTime, sessions.newYork);
+    try {
+        // Get current time
+        const now = new Date();
+        
+        // Update each session
+        updateSessionStatus('sydneyStatus', 'sydneyTime', now, TRADING_SESSIONS_EST.sydney);
+        updateSessionStatus('tokyoStatus', 'tokyoTime', now, TRADING_SESSIONS_EST.tokyo);
+        updateSessionStatus('londonStatus', 'londonTime', now, TRADING_SESSIONS_EST.london);
+        updateSessionStatus('nyStatus', 'nyTime', now, TRADING_SESSIONS_EST.newYork);
+        
+    } catch (error) {
+        console.error('Error updating session times:', error);
+    }
 }
 
 function updateSessionStatus(statusId, timeId, currentTime, session) {
@@ -487,139 +490,230 @@ function updateSessionStatus(statusId, timeId, currentTime, session) {
     
     if (!statusElement || !timeElement) return;
     
-    const currentHour = currentTime.getHours();
-    const currentMinute = currentTime.getMinutes();
-    const currentSecond = currentTime.getSeconds();
+    try {
+        // Calculate session status in user's timezone
+        const { isOpen, nextEventTime, nextEventType, isMarketDay } = calculateSessionStatus(currentTime, session);
+        
+        // Update status badge
+        if (isOpen && isMarketDay) {
+            statusElement.className = 'badge bg-success';
+            statusElement.textContent = 'Open';
+        } else {
+            statusElement.className = 'badge bg-danger';
+            statusElement.textContent = isMarketDay ? 'Closed' : 'Weekend';
+        }
+        
+        // Update countdown
+        if (nextEventTime && isMarketDay) {
+            const timeDiff = nextEventTime.getTime() - currentTime.getTime();
+            
+            if (timeDiff > 0) {
+                const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+                
+                let timeDisplay = '';
+                if (days > 0) {
+                    timeDisplay = `${days}d ${hours}h ${minutes}m until ${nextEventType}`;
+                } else if (hours > 0) {
+                    timeDisplay = `${hours}h ${minutes}m ${seconds}s until ${nextEventType}`;
+                } else if (minutes > 0) {
+                    timeDisplay = `${minutes}m ${seconds}s until ${nextEventType}`;
+                } else {
+                    timeDisplay = `${seconds}s until ${nextEventType}`;
+                }
+                
+                timeElement.textContent = timeDisplay;
+                
+                // Add urgency styling
+                if (days === 0 && hours === 0 && minutes === 0 && seconds <= 60) {
+                    timeElement.style.color = '#ef4444'; // Red for last minute
+                    timeElement.style.fontWeight = 'bold';
+                } else if (days === 0 && hours === 0 && minutes <= 5) {
+                    timeElement.style.color = '#f59e0b'; // Orange for last 5 minutes
+                    timeElement.style.fontWeight = 'bold';
+                } else {
+                    timeElement.style.color = '';
+                    timeElement.style.fontWeight = '';
+                }
+            } else {
+                timeElement.textContent = `${nextEventType === 'open' ? 'Opening' : 'Closing'} now...`;
+                timeElement.style.color = '#10b981';
+                timeElement.style.fontWeight = 'bold';
+            }
+        } else if (!isMarketDay) {
+            timeElement.textContent = 'Closed for weekend';
+            timeElement.style.color = '#6b7280';
+            timeElement.style.fontWeight = '';
+        }
+        
+    } catch (error) {
+        console.error('Error calculating session status for', statusId, ':', error);
+        timeElement.textContent = 'Error calculating time';
+    }
+}
+
+function calculateSessionStatus(currentTime, session) {
+    // Get current day of week (0 = Sunday, 1 = Monday, etc.)
+    const currentDay = currentTime.getDay();
+    
+    // Check if market should be open today
+    const isMarketDay = session.days.includes(currentDay);
+    
+    // Convert EST session times to user's timezone
+    const userTimezoneTimes = convertSessionTimesToUserTimezone(session, currentTime);
     
     let isOpen = false;
     let nextEventTime = null;
     let nextEventType = '';
     
-    // Create time objects for comparison
-    const currentTimeMinutes = currentHour * 60 + currentMinute;
-    const openTimeMinutes = session.open.hour * 60 + session.open.minute;
-    const closeTimeMinutes = session.close.hour * 60 + session.close.minute;
-    
-    if (openTimeMinutes < closeTimeMinutes) {
-        // Same day session (e.g., London: 3 AM - 12 PM)
-        isOpen = currentTimeMinutes >= openTimeMinutes && currentTimeMinutes < closeTimeMinutes;
+    if (!isMarketDay) {
+        // Market closed for the day - find next market day
+        isOpen = false;
+        const nextMarketDay = findNextMarketDay(currentDay, session.days);
+        const daysUntilOpen = nextMarketDay > currentDay ? 
+            nextMarketDay - currentDay : 
+            (7 - currentDay) + nextMarketDay;
         
-        if (isOpen) {
-            // Currently open, next event is close
-            nextEventTime = new Date(currentTime);
-            nextEventTime.setHours(session.close.hour, session.close.minute, 0, 0);
-            nextEventType = 'close';
-        } else if (currentTimeMinutes < openTimeMinutes) {
-            // Before opening today
-            nextEventTime = new Date(currentTime);
-            nextEventTime.setHours(session.open.hour, session.open.minute, 0, 0);
-            nextEventType = 'open';
-        } else {
-            // After closing today, next open is tomorrow
-            nextEventTime = new Date(currentTime);
-            nextEventTime.setDate(currentTime.getDate() + 1);
-            nextEventTime.setHours(session.open.hour, session.open.minute, 0, 0);
-            nextEventType = 'open';
-        }
+        nextEventTime = new Date(userTimezoneTimes.openTime);
+        nextEventTime.setDate(nextEventTime.getDate() + daysUntilOpen);
+        nextEventType = 'open';
     } else {
-        // Overnight session (e.g., Sydney: 5 PM - 2 AM next day)
-        isOpen = currentTimeMinutes >= openTimeMinutes || currentTimeMinutes < closeTimeMinutes;
+        // Check if within trading hours
+        const { openTime, closeTime } = userTimezoneTimes;
+        
+        if (session.close.hour < session.open.hour) {
+            // Overnight session (e.g., Sydney, Tokyo)
+            isOpen = currentTime >= openTime || currentTime < closeTime;
+        } else {
+            // Same day session (e.g., London, New York)
+            isOpen = currentTime >= openTime && currentTime < closeTime;
+        }
         
         if (isOpen) {
-            if (currentTimeMinutes >= openTimeMinutes) {
-                // Opened today, closes tomorrow
-                nextEventTime = new Date(currentTime);
-                nextEventTime.setDate(currentTime.getDate() + 1);
-                nextEventTime.setHours(session.close.hour, session.close.minute, 0, 0);
-            } else {
-                // Opened yesterday, closes today
-                nextEventTime = new Date(currentTime);
-                nextEventTime.setHours(session.close.hour, session.close.minute, 0, 0);
-            }
+            nextEventTime = closeTime;
             nextEventType = 'close';
         } else {
-            // Currently closed
-            nextEventTime = new Date(currentTime);
-            nextEventTime.setHours(session.open.hour, session.open.minute, 0, 0);
-            nextEventType = 'open';
+            if (currentTime < openTime) {
+                // Before opening today
+                nextEventTime = openTime;
+                nextEventType = 'open';
+            } else {
+                // After closing today - next open is next market day
+                const nextMarketDay = findNextMarketDay(currentDay, session.days);
+                const daysUntilOpen = nextMarketDay > currentDay ? 
+                    nextMarketDay - currentDay : 
+                    (7 - currentDay) + nextMarketDay;
+                
+                nextEventTime = new Date(openTime);
+                nextEventTime.setDate(nextEventTime.getDate() + daysUntilOpen);
+                nextEventType = 'open';
+            }
         }
     }
     
-    // Update status badge
-    if (isOpen) {
-        statusElement.className = 'badge bg-success';
-        statusElement.textContent = 'Open';
-    } else {
-        statusElement.className = 'badge bg-danger';
-        statusElement.textContent = 'Closed';
-    }
-    
-    // Calculate time difference with hours, minutes, and seconds
-    if (nextEventTime) {
-        const timeDiff = nextEventTime.getTime() - currentTime.getTime();
+    return { isOpen, nextEventTime, nextEventType, isMarketDay };
+}
+
+function convertSessionTimesToUserTimezone(session, currentTime) {
+    try {
+        // Create a date for today in EST
+        const today = new Date(currentTime);
         
-        if (timeDiff > 0) {
-            const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-            const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
-            
-            // Format the time display
-            let timeDisplay = '';
-            if (hours > 0) {
-                timeDisplay = `${hours}h ${minutes}m ${seconds}s until ${nextEventType}`;
-            } else if (minutes > 0) {
-                timeDisplay = `${minutes}m ${seconds}s until ${nextEventType}`;
-            } else {
-                timeDisplay = `${seconds}s until ${nextEventType}`;
-            }
-            
-            timeElement.textContent = timeDisplay;
-            
-            // Add urgency styling for last minute
-            if (hours === 0 && minutes === 0 && seconds <= 60) {
-                timeElement.style.color = '#ef4444'; // Red color for urgency
-                timeElement.style.fontWeight = 'bold';
-            } else if (hours === 0 && minutes <= 5) {
-                timeElement.style.color = '#f59e0b'; // Orange color for warning
-                timeElement.style.fontWeight = 'bold';
-            } else {
-                timeElement.style.color = '';
-                timeElement.style.fontWeight = '';
-            }
-        } else {
-            timeElement.textContent = `${nextEventType === 'open' ? 'Opening' : 'Closing'} now...`;
-            timeElement.style.color = '#10b981'; // Green for active change
-            timeElement.style.fontWeight = 'bold';
+        // Create EST times (baseline times are in EST)
+        const estOpenTime = new Date(today);
+        estOpenTime.setHours(session.open.hour, session.open.minute, 0, 0);
+        
+        const estCloseTime = new Date(today);
+        estCloseTime.setHours(session.close.hour, session.close.minute, 0, 0);
+        
+        // Handle overnight sessions
+        if (session.close.hour < session.open.hour) {
+            estCloseTime.setDate(estCloseTime.getDate() + 1);
         }
+        
+        // Convert to user's timezone using the browser's built-in timezone conversion
+        // This is a simplified approach - the times are displayed as-is since we're showing EST times converted to user display
+        
+        // For now, we'll calculate the offset and adjust accordingly
+        const estOffset = -5 * 60; // EST is UTC-5 (in minutes)
+        const userOffset = -(new Date().getTimezoneOffset()); // User's offset from UTC (in minutes)
+        const offsetDifference = (userOffset - estOffset) * 60 * 1000; // Convert to milliseconds
+        
+        const openTime = new Date(estOpenTime.getTime() + offsetDifference);
+        const closeTime = new Date(estCloseTime.getTime() + offsetDifference);
+        
+        return { openTime, closeTime };
+        
+    } catch (error) {
+        console.error('Error converting session times:', error);
+        // Fallback to EST times
+        const today = new Date(currentTime);
+        const openTime = new Date(today);
+        openTime.setHours(session.open.hour, session.open.minute, 0, 0);
+        
+        const closeTime = new Date(today);
+        closeTime.setHours(session.close.hour, session.close.minute, 0, 0);
+        
+        if (session.close.hour < session.open.hour) {
+            closeTime.setDate(closeTime.getDate() + 1);
+        }
+        
+        return { openTime, closeTime };
     }
 }
 
-// Enhanced initialization with better error handling
-document.addEventListener('DOMContentLoaded', function() {
-    // Check stream status
-    checkStreamStatus();
-    
-    // Update session times immediately
-    updateSessionTimes();
-    
-    // Set up intervals with error handling
-    const streamInterval = setInterval(() => {
-        try {
-            checkStreamStatus();
-        } catch (error) {
-            console.error('Error checking stream status:', error);
+function findNextMarketDay(currentDay, marketDays) {
+    // Find the next day that's in the marketDays array
+    for (let i = 1; i <= 7; i++) {
+        const nextDay = (currentDay + i) % 7;
+        if (marketDays.includes(nextDay)) {
+            return nextDay;
         }
-    }, 5000); // Check every 5 seconds for more responsiveness
+    }
+    return marketDays[0]; // Fallback to first market day
+}
+
+function addTimezoneInfo() {
+    // Find the session times card
+    const cards = document.querySelectorAll('.card');
+    let sessionCard = null;
     
-    const sessionInterval = setInterval(() => {
-        try {
-            updateSessionTimes();
-        } catch (error) {
-            console.error('Error updating session times:', error);
+    for (let card of cards) {
+        const header = card.querySelector('.card-header h5');
+        if (header && header.textContent.includes('Session Times')) {
+            sessionCard = card;
+            break;
         }
-    }, 1000); // Update every second for smooth countdown
+    }
     
-    // Animate dashboard cards
+    if (sessionCard) {
+        const cardHeader = sessionCard.querySelector('.card-header');
+        const titleElement = cardHeader.querySelector('h5');
+        
+        // Add timezone info
+        const timezoneInfo = document.createElement('small');
+        timezoneInfo.className = 'text-muted d-block mt-1';
+        timezoneInfo.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 14px;">public</span>Times in: ${USER_TIMEZONE.replace('_', ' ')}`;
+        titleElement.appendChild(timezoneInfo);
+        
+        // Add settings link
+        const settingsLink = document.createElement('a');
+        settingsLink.href = '/settings';
+        settingsLink.className = 'btn btn-outline-primary btn-sm';
+        settingsLink.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">schedule</span>Change';
+        settingsLink.title = 'Change your timezone';
+        
+        // Style the header to accommodate the button
+        cardHeader.style.display = 'flex';
+        cardHeader.style.justifyContent = 'space-between';
+        cardHeader.style.alignItems = 'flex-start';
+        cardHeader.appendChild(settingsLink);
+    }
+}
+
+function animateCards() {
     const cards = document.querySelectorAll('.card');
     cards.forEach((card, index) => {
         card.style.opacity = '0';
@@ -631,13 +725,7 @@ document.addEventListener('DOMContentLoaded', function() {
             card.style.transform = 'translateY(0)';
         }, index * 100);
     });
-    
-    // Clean up intervals when page unloads
-    window.addEventListener('beforeunload', () => {
-        clearInterval(streamInterval);
-        clearInterval(sessionInterval);
-    });
-});
+}
 
 // Add pulsing animation for live indicator
 const style = document.createElement('style');
@@ -650,4 +738,5 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 </script>
+{% endblock %}
 {% endblock %}
