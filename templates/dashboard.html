@@ -8,27 +8,25 @@
     <div class="col-12">
         <!-- Main Welcome Content -->
         <div class="row align-items-start">
-            <div class="col-lg-8 col-md-7 mb-3 mb-md-0">
+            <div class="col-lg-8 col-md-7 mb-3 mb-md-0 d-flex flex-column">
                 <h1 class="text-gradient-primary mb-2">Welcome back, {{ current_user.username }}!</h1>
                 <p class="text-muted mb-3">Ready to continue your trading journey? Here's what's happening today.</p>
                 
                 <!-- Inspirational Quote -->
-                <div class="card quote-card h-100">
-                    <div class="card-body d-flex flex-column justify-content-center">
-                        <div class="d-flex align-items-center">
-                            <span class="material-symbols-outlined text-primary me-3 quote-icon">format_quote</span>
-                            <div class="flex-grow-1">
-                                <p class="mb-1 text-white quote-text" id="dailyQuote">Every day is a new opportunity. You can build on yesterday's success or put its failures behind and start over again.</p>
-                                <small class="text-muted">— Trading Wisdom</small>
-                            </div>
+                <div class="card quote-card flex-grow-1">
+                    <div class="card-body d-flex align-items-center">
+                        <span class="material-symbols-outlined text-primary me-3 quote-icon">format_quote</span>
+                        <div class="flex-grow-1">
+                            <p class="mb-1 text-white quote-text" id="dailyQuote">Every day is a new opportunity. You can build on yesterday's success or put its failures behind and start over again.</p>
+                            <small class="text-muted">— Trading Wisdom</small>
                         </div>
                     </div>
                 </div>
             </div>
             
             <!-- Subscription Status -->
-            <div class="col-lg-4 col-md-5">
-                <div class="card subscription-card h-100">
+            <div class="col-lg-4 col-md-5 d-flex flex-column">
+                <div class="card subscription-card flex-grow-1" style="margin-top: 4.75rem;">
                     <div class="card-body text-center d-flex flex-column justify-content-center">
                         <div class="d-flex align-items-center justify-content-center mb-2">
                             <span class="material-symbols-outlined text-primary me-2 subscription-icon">workspace_premium</span>
@@ -383,14 +381,27 @@
 </div>
 
 <style>
-/* Responsive improvements */
+/* Welcome section cards */
 .quote-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: all 0.3s ease;
+}
+
+.quote-card:hover {
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
 }
 
 .quote-icon {
     font-size: 2rem;
+    transition: all 0.3s ease;
+}
+
+.quote-card:hover .quote-icon {
+    transform: scale(1.1);
 }
 
 .quote-text {
@@ -400,8 +411,16 @@
 
 /* Subscription card improvements */
 .subscription-card {
-    border: 1px solid rgba(16, 185, 129, 0.2);
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.02) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+    transition: all 0.3s ease;
+}
+
+.subscription-card:hover {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+    border-color: rgba(16, 185, 129, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
 }
 
 .subscription-icon {
