@@ -1168,6 +1168,13 @@ def admin_add_video():
         if hasattr(form, 'tags'):
             tags_data = form.tags.data
         
+        # Handle integer fields properly
+        order_index = form.order_index.data
+        if order_index == '' or order_index is None:
+            order_index = 0
+        else:
+            order_index = int(order_index)
+        
         video = Video(
             title=form.title.data,
             description=form.description.data,
@@ -1175,7 +1182,7 @@ def admin_add_video():
             thumbnail_url=form.thumbnail_url.data,
             category_id=form.category_id.data,
             is_free=form.is_free.data,
-            order_index=form.order_index.data
+            order_index=order_index
         )
         db.session.add(video)
         db.session.flush()
@@ -1199,7 +1206,7 @@ def admin_add_video():
         return redirect(url_for('admin_videos'))
     
     return render_template('admin/video_form.html', form=form, title='Add Video')
-
+    
 @app.route('/admin/video/edit/<int:video_id>', methods=['GET', 'POST'])
 @login_required
 def admin_edit_video(video_id):
@@ -1507,7 +1514,6 @@ def admin_stream():
                          user_active_stream=user_active_stream,
                          user_active_stream_dict=user_active_stream_dict)
 
-# API Routes for Admin and Recommendations
 @app.route('/api/admin/recommendations', methods=['POST'])
 @login_required
 def api_add_recommendation():
@@ -1517,6 +1523,10 @@ def api_add_recommendation():
     data = request.get_json()
     
     try:
+        # Convert empty strings to None for integer fields
+        integer_fields = ['discount_percentage', 'order_index']
+        data = convert_empty_strings_to_none(data, integer_fields)
+        
         recommendation = Recommendation(
             title=data.get('title'),
             description=data.get('description'),
@@ -1581,6 +1591,10 @@ def api_update_recommendation(recommendation_id):
     data = request.get_json()
     
     try:
+        # Convert empty strings to None for integer fields
+        integer_fields = ['discount_percentage', 'order_index']
+        data = convert_empty_strings_to_none(data, integer_fields)
+        
         recommendation.title = data.get('title', recommendation.title)
         recommendation.description = data.get('description', recommendation.description)
         recommendation.category = data.get('category', recommendation.category)
