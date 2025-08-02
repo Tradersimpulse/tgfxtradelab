@@ -1,0 +1,520 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - TGFX Trade Lab{% endblock %}
+
+{% block content %}
+<!-- Welcome Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h1 class="text-gradient-primary mb-2">Welcome back, {{ current_user.username }}!</h1>
+                <p class="text-muted mb-3">Ready to continue your trading journey? Here's what's happening today.</p>
+                
+                <!-- Inspirational Quote -->
+                <div class="card bg-gradient" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%); border: 1px solid rgba(16, 185, 129, 0.2);">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center">
+                            <span class="material-symbols-outlined text-primary me-3" style="font-size: 2rem;">format_quote</span>
+                            <div>
+                                <p class="mb-1 text-white" id="dailyQuote">Every day is a new opportunity. You can build on yesterday's success or put its failures behind and start over again.</p>
+                                <small class="text-muted">— Trading Wisdom</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Subscription Status -->
+            <div class="card" style="min-width: 250px;">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <span class="material-symbols-outlined text-primary me-2" style="font-size: 1.5rem;">workspace_premium</span>
+                        <small class="text-muted">Your Current Subscription</small>
+                    </div>
+                    <h3 class="text-gradient-primary mb-1">
+                        {% if current_user.has_subscription %}Premium{% else %}Free{% endif %}
+                    </h3>
+                    {% if current_user.has_subscription and current_user.subscription_expires %}
+                    <small class="text-muted">Expires: {{ current_user.subscription_expires.strftime('%B %d, %Y') }}</small>
+                    {% elif not current_user.has_subscription %}
+                    <a href="{{ url_for('subscription') }}" class="btn btn-primary btn-sm mt-2">
+                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">upgrade</span>
+                        Upgrade Now
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats & Notifications -->
+<div class="row mb-5">
+    <!-- Progress Stats -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span class="material-symbols-outlined text-success" style="font-size: 3rem;">trending_up</span>
+                </div>
+                <h3 class="text-gradient-primary mb-2">{{ progress_percentage|round }}%</h3>
+                <p class="text-muted mb-0">Course Progress</p>
+                <div class="progress mt-2" style="height: 6px;">
+                    <div class="progress-bar bg-gradient-primary" style="width: {{ progress_percentage }}%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Videos Watched -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span class="material-symbols-outlined text-primary" style="font-size: 3rem;">play_circle</span>
+                </div>
+                <h3 class="text-gradient-primary mb-2">{{ completed_videos }}</h3>
+                <p class="text-muted mb-0">Videos Completed</p>
+                <small class="text-muted">of {{ total_videos }} total</small>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Favorites -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <span class="material-symbols-outlined text-danger" style="font-size: 3rem;">favorite</span>
+                </div>
+                <h3 class="text-gradient-primary mb-2">{{ favorite_count }}</h3>
+                <p class="text-muted mb-0">Favorite Videos</p>
+                <a href="{{ url_for('favorites') }}" class="btn btn-outline-primary btn-sm mt-2">View All</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Live Stream Status -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="mb-3" id="streamStatusIcon">
+                    <span class="material-symbols-outlined text-muted" style="font-size: 3rem;">live_tv</span>
+                </div>
+                <h3 class="text-muted mb-2" id="streamStatusText">Offline</h3>
+                <p class="text-muted mb-0">Live Stream</p>
+                <a href="{{ url_for('livestream') }}" class="btn btn-outline-primary btn-sm mt-2">
+                    <span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>
+                    Go Live
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Dashboard Content -->
+<div class="row">
+    <!-- Left Column -->
+    <div class="col-lg-8">
+        <!-- Quick Calculations -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">calculate</span>
+                    Quick Calculations
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-6 mb-3 mb-md-0">
+                        <div class="p-3 bg-dark rounded-3">
+                            <strong class="text-primary">NQ1:</strong> 1 point (4 ticks) = <span class="text-success">$20</span> per contract
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 bg-dark rounded-3">
+                            <strong class="text-primary">6E1:</strong> 1 point (2 ticks) = <span class="text-success">$12.50</span> per contract
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3 text-center">
+                    <div class="col-md-6 mb-3 mb-md-0">
+                        <div class="p-3 bg-dark rounded-3">
+                            <strong class="text-primary">GC:</strong> 1 point (10 ticks) = <span class="text-success">$100</span> per contract
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 bg-dark rounded-3">
+                            <strong class="text-primary">M6E1:</strong> 1 point (1 tick) = <span class="text-success">$1.25</span> per contract
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3 text-center">
+                    <div class="col-12">
+                        <div class="p-3 bg-dark rounded-3">
+                            <strong class="text-primary">MNQ M4:</strong> 1 point (4 ticks) = <span class="text-success">$2.00</span> per contract
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Latest News -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">newspaper</span>
+                    Latest News
+                </h5>
+            </div>
+            <div class="card-body p-0" style="height: 400px;">
+                <!-- TradingView Widget BEGIN -->
+                <div class="tradingview-widget-container" style="height: 100%;">
+                  <div class="tradingview-widget-container__widget" style="height: 100%;"></div>
+                  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-timeline.js" async>
+                  {
+                  "feedMode": "all_symbols",
+                  "isTransparent": true,
+                  "displayMode": "regular",
+                  "width": "100%",
+                  "height": "100%",
+                  "colorTheme": "dark",
+                  "locale": "en"
+                }
+                  </script>
+                </div>
+                <!-- TradingView Widget END -->
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">history</span>
+                    Recent Activity
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_activity %}
+                <div class="list-group list-group-flush">
+                    {% for activity in recent_activity %}
+                    <div class="list-group-item bg-transparent border-secondary d-flex align-items-center">
+                        <span class="material-symbols-outlined text-primary me-3">
+                            {% if activity.type == 'video_completed' %}
+                            check_circle
+                            {% elif activity.type == 'video_favorited' %}
+                            favorite
+                            {% elif activity.type == 'course_started' %}
+                            play_arrow
+                            {% else %}
+                            info
+                            {% endif %}
+                        </span>
+                        <div class="flex-grow-1">
+                            <p class="mb-1 text-white">{{ activity.description }}</p>
+                            <small class="text-muted">{{ activity.timestamp.strftime('%B %d, %Y at %I:%M %p') }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <span class="material-symbols-outlined text-muted mb-3" style="font-size: 3rem;">history</span>
+                    <p class="text-muted">No recent activity. Start watching videos to see your progress here!</p>
+                    <a href="{{ url_for('courses') }}" class="btn btn-primary">
+                        <span class="material-symbols-outlined me-2">play_arrow</span>
+                        Browse Courses
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column -->
+    <div class="col-lg-4">
+        <!-- Session Times -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">schedule</span>
+                    Session Times
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- New York -->
+                <div class="d-flex align-items-center mb-3">
+                    <div class="me-3">
+                        <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                            <span class="text-white fw-bold">NY</span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-medium text-white">New York</span>
+                            <span class="badge bg-success" id="nyStatus">Open</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted" id="nyTime">-49h: -16m: -52s until close</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- London -->
+                <div class="d-flex align-items-center mb-3">
+                    <div class="me-3">
+                        <div class="rounded-circle bg-warning d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                            <span class="text-white fw-bold">LN</span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-medium text-white">London</span>
+                            <span class="badge bg-danger" id="londonStatus">Closed</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted" id="londonTime">-55h: -16m: -52s until close</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tokyo -->
+                <div class="d-flex align-items-center mb-3">
+                    <div class="me-3">
+                        <div class="rounded-circle bg-info d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                            <span class="text-white fw-bold">TK</span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-medium text-white">Tokyo</span>
+                            <span class="badge bg-danger" id="tokyoStatus">Closed</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted" id="tokyoTime">-38h: -16m: -52s until close</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sydney -->
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                            <span class="text-white fw-bold">SY</span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-medium text-white">Sydney</span>
+                            <span class="badge bg-danger" id="sydneyStatus">Closed</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted" id="sydneyTime">-41h: -16m: -52s until close</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Economic Calendar -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">event</span>
+                    Economic Calendar
+                </h5>
+            </div>
+            <div class="card-body p-0" style="height: 400px;">
+                <!-- TradingView Widget BEGIN -->
+                <div class="tradingview-widget-container" style="height: 100%;">
+                  <div class="tradingview-widget-container__widget" style="height: 100%;"></div>
+                  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
+                  {
+                  "width": "100%",
+                  "height": "100%",
+                  "colorTheme": "dark",
+                  "isTransparent": true,
+                  "locale": "en",
+                  "importanceFilter": "0,1",
+                  "countryFilter": "us,eu,gb"
+                }
+                  </script>
+                </div>
+                <!-- TradingView Widget END -->
+            </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">notifications</span>
+                    Latest Updates
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if notifications %}
+                <div class="list-group list-group-flush">
+                    {% for notification in notifications %}
+                    <div class="list-group-item bg-transparent border-secondary d-flex align-items-start">
+                        <span class="material-symbols-outlined text-primary me-3 mt-1" style="font-size: 20px;">
+                            {% if notification.type == 'new_video' %}
+                            video_library
+                            {% elif notification.type == 'live_stream' %}
+                            live_tv
+                            {% elif notification.type == 'system' %}
+                            info
+                            {% else %}
+                            notifications
+                            {% endif %}
+                        </span>
+                        <div class="flex-grow-1">
+                            <p class="mb-1 text-white">{{ notification.title }}</p>
+                            <p class="mb-1 text-muted small">{{ notification.message }}</p>
+                            <small class="text-muted">{{ notification.created_at.strftime('%B %d, %Y') }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <span class="material-symbols-outlined text-muted mb-3" style="font-size: 3rem;">notifications_off</span>
+                    <p class="text-muted">No new notifications</p>
+                    <small class="text-muted">You'll see updates about new videos and live streams here</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Check stream status
+    checkStreamStatus();
+    
+    // Update session times
+    updateSessionTimes();
+    
+    // Set up intervals
+    setInterval(checkStreamStatus, 30000); // Check every 30 seconds
+    setInterval(updateSessionTimes, 1000); // Update every second
+    
+    // Animate dashboard cards
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+
+function checkStreamStatus() {
+    fetch('/api/stream/status')
+        .then(response => response.json())
+        .then(data => {
+            const statusIcon = document.getElementById('streamStatusIcon').querySelector('.material-symbols-outlined');
+            const statusText = document.getElementById('streamStatusText');
+            
+            if (data.active && data.count > 0) {
+                statusIcon.className = 'material-symbols-outlined text-danger';
+                statusIcon.textContent = 'live_tv';
+                statusText.textContent = `${data.count} Live`;
+                statusText.className = 'text-danger mb-2';
+                
+                // Add pulsing effect
+                statusIcon.style.animation = 'pulse 2s infinite';
+            } else {
+                statusIcon.className = 'material-symbols-outlined text-muted';
+                statusIcon.textContent = 'live_tv';
+                statusText.textContent = 'Offline';
+                statusText.className = 'text-muted mb-2';
+                statusIcon.style.animation = 'none';
+            }
+        })
+        .catch(error => console.error('Error checking stream status:', error));
+}
+
+function updateSessionTimes() {
+    const now = new Date();
+    
+    // Trading session times (EST/EDT)
+    const sessions = {
+        sydney: { open: 17, close: 2 }, // 5 PM - 2 AM EST
+        tokyo: { open: 19, close: 4 },  // 7 PM - 4 AM EST
+        london: { open: 3, close: 12 }, // 3 AM - 12 PM EST
+        newYork: { open: 8, close: 17 } // 8 AM - 5 PM EST
+    };
+    
+    // This is a simplified version - you'd want to implement proper timezone handling
+    const currentHour = now.getHours();
+    
+    updateSessionStatus('nyStatus', 'nyTime', currentHour, sessions.newYork);
+    updateSessionStatus('londonStatus', 'londonTime', currentHour, sessions.london);
+    updateSessionStatus('tokyoStatus', 'tokyoTime', currentHour, sessions.tokyo);
+    updateSessionStatus('sydneyStatus', 'sydneyTime', currentHour, sessions.sydney);
+}
+
+function updateSessionStatus(statusId, timeId, currentHour, session) {
+    const statusElement = document.getElementById(statusId);
+    const timeElement = document.getElementById(timeId);
+    
+    let isOpen = false;
+    let nextEventHour = 0;
+    let nextEventType = '';
+    
+    if (session.open < session.close) {
+        // Same day session
+        isOpen = currentHour >= session.open && currentHour < session.close;
+        nextEventHour = isOpen ? session.close : session.open;
+        nextEventType = isOpen ? 'close' : 'open';
+    } else {
+        // Overnight session
+        isOpen = currentHour >= session.open || currentHour < session.close;
+        if (currentHour >= session.open) {
+            nextEventHour = session.close + 24;
+            nextEventType = 'close';
+        } else if (currentHour < session.close) {
+            nextEventHour = session.close;
+            nextEventType = 'close';
+        } else {
+            nextEventHour = session.open;
+            nextEventType = 'open';
+        }
+    }
+    
+    // Update status badge
+    if (isOpen) {
+        statusElement.className = 'badge bg-success';
+        statusElement.textContent = 'Open';
+    } else {
+        statusElement.className = 'badge bg-danger';
+        statusElement.textContent = 'Closed';
+    }
+    
+    // Calculate time until next event (simplified)
+    const hoursUntil = Math.abs(nextEventHour - currentHour);
+    timeElement.textContent = `${hoursUntil}h until ${nextEventType}`;
+}
+
+// Add pulsing animation for live indicator
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}
