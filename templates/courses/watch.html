@@ -9,13 +9,13 @@
             <ol class="breadcrumb">
                 <li class="breadcrumb-item">
                     <a href="{{ url_for('courses') }}" class="text-success text-decoration-none">
-                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">school</span>
+                        <span class="material-symbols-outlined me-1 breadcrumb-icon">school</span>
                         All Courses
                     </a>
                 </li>
                 <li class="breadcrumb-item">
                     <a href="{{ url_for('category_videos', category_id=video.category.id) }}" class="text-success text-decoration-none">
-                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">category</span>
+                        <span class="material-symbols-outlined me-1 breadcrumb-icon">category</span>
                         {{ video.category.name }}
                     </a>
                 </li>
@@ -25,7 +25,7 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row g-4">
     <!-- Video Player Column -->
     <div class="col-lg-8">
         <!-- Video Player -->
@@ -52,47 +52,42 @@
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div class="flex-grow-1">
                         <h2 class="text-gradient-primary mb-2">{{ video.title }}</h2>
-                        <div class="d-flex gap-3 align-items-center mb-3">
+                        <div class="d-flex flex-wrap gap-3 align-items-center mb-3">
                             <span class="badge bg-info">{{ video.category.name }}</span>
                             {% if video.is_free %}
                             <span class="badge bg-success">
-                                <span class="material-symbols-outlined me-1" style="font-size: 12px;">lock_open</span>
+                                <span class="material-symbols-outlined me-1 badge-icon">lock_open</span>
                                 Free
                             </span>
                             {% else %}
                             <span class="badge bg-warning">
-                                <span class="material-symbols-outlined me-1" style="font-size: 12px;">workspace_premium</span>
+                                <span class="material-symbols-outlined me-1 badge-icon">workspace_premium</span>
                                 Premium
                             </span>
                             {% endif %}
                             
                             {% if video.duration %}
-                            <span class="text-muted">
-                                <span class="material-symbols-outlined me-1" style="font-size: 16px;">schedule</span>
+                            <span class="text-muted duration-info">
+                                <span class="material-symbols-outlined me-1 duration-icon">schedule</span>
                                 {{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}
                             </span>
                             {% endif %}
+
+                            <!-- Completion Status Badge -->
+                            <span class="badge completion-badge" id="completionBadge">
+                                {% if progress.completed %}
+                                <span class="material-symbols-outlined me-1 completion-icon">check_circle</span>
+                                Completed
+                                {% else %}
+                                <span class="material-symbols-outlined me-1 completion-icon">radio_button_unchecked</span>
+                                In Progress
+                                {% endif %}
+                            </span>
                         </div>
                         
                         {% if video.description %}
-                        <p class="text-muted mb-0">{{ video.description|safe }}</p>
+                        <p class="text-muted mb-0 video-description">{{ video.description|safe }}</p>
                         {% endif %}
-                    </div>
-                    
-                    <div class="d-flex gap-2">
-                        <!-- Favorite Button -->
-                        <button class="btn btn-outline-danger" 
-                                onclick="toggleFavorite()"
-                                id="favoriteBtn">
-                            <span class="material-symbols-outlined" id="favoriteIcon">
-                                {% if is_favorited %}favorite{% else %}favorite_border{% endif %}
-                            </span>
-                        </button>
-                        
-                        <!-- Share Button -->
-                        <button class="btn btn-outline-secondary" onclick="shareVideo()">
-                            <span class="material-symbols-outlined">share</span>
-                        </button>
                     </div>
                 </div>
                 
@@ -110,12 +105,49 @@
                             {% endif %}
                         </small>
                     </div>
-                    <div class="progress" style="height: 8px;">
+                    <div class="progress video-progress">
                         <div class="progress-bar" 
                              id="progressBar"
                              style="width: {% if video.duration and progress.watched_duration %}{{ (progress.watched_duration / video.duration * 100)|round(1) }}{% else %}0{% endif %}%">
                         </div>
                     </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <!-- Manual Completion Button -->
+                    <button class="btn completion-btn" 
+                            onclick="toggleCompletion()"
+                            id="completionBtn">
+                        <span class="material-symbols-outlined me-2" id="completionBtnIcon">
+                            {% if progress.completed %}check_circle{% else %}radio_button_unchecked{% endif %}
+                        </span>
+                        <span id="completionBtnText">
+                            {% if progress.completed %}Mark as Incomplete{% else %}Mark as Complete{% endif %}
+                        </span>
+                    </button>
+                    
+                    <!-- Favorite Button -->
+                    <button class="btn btn-outline-danger favorite-btn" 
+                            onclick="toggleFavorite()"
+                            id="favoriteBtn">
+                        <span class="material-symbols-outlined" id="favoriteIcon">
+                            {% if is_favorited %}favorite{% else %}favorite_border{% endif %}
+                        </span>
+                    </button>
+                    
+                    <!-- Share Button -->
+                    <button class="btn btn-outline-secondary share-btn" onclick="shareVideo()">
+                        <span class="material-symbols-outlined">share</span>
+                    </button>
+
+                    <!-- Reset Progress Button -->
+                    {% if progress.watched_duration > 0 %}
+                    <button class="btn btn-outline-warning reset-btn" onclick="resetProgress()">
+                        <span class="material-symbols-outlined me-2">restart_alt</span>
+                        Reset Progress
+                    </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -130,17 +162,17 @@
                 </h5>
             </div>
             <div class="card-body">
-                <div class="row">
+                <div class="row g-3">
                     {% for file in video.files %}
-                    <div class="col-md-6 mb-3">
-                        <div class="d-flex align-items-center p-3 border rounded">
-                            <span class="material-symbols-outlined me-3 text-primary">description</span>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1 text-white">{{ file.filename }}</h6>
-                                <small class="text-muted">{{ file.file_type|upper if file.file_type }}</small>
+                    <div class="col-md-6">
+                        <div class="file-item">
+                            <span class="material-symbols-outlined file-icon">description</span>
+                            <div class="file-info">
+                                <h6 class="mb-1 text-white file-name">{{ file.filename }}</h6>
+                                <small class="text-muted file-type">{{ file.file_type|upper if file.file_type }}</small>
                             </div>
                             <a href="{{ url_for('download_file', file_id=file.id) }}" 
-                               class="btn btn-sm btn-primary">
+                               class="btn btn-sm btn-primary download-btn">
                                 <span class="material-symbols-outlined">download</span>
                             </a>
                         </div>
@@ -171,12 +203,12 @@
                     {% if current_index > 0 %}
                     {% set prev_video = category_videos[current_index - 1] %}
                     <a href="{{ url_for('watch_video', video_id=prev_video.id) }}" 
-                       class="btn btn-outline-primary d-flex align-items-center justify-content-between">
-                        <div class="d-flex align-items-center">
-                            <span class="material-symbols-outlined me-2">arrow_back</span>
-                            <div class="text-start">
-                                <div class="fw-medium">Previous Video</div>
-                                <small class="text-muted">{{ prev_video.title[:30] }}{% if prev_video.title|length > 30 %}...{% endif %}</small>
+                       class="btn btn-outline-primary nav-btn prev-btn">
+                        <div class="nav-btn-content">
+                            <span class="material-symbols-outlined nav-icon">arrow_back</span>
+                            <div class="nav-text">
+                                <div class="nav-title">Previous Video</div>
+                                <small class="nav-subtitle">{{ prev_video.title[:30] }}{% if prev_video.title|length > 30 %}...{% endif %}</small>
                             </div>
                         </div>
                     </a>
@@ -187,27 +219,27 @@
                     {% set next_video = category_videos[current_index + 1] %}
                     {% if next_video.is_free or current_user.has_subscription %}
                     <a href="{{ url_for('watch_video', video_id=next_video.id) }}" 
-                       class="btn btn-primary d-flex align-items-center justify-content-between">
-                        <div class="d-flex align-items-center">
-                            <span class="material-symbols-outlined me-2">play_arrow</span>
-                            <div class="text-start">
-                                <div class="fw-medium">Next Video</div>
-                                <small class="opacity-75">{{ next_video.title[:30] }}{% if next_video.title|length > 30 %}...{% endif %}</small>
+                       class="btn btn-primary nav-btn next-btn">
+                        <div class="nav-btn-content">
+                            <span class="material-symbols-outlined nav-icon">play_arrow</span>
+                            <div class="nav-text">
+                                <div class="nav-title">Next Video</div>
+                                <small class="nav-subtitle">{{ next_video.title[:30] }}{% if next_video.title|length > 30 %}...{% endif %}</small>
                             </div>
+                            <span class="material-symbols-outlined nav-arrow">arrow_forward</span>
                         </div>
-                        <span class="material-symbols-outlined">arrow_forward</span>
                     </a>
                     {% else %}
                     <a href="{{ url_for('subscription') }}" 
-                       class="btn btn-warning d-flex align-items-center justify-content-between">
-                        <div class="d-flex align-items-center">
-                            <span class="material-symbols-outlined me-2">lock</span>
-                            <div class="text-start">
-                                <div class="fw-medium">Next Video (Premium)</div>
-                                <small class="opacity-75">{{ next_video.title[:30] }}{% if next_video.title|length > 30 %}...{% endif %}</small>
+                       class="btn btn-warning nav-btn premium-btn">
+                        <div class="nav-btn-content">
+                            <span class="material-symbols-outlined nav-icon">lock</span>
+                            <div class="nav-text">
+                                <div class="nav-title">Next Video (Premium)</div>
+                                <small class="nav-subtitle">{{ next_video.title[:30] }}{% if next_video.title|length > 30 %}...{% endif %}</small>
                             </div>
+                            <span class="material-symbols-outlined nav-arrow">workspace_premium</span>
                         </div>
-                        <span class="material-symbols-outlined">workspace_premium</span>
                     </a>
                     {% endif %}
                     {% endif %}
@@ -233,16 +265,16 @@
                 {% set category_progress = (completed_in_category / category_videos|length * 100) if category_videos else 0 %}
                 
                 <div class="text-center mb-3">
-                    <h4 class="text-gradient-primary">{{ "%.0f"|format(category_progress) }}%</h4>
-                    <p class="text-muted mb-0">{{ completed_in_category }} of {{ category_videos|length }} videos completed</p>
+                    <h4 class="text-gradient-primary category-progress-number">{{ "%.0f"|format(category_progress) }}%</h4>
+                    <p class="text-muted mb-0 category-progress-text">{{ completed_in_category }} of {{ category_videos|length }} videos completed</p>
                 </div>
                 
-                <div class="progress mb-3" style="height: 8px;">
+                <div class="progress mb-3 category-progress-bar">
                     <div class="progress-bar" style="width: {{ category_progress }}%"></div>
                 </div>
                 
                 <a href="{{ url_for('category_videos', category_id=video.category.id) }}" 
-                   class="btn btn-outline-primary btn-sm w-100">
+                   class="btn btn-outline-primary btn-sm w-100 view-all-btn">
                     <span class="material-symbols-outlined me-2">list</span>
                     View All Videos
                 </a>
@@ -259,18 +291,18 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <a href="{{ url_for('courses') }}" class="btn btn-outline-secondary btn-sm">
+                    <a href="{{ url_for('courses') }}" class="btn btn-outline-secondary btn-sm action-btn">
                         <span class="material-symbols-outlined me-2">arrow_back</span>
                         All Courses
                     </a>
                     
-                    <a href="{{ url_for('favorites') }}" class="btn btn-outline-primary btn-sm">
+                    <a href="{{ url_for('favorites') }}" class="btn btn-outline-primary btn-sm action-btn">
                         <span class="material-symbols-outlined me-2">favorite</span>
                         My Favorites
                     </a>
                     
                     {% if not current_user.has_subscription %}
-                    <a href="{{ url_for('subscription') }}" class="btn btn-primary btn-sm">
+                    <a href="{{ url_for('subscription') }}" class="btn btn-primary btn-sm action-btn">
                         <span class="material-symbols-outlined me-2">workspace_premium</span>
                         Upgrade to Premium
                     </a>
@@ -280,6 +312,372 @@
         </div>
     </div>
 </div>
+
+<style>
+/* Responsive improvements */
+.breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin-bottom: 1rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "›";
+    color: var(--text-muted);
+}
+
+.breadcrumb-item a {
+    color: #10B981 !important;
+    transition: color 0.3s ease;
+}
+
+.breadcrumb-item a:hover {
+    color: #059669 !important;
+}
+
+.breadcrumb-icon {
+    font-size: 16px;
+}
+
+/* Video container */
+.video-container {
+    position: relative;
+    background: #000;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+#videoPlayer {
+    border-radius: 16px;
+}
+
+/* Badge improvements */
+.badge-icon,
+.completion-icon {
+    font-size: 12px;
+}
+
+.duration-icon {
+    font-size: 16px;
+}
+
+.completion-badge {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    border: none;
+}
+
+.completion-badge.completed {
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+.completion-badge.in-progress {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+}
+
+/* Video description */
+.video-description {
+    line-height: 1.6;
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+/* Progress bar */
+.video-progress {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    height: 8px;
+}
+
+.progress-bar {
+    background: linear-gradient(135deg, #10B981, #059669);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+/* Action buttons */
+.completion-btn {
+    background: linear-gradient(135deg, #10B981, #059669);
+    border: none;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.completion-btn:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+    color: white;
+}
+
+.completion-btn.completed {
+    background: linear-gradient(135deg, #EF4444, #DC2626);
+}
+
+.completion-btn.completed:hover {
+    background: linear-gradient(135deg, #DC2626, #B91C1C);
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+}
+
+.favorite-btn,
+.share-btn,
+.reset-btn {
+    padding: 0.75rem;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.favorite-btn:hover,
+.share-btn:hover,
+.reset-btn:hover {
+    transform: translateY(-2px);
+}
+
+.favorite-btn.favorited {
+    background: #EF4444;
+    border-color: #EF4444;
+    color: white;
+}
+
+/* File items */
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.file-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.file-icon {
+    color: #10B981;
+    margin-right: 0.75rem;
+    font-size: 1.5rem;
+}
+
+.file-info {
+    flex-grow: 1;
+}
+
+.file-name {
+    font-size: 0.9rem;
+}
+
+.file-type {
+    font-size: 0.8rem;
+}
+
+.download-btn {
+    border-radius: 8px;
+    padding: 0.5rem;
+    min-width: 40px;
+}
+
+/* Navigation buttons */
+.nav-btn {
+    border-radius: 12px;
+    padding: 1rem;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.nav-btn:hover {
+    transform: translateY(-2px);
+    text-decoration: none;
+}
+
+.nav-btn-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.nav-icon {
+    font-size: 1.25rem;
+    margin-right: 0.75rem;
+}
+
+.nav-text {
+    flex-grow: 1;
+    text-align: left;
+}
+
+.nav-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.nav-subtitle {
+    opacity: 0.75;
+    font-size: 0.8rem;
+}
+
+.nav-arrow {
+    font-size: 1.25rem;
+    margin-left: 0.75rem;
+}
+
+.prev-btn:hover {
+    background: linear-gradient(135deg, #10B981, #059669);
+    border-color: #10B981;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.next-btn {
+    background: linear-gradient(135deg, #10B981, #059669);
+    border: none;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.next-btn:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+}
+
+.premium-btn {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    border: none;
+    color: white;
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+}
+
+.premium-btn:hover {
+    background: linear-gradient(135deg, #D97706, #B45309);
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+    color: white;
+}
+
+/* Category progress */
+.category-progress-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+.category-progress-text {
+    font-size: 0.9rem;
+}
+
+.category-progress-bar {
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+/* Action buttons in sidebar */
+.action-btn {
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+    transform: translateY(-2px);
+}
+
+.view-all-btn {
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+
+.view-all-btn:hover {
+    background: #10B981;
+    border-color: #10B981;
+    transform: translateY(-2px);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .nav-btn-content {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+    
+    .nav-text {
+        text-align: center;
+    }
+    
+    .nav-arrow {
+        margin-left: 0;
+    }
+    
+    .completion-btn {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.9rem;
+    }
+    
+    .category-progress-number {
+        font-size: 2rem;
+    }
+    
+    .file-item {
+        padding: 0.75rem;
+    }
+    
+    .file-icon {
+        font-size: 1.25rem;
+        margin-right: 0.5rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .d-flex.flex-wrap.gap-2 {
+        flex-direction: column;
+    }
+    
+    .d-flex.flex-wrap.gap-2 > * {
+        width: 100%;
+    }
+    
+    .breadcrumb-icon {
+        font-size: 14px;
+    }
+    
+    .nav-title {
+        font-size: 0.8rem;
+    }
+    
+    .nav-subtitle {
+        font-size: 0.75rem;
+    }
+}
+
+/* Loading states */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+</style>
+
 {% endblock %}
 
 {% block scripts %}
@@ -287,13 +685,14 @@
 let videoPlayer;
 let progressUpdateInterval;
 let lastProgressUpdate = 0;
+let isCompleted = {{ 'true' if progress.completed else 'false' }};
 
 document.addEventListener('DOMContentLoaded', function() {
     videoPlayer = document.getElementById('videoPlayer');
     
     if (videoPlayer) {
-        // Set initial time if there's previous progress
-        {% if progress.watched_duration > 0 and video.duration %}
+        // Set initial time if there's previous progress and video is not completed
+        {% if progress.watched_duration > 0 and video.duration and not progress.completed %}
         videoPlayer.currentTime = {{ progress.watched_duration }};
         {% endif %}
         
@@ -305,11 +704,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update progress on time change
         videoPlayer.addEventListener('timeupdate', updateVisualProgress);
         
-        // Handle video completion
+        // Handle video completion (90% watched)
+        videoPlayer.addEventListener('timeupdate', checkAutoCompletion);
+        
+        // Handle video ended
         videoPlayer.addEventListener('ended', function() {
             updateProgress(videoPlayer.duration, videoPlayer.duration, true);
         });
     }
+    
+    // Update completion UI based on current status
+    updateCompletionUI();
 });
 
 function startProgressTracking() {
@@ -356,7 +761,9 @@ function updateProgress(watchedDuration, totalDuration, forceComplete = false) {
     })
     .then(response => response.json())
     .then(data => {
-        if (data.success && data.completed) {
+        if (data.success && data.completed && !isCompleted) {
+            isCompleted = true;
+            updateCompletionUI();
             showToast('Video completed! 🎉', 'success');
         }
     })
@@ -373,11 +780,154 @@ function updateVisualProgress() {
             progressBar.style.width = progress + '%';
         }
         
-        if (progressText) {
+        if (progressText && !isCompleted) {
             const minutes = Math.floor(videoPlayer.currentTime / 60);
             const seconds = Math.floor(videoPlayer.currentTime % 60);
             progressText.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} watched`;
         }
+    }
+}
+
+function checkAutoCompletion() {
+    if (videoPlayer && videoPlayer.duration > 0 && !isCompleted) {
+        const progress = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+        if (progress >= 90) {
+            // Auto-complete when 90% watched
+            const currentTime = Math.floor(videoPlayer.currentTime);
+            const duration = Math.floor(videoPlayer.duration);
+            updateProgress(currentTime, duration, true);
+        }
+    }
+}
+
+async function toggleCompletion() {
+    const btn = document.getElementById('completionBtn');
+    const icon = document.getElementById('completionBtnIcon');
+    const text = document.getElementById('completionBtnText');
+    
+    // Add loading state
+    btn.disabled = true;
+    btn.classList.add('loading');
+    
+    try {
+        const response = await fetch('/api/video/completion', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                video_id: {{ video.id }},
+                completed: !isCompleted
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            isCompleted = data.completed;
+            updateCompletionUI();
+            
+            if (isCompleted) {
+                showToast('Video marked as complete! ✅', 'success');
+                // Update progress bar to 100%
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+                if (progressBar) progressBar.style.width = '100%';
+                if (progressText) progressText.textContent = 'Completed';
+            } else {
+                showToast('Video marked as incomplete', 'info');
+                updateVisualProgress(); // Restore actual progress
+            }
+        } else {
+            showToast('Error updating completion status', 'error');
+        }
+    } catch (error) {
+        console.error('Error toggling completion:', error);
+        showToast('Error updating completion status', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+    }
+}
+
+function updateCompletionUI() {
+    const btn = document.getElementById('completionBtn');
+    const icon = document.getElementById('completionBtnIcon');
+    const text = document.getElementById('completionBtnText');
+    const badge = document.getElementById('completionBadge');
+    const badgeIcon = badge?.querySelector('.completion-icon');
+    
+    if (isCompleted) {
+        // Update button
+        btn.classList.remove('btn-primary');
+        btn.classList.add('completed');
+        icon.textContent = 'check_circle';
+        text.textContent = 'Mark as Incomplete';
+        
+        // Update badge
+        if (badge) {
+            badge.classList.remove('in-progress');
+            badge.classList.add('completed');
+            badge.innerHTML = '<span class="material-symbols-outlined me-1 completion-icon">check_circle</span>Completed';
+        }
+    } else {
+        // Update button
+        btn.classList.remove('completed');
+        btn.classList.add('btn-primary');
+        icon.textContent = 'radio_button_unchecked';
+        text.textContent = 'Mark as Complete';
+        
+        // Update badge
+        if (badge) {
+            badge.classList.remove('completed');
+            badge.classList.add('in-progress');
+            badge.innerHTML = '<span class="material-symbols-outlined me-1 completion-icon">radio_button_unchecked</span>In Progress';
+        }
+    }
+}
+
+async function resetProgress() {
+    if (!confirm('Are you sure you want to reset your progress for this video? This will set your watch time back to 0 and mark the video as incomplete.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/video/reset-progress', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ video_id: {{ video.id }} })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Reset video player to beginning
+            if (videoPlayer) {
+                videoPlayer.currentTime = 0;
+            }
+            
+            // Reset progress UI
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            if (progressBar) progressBar.style.width = '0%';
+            if (progressText) progressText.textContent = 'Not started';
+            
+            // Mark as incomplete
+            isCompleted = false;
+            updateCompletionUI();
+            
+            showToast('Progress reset successfully', 'success');
+            
+            // Reload page to update reset button visibility
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('Error resetting progress', 'error');
+        }
+    } catch (error) {
+        console.error('Error resetting progress:', error);
+        showToast('Error resetting progress', 'error');
     }
 }
 
@@ -400,11 +950,11 @@ async function toggleFavorite() {
             if (data.is_favorited) {
                 icon.textContent = 'favorite';
                 btn.classList.remove('btn-outline-danger');
-                btn.classList.add('btn-danger');
+                btn.classList.add('btn-danger', 'favorited');
                 showToast('Added to favorites', 'success');
             } else {
                 icon.textContent = 'favorite_border';
-                btn.classList.remove('btn-danger');
+                btn.classList.remove('btn-danger', 'favorited');
                 btn.classList.add('btn-outline-danger');
                 showToast('Removed from favorites', 'info');
             }
@@ -435,88 +985,4 @@ window.addEventListener('beforeunload', function() {
     stopProgressTracking();
 });
 </script>
-
-<style>
-.video-container {
-    position: relative;
-    background: #000;
-    border-radius: 16px;
-    overflow: hidden;
-}
-
-/* Breadcrumb Styling */
-.breadcrumb {
-    background: transparent;
-    padding: 0;
-    margin-bottom: 1rem;
-}
-
-.breadcrumb-item + .breadcrumb-item::before {
-    content: "›";
-    color: var(--text-muted);
-}
-
-.breadcrumb-item a {
-    color: #10B981 !important;
-    transition: color 0.3s ease;
-}
-
-.breadcrumb-item a:hover {
-    color: #059669 !important;
-}
-
-#videoPlayer {
-    border-radius: 16px;
-}
-
-.progress {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-}
-
-.progress-bar {
-    background: var(--gradient-primary);
-    border-radius: 10px;
-}
-
-/* Navigation Buttons */
-.btn {
-    border-radius: 12px;
-    transition: all 0.3s ease;
-    padding: 0.75rem 1rem;
-}
-
-.btn:hover {
-    transform: translateY(-2px);
-}
-
-.btn-outline-primary:hover {
-    background: var(--primary-color);
-    border-color: var(--primary-color);
-    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-}
-
-.btn-primary {
-    background: linear-gradient(135deg, #10B981, #059669);
-    border: none;
-    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-}
-
-.btn-primary:hover {
-    background: linear-gradient(135deg, #059669, #047857);
-    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
-}
-
-.btn-warning {
-    background: linear-gradient(135deg, #F59E0B, #D97706);
-    border: none;
-    color: white;
-    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
-}
-
-.btn-warning:hover {
-    background: linear-gradient(135deg, #D97706, #B45309);
-    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
-}
-</style>
 {% endblock %}
