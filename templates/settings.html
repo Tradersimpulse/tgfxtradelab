@@ -3,164 +3,815 @@
 {% block title %}Settings - TGFX Trade Lab{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="text-center">
-            <h1 class="text-gradient-primary mb-3">
-                <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">settings</span>
-                User Settings
-            </h1>
-            <p class="text-muted mb-0 lead">Customize your trading dashboard experience</p>
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
+            <!-- Header -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex align-items-center mb-3">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary me-3 back-btn">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </a>
+                        <div>
+                            <h1 class="text-gradient-primary mb-1">Settings</h1>
+                            <p class="text-muted mb-0">Customize your trading experience</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Cards -->
+            <div class="row g-4">
+                <!-- Timezone Settings -->
+                <div class="col-12">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-1">
+                                <span class="material-symbols-outlined me-2 header-icon">schedule</span>
+                                Timezone Preferences
+                            </h5>
+                            <small class="text-muted">Set your timezone to see accurate trading session times</small>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" id="timezoneForm">
+                                {{ form.hidden_tag() }}
+                                
+                                <div class="row g-4">
+                                    <!-- Timezone Selection -->
+                                    <div class="col-12">
+                                        <label for="{{ form.timezone.id }}" class="form-label">
+                                            <span class="material-symbols-outlined me-2 label-icon">public</span>
+                                            Select Your Timezone
+                                        </label>
+                                        {{ form.timezone(class="form-select custom-select", id="timezoneSelect") }}
+                                        <div class="form-text">
+                                            Trading session times will be displayed in your selected timezone
+                                        </div>
+                                    </div>
+
+                                    <!-- Current Time Preview -->
+                                    <div class="col-md-6">
+                                        <div class="preview-card time-preview">
+                                            <div class="preview-header">
+                                                <span class="material-symbols-outlined me-2">access_time</span>
+                                                Current Time
+                                            </div>
+                                            <div class="preview-content">
+                                                <div class="time-display" id="currentTime">--:--:-- --</div>
+                                                <small class="timezone-label" id="currentTimezone">Select a timezone</small>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Timezone Info -->
+                                    <div class="col-md-6">
+                                        <div class="preview-card info-preview">
+                                            <div class="preview-header">
+                                                <span class="material-symbols-outlined me-2">info</span>
+                                                Timezone Info
+                                            </div>
+                                            <div class="preview-content">
+                                                <div class="info-item">
+                                                    <strong>Region:</strong> <span id="regionInfo">-</span>
+                                                </div>
+                                                <div class="info-item">
+                                                    <strong>UTC Offset:</strong> <span id="offsetInfo">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Save Button -->
+                                <div class="d-flex justify-content-end mt-4">
+                                    <button type="submit" class="btn btn-primary save-btn">
+                                        <span class="material-symbols-outlined me-2">save</span>
+                                        Save Settings
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trading Session Preview -->
+                <div class="col-12">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-1">
+                                <span class="material-symbols-outlined me-2 header-icon">analytics</span>
+                                Trading Sessions Preview
+                            </h5>
+                            <small class="text-muted">See how session times will appear with your selected timezone</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <!-- New York -->
+                                <div class="col-sm-6 col-lg-3">
+                                    <div class="session-card ny-session">
+                                        <div class="session-badge">NY</div>
+                                        <div class="session-info">
+                                            <div class="session-name">New York</div>
+                                            <div class="session-time" id="nyPreview">8:00 AM - 5:00 PM</div>
+                                            <small class="session-days">Mon - Fri</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- London -->
+                                <div class="col-sm-6 col-lg-3">
+                                    <div class="session-card london-session">
+                                        <div class="session-badge">LN</div>
+                                        <div class="session-info">
+                                            <div class="session-name">London</div>
+                                            <div class="session-time" id="londonPreview">3:00 AM - 12:00 PM</div>
+                                            <small class="session-days">Mon - Fri</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Tokyo -->
+                                <div class="col-sm-6 col-lg-3">
+                                    <div class="session-card tokyo-session">
+                                        <div class="session-badge">TK</div>
+                                        <div class="session-info">
+                                            <div class="session-name">Tokyo</div>
+                                            <div class="session-time" id="tokyoPreview">7:00 PM - 4:00 AM</div>
+                                            <small class="session-days">Sun - Thu</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Sydney -->
+                                <div class="col-sm-6 col-lg-3">
+                                    <div class="session-card sydney-session">
+                                        <div class="session-badge">SY</div>
+                                        <div class="session-info">
+                                            <div class="session-name">Sydney</div>
+                                            <div class="session-time" id="sydneyPreview">5:00 PM - 2:00 AM</div>
+                                            <small class="session-days">Sun - Thu</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-info session-note mt-4">
+                                <span class="material-symbols-outlined me-2">lightbulb</span>
+                                <strong>Note:</strong> Trading sessions are shown in your selected timezone. Actual market hours may vary due to daylight saving time changes.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Information -->
+                <div class="col-12">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-1">
+                                <span class="material-symbols-outlined me-2 header-icon">person</span>
+                                Account Information
+                            </h5>
+                            <small class="text-muted">Your account details and subscription status</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-4">
+                                <!-- Basic Info -->
+                                <div class="col-md-6">
+                                    <div class="profile-section">
+                                        <h6 class="section-title">
+                                            <span class="material-symbols-outlined me-2">account_circle</span>
+                                            Basic Information
+                                        </h6>
+                                        <div class="profile-items">
+                                            <div class="profile-item">
+                                                <label>Username</label>
+                                                <div class="profile-value">{{ current_user.username }}</div>
+                                            </div>
+                                            <div class="profile-item">
+                                                <label>Email</label>
+                                                <div class="profile-value">{{ current_user.email }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Subscription Info -->
+                                <div class="col-md-6">
+                                    <div class="profile-section">
+                                        <h6 class="section-title">
+                                            <span class="material-symbols-outlined me-2">workspace_premium</span>
+                                            Subscription
+                                        </h6>
+                                        <div class="profile-items">
+                                            <div class="profile-item">
+                                                <label>Status</label>
+                                                <div class="profile-value">
+                                                    {% if current_user.has_subscription %}
+                                                    <span class="badge bg-success subscription-badge">
+                                                        <span class="material-symbols-outlined me-1">verified</span>
+                                                        Premium
+                                                    </span>
+                                                    {% else %}
+                                                    <span class="badge bg-secondary subscription-badge">
+                                                        <span class="material-symbols-outlined me-1">person</span>
+                                                        Free
+                                                    </span>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            {% if current_user.has_subscription and current_user.subscription_expires %}
+                                            <div class="profile-item">
+                                                <label>Expires</label>
+                                                <div class="profile-value">{{ current_user.subscription_expires.strftime('%B %d, %Y') }}</div>
+                                            </div>
+                                            {% endif %}
+                                            <div class="profile-item">
+                                                <label>Member Since</label>
+                                                <div class="profile-value">{{ current_user.created_at.strftime('%B %d, %Y') }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {% if not current_user.has_subscription %}
+                            <div class="upgrade-section mt-4">
+                                <div class="upgrade-card">
+                                    <div class="upgrade-content">
+                                        <h6 class="upgrade-title">
+                                            <span class="material-symbols-outlined me-2">upgrade</span>
+                                            Upgrade to Premium
+                                        </h6>
+                                        <p class="upgrade-text">Get access to all premium videos and exclusive content</p>
+                                    </div>
+                                    <a href="{{ url_for('subscription') }}" class="btn btn-primary upgrade-btn">
+                                        <span class="material-symbols-outlined me-2">workspace_premium</span>
+                                        Upgrade Now
+                                    </a>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="col-12">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-1">
+                                <span class="material-symbols-outlined me-2 header-icon">bolt</span>
+                                Quick Actions
+                            </h5>
+                            <small class="text-muted">Navigate to frequently used sections</small>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <a href="{{ url_for('dashboard') }}" class="action-card">
+                                        <span class="material-symbols-outlined action-icon">dashboard</span>
+                                        <div class="action-content">
+                                            <div class="action-title">Dashboard</div>
+                                            <small class="action-desc">View your progress</small>
+                                        </div>
+                                        <span class="material-symbols-outlined action-arrow">arrow_forward</span>
+                                    </a>
+                                </div>
+                                <div class="col-md-4">
+                                    <a href="{{ url_for('courses') }}" class="action-card">
+                                        <span class="material-symbols-outlined action-icon">school</span>
+                                        <div class="action-content">
+                                            <div class="action-title">Courses</div>
+                                            <small class="action-desc">Browse all courses</small>
+                                        </div>
+                                        <span class="material-symbols-outlined action-arrow">arrow_forward</span>
+                                    </a>
+                                </div>
+                                <div class="col-md-4">
+                                    <a href="{{ url_for('favorites') }}" class="action-card">
+                                        <span class="material-symbols-outlined action-icon">favorite</span>
+                                        <div class="action-content">
+                                            <div class="action-title">Favorites</div>
+                                            <small class="action-desc">Your saved videos</small>
+                                        </div>
+                                        <span class="material-symbols-outlined action-arrow">arrow_forward</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <span class="material-symbols-outlined me-2">schedule</span>
-                    Trading Session Timezone
-                </h5>
-            </div>
-            <div class="card-body">
-                <form method="POST">
-                    {{ form.hidden_tag() }}
-                    
-                    <div class="mb-4">
-                        <label for="{{ form.timezone.id }}" class="form-label text-white">
-                            Select Your Timezone
-                        </label>
-                        {{ form.timezone(class="form-select form-select-lg", id="timezoneSelect") }}
-                        <div class="form-text text-muted">
-                            This will adjust the trading session times to display in your local timezone.
-                        </div>
-                    </div>
-                    
-                    <!-- Current Time Preview -->
-                    <div class="mb-4">
-                        <div class="card bg-dark border-secondary">
-                            <div class="card-body">
-                                <h6 class="text-primary mb-3">
-                                    <span class="material-symbols-outlined me-2">access_time</span>
-                                    Current Time Preview
-                                </h6>
-                                <div id="timePreview" class="text-center">
-                                    <div class="display-6 text-white" id="currentTime">--:--:-- --</div>
-                                    <small class="text-muted" id="currentTimezone">Select a timezone</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Trading Sessions Preview -->
-                    <div class="mb-4">
-                        <div class="card bg-dark border-secondary">
-                            <div class="card-body">
-                                <h6 class="text-primary mb-3">
-                                    <span class="material-symbols-outlined me-2">public</span>
-                                    Trading Sessions in Your Timezone
-                                </h6>
-                                <div class="row" id="sessionPreview">
-                                    <div class="col-md-6 mb-3">
-                                        <div class="d-flex align-items-center">
-                                            <div class="me-3">
-                                                <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
-                                                    <span class="text-white fw-bold small">NY</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div class="text-white fw-medium">New York</div>
-                                                <small class="text-muted" id="nyPreview">8:00 AM - 5:00 PM</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <div class="d-flex align-items-center">
-                                            <div class="me-3">
-                                                <div class="rounded-circle bg-warning d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
-                                                    <span class="text-white fw-bold small">LN</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div class="text-white fw-medium">London</div>
-                                                <small class="text-muted" id="londonPreview">3:00 AM - 12:00 PM</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <div class="d-flex align-items-center">
-                                            <div class="me-3">
-                                                <div class="rounded-circle bg-info d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
-                                                    <span class="text-white fw-bold small">TK</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div class="text-white fw-medium">Tokyo</div>
-                                                <small class="text-muted" id="tokyoPreview">7:00 PM - 4:00 AM</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <div class="d-flex align-items-center">
-                                            <div class="me-3">
-                                                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
-                                                    <span class="text-white fw-bold small">SY</span>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div class="text-white fw-medium">Sydney</div>
-                                                <small class="text-muted" id="sydneyPreview">5:00 PM - 2:00 AM</small>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="d-flex justify-content-between">
-                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
-                            <span class="material-symbols-outlined me-2">arrow_back</span>
-                            Back to Dashboard
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <span class="material-symbols-outlined me-2">save</span>
-                            Save Settings
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+<style>
+/* Main theme consistency */
+.settings-card {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    transition: all 0.3s ease;
+    border-radius: 16px;
+}
+
+.settings-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.settings-card .card-header {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+    border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 16px 16px 0 0;
+    padding: 1.25rem;
+}
+
+.header-icon {
+    font-size: 1.5rem;
+    color: #10B981;
+}
+
+.label-icon {
+    font-size: 1.25rem;
+    color: #10B981;
+}
+
+/* Back button */
+.back-btn {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #9CA3AF;
+    border-radius: 12px;
+    padding: 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.back-btn:hover {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: #10B981;
+    color: #10B981;
+    transform: translateY(-2px);
+}
+
+/* Form styling */
+.custom-select {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.custom-select:focus {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+    border-color: #10B981;
+    box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.25);
+    color: white;
+}
+
+.custom-select option {
+    background-color: #1f2937;
+    color: white;
+    padding: 0.5rem;
+}
+
+.form-text {
+    color: #9CA3AF;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+
+/* Preview cards */
+.preview-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 1.25rem;
+    height: 100%;
+    transition: all 0.3s ease;
+}
+
+.preview-card:hover {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+    border-color: rgba(16, 185, 129, 0.3);
+    transform: translateY(-2px);
+}
+
+.preview-header {
+    color: #10B981;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+}
+
+.preview-content {
+    text-align: center;
+}
+
+.time-display {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 0.5rem;
+    font-family: 'Courier New', monospace;
+}
+
+.timezone-label {
+    color: #9CA3AF;
+    font-size: 0.8rem;
+}
+
+.info-item {
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: #E5E7EB;
+}
+
+.info-item strong {
+    color: #10B981;
+}
+
+/* Save button */
+.save-btn {
+    background: linear-gradient(135deg, #10B981, #059669);
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+
+.save-btn:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+    color: white;
+}
+
+.save-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Session cards */
+.session-card {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    height: 100%;
+}
+
+.session-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.session-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.8rem;
+    color: white;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+}
+
+.ny-session .session-badge { background: linear-gradient(135deg, #10B981, #059669); }
+.london-session .session-badge { background: linear-gradient(135deg, #F59E0B, #D97706); }
+.tokyo-session .session-badge { background: linear-gradient(135deg, #3B82F6, #2563EB); }
+.sydney-session .session-badge { background: linear-gradient(135deg, #6B7280, #4B5563); }
+
+.session-info {
+    flex-grow: 1;
+}
+
+.session-name {
+    font-weight: 600;
+    color: white;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.session-time {
+    color: #E5E7EB;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+    font-family: 'Courier New', monospace;
+}
+
+.session-days {
+    color: #9CA3AF;
+    font-size: 0.75rem;
+}
+
+/* Session note */
+.session-note {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 12px;
+    color: #E5E7EB;
+}
+
+.session-note .material-symbols-outlined {
+    color: #3B82F6;
+}
+
+/* Profile sections */
+.profile-section {
+    height: 100%;
+}
+
+.section-title {
+    color: #10B981;
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.profile-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.profile-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.profile-item label {
+    color: #9CA3AF;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.profile-value {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 0.75rem;
+    color: white;
+    font-size: 0.9rem;
+}
+
+.subscription-badge {
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+}
+
+.subscription-badge .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+/* Upgrade section */
+.upgrade-section {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 1.5rem;
+}
+
+.upgrade-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.upgrade-card:hover {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.08) 100%);
+    transform: translateY(-2px);
+}
+
+.upgrade-content {
+    flex-grow: 1;
+}
+
+.upgrade-title {
+    color: #F59E0B;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+}
+
+.upgrade-text {
+    color: #E5E7EB;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.upgrade-btn {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    color: white;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.upgrade-btn:hover {
+    background: linear-gradient(135deg, #D97706, #B45309);
+    transform: translateY(-2px);
+    color: white;
+    text-decoration: none;
+}
+
+/* Action cards */
+.action-card {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.3s ease;
+    height: 100%;
+}
+
+.action-card:hover {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+    border-color: rgba(16, 185, 129, 0.3);
+    transform: translateY(-2px);
+    text-decoration: none;
+    color: inherit;
+}
+
+.action-icon {
+    color: #10B981;
+    font-size: 1.5rem;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+}
+
+.action-content {
+    flex-grow: 1;
+}
+
+.action-title {
+    font-weight: 600;
+    color: white;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.action-desc {
+    color: #9CA3AF;
+    font-size: 0.8rem;
+}
+
+.action-arrow {
+    color: #6B7280;
+    font-size: 1.25rem;
+    transition: all 0.3s ease;
+}
+
+.action-card:hover .action-arrow {
+    color: #10B981;
+    transform: translateX(3px);
+}
+
+/* Loading state */
+.loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .upgrade-card {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .session-card {
+        margin-bottom: 0.75rem;
+    }
+    
+    .action-card {
+        margin-bottom: 0.75rem;
+    }
+    
+    .time-display {
+        font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .settings-card .card-header {
+        padding: 1rem;
+    }
+    
+    .session-badge {
+        width: 35px;
+        height: 35px;
+        font-size: 0.7rem;
+    }
+    
+    .session-name {
+        font-size: 0.85rem;
+    }
+    
+    .session-time {
+        font-size: 0.75rem;
+    }
+}
+
+/* Success animations */
+@keyframes success {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.success-animation {
+    animation: success 0.3s ease;
+}
+</style>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Trading session times in EST (baseline)
+const sessionTimesEST = {
+    newYork: { open: 8, close: 17 },
+    london: { open: 3, close: 12 },
+    tokyo: { open: 19, close: 4 },  // Next day
+    sydney: { open: 17, close: 2 }  // Next day
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     const timezoneSelect = document.getElementById('timezoneSelect');
     const currentTimeElement = document.getElementById('currentTime');
     const currentTimezoneElement = document.getElementById('currentTimezone');
-    
-    // Trading session times in EST (baseline)
-    const sessionTimesEST = {
-        newYork: { open: 8, close: 17 },
-        london: { open: 3, close: 12 },
-        tokyo: { open: 19, close: 4 },  // Next day
-        sydney: { open: 17, close: 2 }  // Next day
-    };
+    const regionInfoElement = document.getElementById('regionInfo');
+    const offsetInfoElement = document.getElementById('offsetInfo');
+    const form = document.getElementById('timezoneForm');
     
     function updatePreview() {
         const selectedTimezone = timezoneSelect.value;
         
-        if (!selectedTimezone) return;
+        if (!selectedTimezone) {
+            currentTimeElement.textContent = '--:--:-- --';
+            currentTimezoneElement.textContent = 'Select a timezone';
+            regionInfoElement.textContent = '-';
+            offsetInfoElement.textContent = '-';
+            return;
+        }
         
         try {
             // Update current time in selected timezone
             const now = new Date();
-            const formatter = new Intl.DateTimeFormat('en-US', {
+            const timeFormatter = new Intl.DateTimeFormat('en-US', {
                 timeZone: selectedTimezone,
                 hour: '2-digit',
                 minute: '2-digit',
@@ -168,8 +819,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 hour12: true
             });
             
-            currentTimeElement.textContent = formatter.format(now);
-            currentTimezoneElement.textContent = selectedTimezone.replace('_', ' ');
+            currentTimeElement.textContent = timeFormatter.format(now);
+            
+            // Update timezone info
+            const displayName = selectedTimezone.replace('_', ' ').replace('/', ' / ');
+            currentTimezoneElement.textContent = displayName;
+            
+            // Extract region
+            const parts = selectedTimezone.split('/');
+            regionInfoElement.textContent = parts[0] || 'Unknown';
+            
+            // Calculate UTC offset
+            const offset = getTimezoneOffset(selectedTimezone);
+            offsetInfoElement.textContent = offset;
             
             // Update session times preview
             updateSessionPreview(selectedTimezone);
@@ -177,7 +839,26 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error updating timezone preview:', error);
             currentTimeElement.textContent = 'Invalid timezone';
-            currentTimezoneElement.textContent = '';
+            currentTimezoneElement.textContent = 'Error';
+            regionInfoElement.textContent = 'Error';
+            offsetInfoElement.textContent = 'Error';
+        }
+    }
+    
+    function getTimezoneOffset(timezone) {
+        try {
+            const now = new Date();
+            const utc = new Date(now.getTime() + (now.getTimezoneOffset() * 60000));
+            const tzTime = new Date(utc.toLocaleString("en-US", {timeZone: timezone}));
+            const offset = (tzTime.getTime() - utc.getTime()) / (1000 * 60 * 60);
+            
+            const sign = offset >= 0 ? '+' : '-';
+            const hours = Math.floor(Math.abs(offset));
+            const minutes = Math.round((Math.abs(offset) - hours) * 60);
+            
+            return `UTC${sign}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        } catch (error) {
+            return 'Unknown';
         }
     }
     
@@ -221,8 +902,64 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Update preview when timezone changes
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+        
+        const submitBtn = form.querySelector('.save-btn');
+        const originalText = submitBtn.innerHTML;
+        
+        // Add loading state
+        submitBtn.disabled = true;
+        submitBtn.classList.add('loading');
+        submitBtn.innerHTML = '<span class="material-symbols-outlined me-2">sync</span>Saving...';
+        
+        try {
+            const formData = new FormData(form);
+            const response = await fetch(form.action || window.location.pathname, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (response.ok) {
+                // Success
+                submitBtn.innerHTML = '<span class="material-symbols-outlined me-2">check_circle</span>Saved!';
+                submitBtn.classList.add('success-animation');
+                submitBtn.style.background = 'linear-gradient(135deg, #059669, #047857)';
+                
+                // Show success message
+                showToast('Settings saved successfully!', 'success');
+                
+                // Reset button after delay
+                setTimeout(() => {
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('loading', 'success-animation');
+                    submitBtn.style.background = '';
+                }, 2000);
+                
+            } else {
+                throw new Error('Failed to save settings');
+            }
+            
+        } catch (error) {
+            // Error
+            submitBtn.innerHTML = '<span class="material-symbols-outlined me-2">error</span>Error';
+            submitBtn.style.background = 'linear-gradient(135deg, #EF4444, #DC2626)';
+            showToast('Failed to save settings. Please try again.', 'error');
+            
+            // Reset button
+            setTimeout(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('loading');
+                submitBtn.style.background = '';
+            }, 2000);
+        }
+    }
+    
+    // Event listeners
     timezoneSelect.addEventListener('change', updatePreview);
+    form.addEventListener('submit', handleFormSubmit);
     
     // Initial preview update
     updatePreview();
