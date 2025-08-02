@@ -914,13 +914,17 @@
             <div class="nav-section">
                 <div class="nav-section-title">Account</div>
                 <div class="nav-item nav-dropdown" id="accountDropdown">
-                    <button class="nav-dropdown-toggle {% if request.endpoint in ['subscription', 'donate'] %}active{% endif %}" 
+                    <button class="nav-dropdown-toggle {% if request.endpoint in ['subscription', 'donate', 'user_settings'] %}active{% endif %}" 
                             onclick="toggleDropdown('accountDropdown')">
                         <span class="material-symbols-outlined">account_circle</span>
                         <span class="nav-text">Account</span>
                         <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
                     </button>
                     <div class="nav-dropdown-menu">
+                        <a href="{{ url_for('user_settings') }}" class="nav-dropdown-item {% if request.endpoint == 'user_settings' %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">settings</span>
+                            Settings
+                        </a>
                         <a href="{{ url_for('subscription') }}" class="nav-dropdown-item {% if request.endpoint == 'subscription' %}active{% endif %}">
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">workspace_premium</span>
                             Billing & Subscription
