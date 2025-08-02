@@ -437,6 +437,19 @@ def create_user_activity(user_id, activity_type, description):
     db.session.add(activity)
     db.session.commit()
 
+def convert_empty_strings_to_none(data, integer_fields):
+    """Convert empty strings to None for integer fields"""
+    for field in integer_fields:
+        if field in data and data[field] == '':
+            data[field] = None
+        elif field in data and data[field] is not None:
+            try:
+                # Try to convert to int if it's a string with a value
+                data[field] = int(data[field]) if str(data[field]).strip() else None
+            except (ValueError, TypeError):
+                data[field] = None
+    return data
+
 def create_notification(user_id, title, message, notification_type):
     """Create a new notification for a user"""
     notification = Notification(
