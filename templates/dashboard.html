@@ -108,10 +108,17 @@
                 </div>
                 <h3 class="text-muted mb-2 stat-number" id="streamStatusText">Offline</h3>
                 <p class="text-muted mb-auto stat-label">Live Stream</p>
+                {% if current_user.has_subscription %}
                 <a href="{{ url_for('livestream') }}" class="btn btn-outline-primary btn-sm mt-2 stat-action">
                     <span class="material-symbols-outlined me-1 stream-icon">live_tv</span>
                     Go Live
                 </a>
+                {% else %}
+                <button onclick="showSubscriptionRequired()" class="btn btn-outline-primary btn-sm mt-2 stat-action">
+                    <span class="material-symbols-outlined me-1 stream-icon">live_tv</span>
+                    Go Live
+                </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -742,6 +749,181 @@
 .pulse-animation {
     animation: pulse 2s infinite;
 }
+
+/* Subscription Modal Styles */
+.subscription-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    animation: fadeIn 0.3s ease;
+}
+
+.subscription-modal {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease;
+}
+
+.subscription-modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    position: relative;
+}
+
+.subscription-modal-icon {
+    color: #F59E0B;
+    font-size: 2rem;
+}
+
+.subscription-modal-header h4 {
+    color: white;
+    margin: 0;
+    flex-grow: 1;
+}
+
+.subscription-modal-close {
+    background: none;
+    border: none;
+    color: #9CA3AF;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.subscription-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.subscription-modal-body {
+    padding: 1.5rem;
+    color: #E5E7EB;
+}
+
+.subscription-modal-body p {
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.subscription-features {
+    margin-top: 1.5rem;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 8px;
+}
+
+.feature-item .material-symbols-outlined {
+    color: #10B981;
+    font-size: 1.25rem;
+}
+
+.subscription-modal-footer {
+    padding: 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+.subscription-modal-footer .btn {
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.subscription-modal-footer .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #E5E7EB;
+}
+
+.subscription-modal-footer .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.subscription-modal-footer .btn-primary {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    border: none;
+    color: white;
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+}
+
+.subscription-modal-footer .btn-primary:hover {
+    background: linear-gradient(135deg, #D97706, #B45309);
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+    transform: translateY(-2px);
+    color: white;
+    text-decoration: none;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobile modal adjustments */
+@media (max-width: 576px) {
+    .subscription-modal {
+        width: 95%;
+        margin: 1rem;
+    }
+    
+    .subscription-modal-header,
+    .subscription-modal-body,
+    .subscription-modal-footer {
+        padding: 1rem;
+    }
+    
+    .subscription-modal-footer {
+        flex-direction: column;
+    }
+    
+    .subscription-modal-footer .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
 </style>
 
 {% endblock %}
@@ -1034,6 +1216,75 @@ function animateCards() {
             card.style.transform = 'translateY(0)';
         }, index * 100);
     });
+}
+
+function showSubscriptionRequired() {
+    // Create and show a modal-style notification
+    const modalHtml = `
+        <div class="subscription-modal-overlay" id="subscriptionModal" onclick="closeSubscriptionModalOnOverlay(event)">
+            <div class="subscription-modal">
+                <div class="subscription-modal-header">
+                    <span class="material-symbols-outlined subscription-modal-icon">workspace_premium</span>
+                    <h4>Premium Feature</h4>
+                    <button class="subscription-modal-close" onclick="closeSubscriptionModal()">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="subscription-modal-body">
+                    <p>Live streaming is available for Premium subscribers only.</p>
+                    <p>Upgrade your account to start broadcasting live trading sessions and connect with the community!</p>
+                    <div class="subscription-features">
+                        <div class="feature-item">
+                            <span class="material-symbols-outlined">live_tv</span>
+                            <span>Live streaming capabilities</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="material-symbols-outlined">video_library</span>
+                            <span>Access to all premium videos</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="material-symbols-outlined">priority_high</span>
+                            <span>Priority support</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="subscription-modal-footer">
+                    <button class="btn btn-secondary" onclick="closeSubscriptionModal()">Maybe Later</button>
+                    <a href="/subscription" class="btn btn-primary">
+                        <span class="material-symbols-outlined me-2">upgrade</span>
+                        Upgrade Now
+                    </a>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    document.body.style.overflow = 'hidden';
+    
+    // Add escape key listener
+    document.addEventListener('keydown', handleEscapeKey);
+}
+
+function closeSubscriptionModal() {
+    const modal = document.getElementById('subscriptionModal');
+    if (modal) {
+        modal.remove();
+        document.body.style.overflow = '';
+        document.removeEventListener('keydown', handleEscapeKey);
+    }
+}
+
+function closeSubscriptionModalOnOverlay(event) {
+    if (event.target.id === 'subscriptionModal') {
+        closeSubscriptionModal();
+    }
+}
+
+function handleEscapeKey(event) {
+    if (event.key === 'Escape') {
+        closeSubscriptionModal();
+    }
 }
 </script>
 {% endblock %}
