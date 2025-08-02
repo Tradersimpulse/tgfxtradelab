@@ -231,6 +231,106 @@
             width: 0;
         }
 
+        /* Dropdown Styles */
+        .nav-dropdown {
+            position: relative;
+        }
+
+        .nav-dropdown-toggle {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.875rem 1rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+            position: relative;
+            font-weight: 500;
+            font-size: 0.875rem;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            width: 100%;
+        }
+
+        .nav-dropdown-toggle:hover {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--text-primary);
+        }
+
+        .nav-dropdown-toggle.active {
+            background: var(--gradient-primary);
+            color: white !important;
+        }
+
+        .dropdown-arrow {
+            margin-left: auto;
+            transition: transform 0.3s ease;
+            font-size: 16px;
+        }
+
+        .nav-dropdown.open .dropdown-arrow {
+            transform: rotate(180deg);
+        }
+
+        .sidebar.collapsed .dropdown-arrow {
+            display: none;
+        }
+
+        .nav-dropdown-menu {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            margin-left: 2.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .sidebar.collapsed .nav-dropdown-menu {
+            position: absolute;
+            left: 80px;
+            top: 0;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.5rem 0;
+            min-width: 200px;
+            box-shadow: var(--shadow-lg);
+            max-height: none;
+            margin: 0;
+            z-index: 1001;
+            display: none;
+        }
+
+        .sidebar.collapsed .nav-dropdown.open .nav-dropdown-menu {
+            display: block;
+        }
+
+        .nav-dropdown.open .nav-dropdown-menu {
+            max-height: 300px;
+        }
+
+        .nav-dropdown-item {
+            padding: 0.75rem 1rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: block;
+            border-radius: 8px;
+            margin: 0.25rem 0.5rem;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+
+        .nav-dropdown-item:hover {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--text-primary);
+        }
+
+        .nav-dropdown-item.active {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--primary-color);
+        }
+
         /* Toggle button */
         .sidebar-toggle {
             position: absolute;
@@ -749,89 +849,131 @@
 
         <!-- Navigation -->
         <nav class="sidebar-nav">
-            <div class="nav-section-title">Livestream</div>
-            <li class="nav-item">
-                <a class="nav-link d-flex align-items-center" href="{{ url_for('livestream') }}">
-                    <span class="material-symbols-outlined me-2">live_tv</span>
-                    <span>Live Stream</span>
-                    <!-- Optional: Show live indicator -->
-                    <span class="badge bg-danger ms-2 live-indicator" style="display: none;">
-                        <span class="material-symbols-outlined" style="font-size: 10px;">radio_button_checked</span>
-                        LIVE
-                    </span>
-                </a>
-            </li>
-            <!-- Learning Section -->
+            <!-- Dashboard Section -->
             <div class="nav-section">
-                <div class="nav-section-title">Learning</div>
+                <div class="nav-section-title">Dashboard</div>
                 <div class="nav-item">
-                    <a href="{{ url_for('courses') }}" class="nav-link {% if request.endpoint == 'courses' %}active{% endif %}">
-                        <span class="material-symbols-outlined">play_circle</span>
-                        <span class="nav-text">All Courses</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="{{ url_for('favorites') }}" class="nav-link {% if request.endpoint == 'favorites' %}active{% endif %}">
-                        <span class="material-symbols-outlined">favorite</span>
-                        <span class="nav-text">Favorites</span>
-                    </a>
-                </div>
-                <div class="nav-item">
-                    <a href="{{ url_for('subscription') }}" class="nav-link {% if request.endpoint == 'subscription' %}active{% endif %}">
-                        <span class="material-symbols-outlined">workspace_premium</span>
-                        <span class="nav-text">Subscription</span>
-                    </a>
-                </div>
-            </div>
-
-            {% if current_user.is_authenticated and current_user.is_admin %}
-            <!-- Admin Section -->
-            <div class="nav-section">
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                        <span class="material-symbols-outlined me-2">admin_panel_settings</span>
-                        Admin
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="{{ url_for('admin') }}">Dashboard</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('admin_videos') }}">Videos</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('admin_categories') }}">Categories</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{{ url_for('admin_stream') }}">
-                            <span class="material-symbols-outlined me-2">live_tv</span>
-                            Stream Control
-                        </a></li>
-                    </ul>
-                </li>
-                <div class="nav-section-title">Admin</div>
-                <div class="nav-item">
-                    <a href="{{ url_for('admin') }}" class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}">
+                    <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
                         <span class="material-symbols-outlined">dashboard</span>
                         <span class="nav-text">Dashboard</span>
                     </a>
                 </div>
+            </div>
+
+            <!-- Live Stream Section -->
+            <div class="nav-section">
+                <div class="nav-section-title">Live Stream</div>
                 <div class="nav-item">
-                    <a href="{{ url_for('admin_videos') }}" class="nav-link {% if 'admin' in request.endpoint and 'video' in request.endpoint %}active{% endif %}">
-                        <span class="material-symbols-outlined">video_library</span>
-                        <span class="nav-text">Videos</span>
+                    <a class="nav-link d-flex align-items-center" href="{{ url_for('livestream') }}">
+                        <span class="material-symbols-outlined">live_tv</span>
+                        <span class="nav-text">Live Stream</span>
+                        <!-- Optional: Show live indicator -->
+                        <span class="badge bg-danger ms-2 live-indicator" style="display: none;">
+                            <span class="material-symbols-outlined" style="font-size: 10px;">radio_button_checked</span>
+                            LIVE
+                        </span>
                     </a>
                 </div>
+            </div>
+
+            <!-- Learning Section with Dropdown -->
+            <div class="nav-section">
+                <div class="nav-section-title">Learning</div>
+                <div class="nav-item nav-dropdown" id="coursesDropdown">
+                    <button class="nav-dropdown-toggle {% if request.endpoint in ['courses', 'category_videos', 'watch_video', 'favorites'] %}active{% endif %}" 
+                            onclick="toggleDropdown('coursesDropdown')">
+                        <span class="material-symbols-outlined">school</span>
+                        <span class="nav-text">Courses</span>
+                        <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="{{ url_for('courses') }}" class="nav-dropdown-item {% if request.endpoint == 'courses' %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">play_circle</span>
+                            All Courses
+                        </a>
+                        <a href="{{ url_for('favorites') }}" class="nav-dropdown-item {% if request.endpoint == 'favorites' %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">favorite</span>
+                            Favorites
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tools Section -->
+            <div class="nav-section">
+                <div class="nav-section-title">Tools</div>
                 <div class="nav-item">
-                    <a href="{{ url_for('admin_categories') }}" class="nav-link {% if 'admin' in request.endpoint and 'categor' in request.endpoint %}active{% endif %}">
-                        <span class="material-symbols-outlined">category</span>
-                        <span class="nav-text">Categories</span>
+                    <a href="{{ url_for('recommendations') }}" class="nav-link {% if request.endpoint == 'recommendations' %}active{% endif %}">
+                        <span class="material-symbols-outlined">recommend</span>
+                        <span class="nav-text">Recommended</span>
                     </a>
                 </div>
-                <div class="nav-item">
-                    <a href="{{ url_for('admin_tags') }}" class="nav-link">
-                        <span class="material-symbols-outlined me-2">label</span>
-                        <span class="nav-text">Manage Tags</span>
-                    </a>
-                </div>    
+            </div>
+
+            <!-- Account Section with Dropdown -->
+            <div class="nav-section">
+                <div class="nav-section-title">Account</div>
+                <div class="nav-item nav-dropdown" id="accountDropdown">
+                    <button class="nav-dropdown-toggle {% if request.endpoint in ['subscription', 'donate'] %}active{% endif %}" 
+                            onclick="toggleDropdown('accountDropdown')">
+                        <span class="material-symbols-outlined">account_circle</span>
+                        <span class="nav-text">Account</span>
+                        <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="{{ url_for('subscription') }}" class="nav-dropdown-item {% if request.endpoint == 'subscription' %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">workspace_premium</span>
+                            Billing & Subscription
+                        </a>
+                        <a href="{{ url_for('donate') }}" class="nav-dropdown-item {% if request.endpoint == 'donate' %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">volunteer_activism</span>
+                            Support Us
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            {% if current_user.is_authenticated and current_user.is_admin %}
+            <!-- Admin Section with Dropdown -->
+            <div class="nav-section">
+                <div class="nav-section-title">Admin</div>
+                <div class="nav-item nav-dropdown" id="adminDropdown">
+                    <button class="nav-dropdown-toggle {% if 'admin' in request.endpoint %}active{% endif %}" 
+                            onclick="toggleDropdown('adminDropdown')">
+                        <span class="material-symbols-outlined">admin_panel_settings</span>
+                        <span class="nav-text">Admin</span>
+                        <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="{{ url_for('admin') }}" class="nav-dropdown-item {% if request.endpoint == 'admin' %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">dashboard</span>
+                            Dashboard
+                        </a>
+                        <a href="{{ url_for('admin_videos') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'video' in request.endpoint %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">video_library</span>
+                            Videos
+                        </a>
+                        <a href="{{ url_for('admin_categories') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'categor' in request.endpoint %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">category</span>
+                            Categories
+                        </a>
+                        <a href="{{ url_for('admin_tags') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'tag' in request.endpoint %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">label</span>
+                            Tags
+                        </a>
+                        <a href="{{ url_for('admin_stream') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'stream' in request.endpoint %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">live_tv</span>
+                            Stream Control
+                        </a>
+                        <a href="{{ url_for('admin_recommendations') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'recommendation' in request.endpoint %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">recommend</span>
+                            Recommendations
+                        </a>
+                    </div>
+                </div>
             </div>
             {% endif %}
         </nav>
-
 
         <!-- User section -->
         <div class="sidebar-user">
@@ -912,6 +1054,46 @@
                 sidebar.classList.remove('mobile-open');
                 mobileOverlay.classList.remove('show');
             });
+        });
+
+        // Dropdown functionality
+        function toggleDropdown(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            const sidebar = document.getElementById('sidebar');
+            
+            if (sidebar.classList.contains('collapsed')) {
+                // In collapsed mode, show as absolute positioned menu
+                dropdown.classList.toggle('open');
+            } else {
+                // In normal mode, show as expandable menu
+                dropdown.classList.toggle('open');
+            }
+            
+            // Close other dropdowns
+            const allDropdowns = document.querySelectorAll('.nav-dropdown');
+            allDropdowns.forEach(dd => {
+                if (dd.id !== dropdownId) {
+                    dd.classList.remove('open');
+                }
+            });
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdowns = document.querySelectorAll('.nav-dropdown');
+            let clickedInside = false;
+            
+            dropdowns.forEach(dropdown => {
+                if (dropdown.contains(event.target)) {
+                    clickedInside = true;
+                }
+            });
+            
+            if (!clickedInside) {
+                dropdowns.forEach(dropdown => {
+                    dropdown.classList.remove('open');
+                });
+            }
         });
 
         // Global notification function
