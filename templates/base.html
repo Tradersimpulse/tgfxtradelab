@@ -112,23 +112,23 @@
         }
 
         .sidebar-logo {
-            font-size: 1.5rem;
-            font-weight: 800;
-            background: var(--gradient-primary);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            height: 40px;
+            width: auto;
+            max-width: 160px;
+            object-fit: contain;
             transition: all 0.3s ease;
+            filter: brightness(1.1);
         }
 
-        .sidebar-logo-icon {
+        .sidebar-logo-collapsed {
             height: 32px;
             width: 32px;
-            color: var(--primary-color);
+            object-fit: contain;
             opacity: 0;
             position: absolute;
             transform: scale(0.8);
             transition: all 0.3s ease;
+            filter: brightness(1.1);
         }
 
         .sidebar.collapsed .sidebar-logo {
@@ -136,7 +136,7 @@
             transform: scale(0.8);
         }
 
-        .sidebar.collapsed .sidebar-logo-icon {
+        .sidebar.collapsed .sidebar-logo-collapsed {
             opacity: 1;
             transform: scale(1);
         }
@@ -661,6 +661,12 @@
             .mobile-toggle:hover {
                 transform: scale(1.05);
             }
+
+            /* Mobile logo adjustments */
+            .sidebar-logo {
+                height: 32px;
+                max-width: 120px;
+            }
         }
 
         /* Text gradients */
@@ -841,10 +847,10 @@
             <span class="material-symbols-outlined">chevron_left</span>
         </button>
 
-        <!-- Header -->
+        <!-- Header with Logo -->
         <div class="sidebar-header">
-            <div class="sidebar-logo">TGFX Trade Lab</div>
-            <span class="material-symbols-outlined sidebar-logo-icon">school</span>
+            <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="TGFX Trade Lab" class="sidebar-logo">
+            <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="TGFX Trade Lab" class="sidebar-logo-collapsed">
         </div>
 
         <!-- Navigation -->
