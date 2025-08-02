@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - TGFX Trade Lab{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="text-center">
+            <h1 class="text-gradient-primary mb-3">
+                <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">settings</span>
+                User Settings
+            </h1>
+            <p class="text-muted mb-0 lead">Customize your trading dashboard experience</p>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">schedule</span>
+                    Trading Session Timezone
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-4">
+                        <label for="{{ form.timezone.id }}" class="form-label text-white">
+                            Select Your Timezone
+                        </label>
+                        {{ form.timezone(class="form-select form-select-lg", id="timezoneSelect") }}
+                        <div class="form-text text-muted">
+                            This will adjust the trading session times to display in your local timezone.
+                        </div>
+                    </div>
+                    
+                    <!-- Current Time Preview -->
+                    <div class="mb-4">
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body">
+                                <h6 class="text-primary mb-3">
+                                    <span class="material-symbols-outlined me-2">access_time</span>
+                                    Current Time Preview
+                                </h6>
+                                <div id="timePreview" class="text-center">
+                                    <div class="display-6 text-white" id="currentTime">--:--:-- --</div>
+                                    <small class="text-muted" id="currentTimezone">Select a timezone</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Trading Sessions Preview -->
+                    <div class="mb-4">
+                        <div class="card bg-dark border-secondary">
+                            <div class="card-body">
+                                <h6 class="text-primary mb-3">
+                                    <span class="material-symbols-outlined me-2">public</span>
+                                    Trading Sessions in Your Timezone
+                                </h6>
+                                <div class="row" id="sessionPreview">
+                                    <div class="col-md-6 mb-3">
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3">
+                                                <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
+                                                    <span class="text-white fw-bold small">NY</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div class="text-white fw-medium">New York</div>
+                                                <small class="text-muted" id="nyPreview">8:00 AM - 5:00 PM</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3">
+                                                <div class="rounded-circle bg-warning d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
+                                                    <span class="text-white fw-bold small">LN</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div class="text-white fw-medium">London</div>
+                                                <small class="text-muted" id="londonPreview">3:00 AM - 12:00 PM</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3">
+                                                <div class="rounded-circle bg-info d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
+                                                    <span class="text-white fw-bold small">TK</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div class="text-white fw-medium">Tokyo</div>
+                                                <small class="text-muted" id="tokyoPreview">7:00 PM - 4:00 AM</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3">
+                                                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
+                                                    <span class="text-white fw-bold small">SY</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <div class="text-white fw-medium">Sydney</div>
+                                                <small class="text-muted" id="sydneyPreview">5:00 PM - 2:00 AM</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                            <span class="material-symbols-outlined me-2">arrow_back</span>
+                            Back to Dashboard
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <span class="material-symbols-outlined me-2">save</span>
+                            Save Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const timezoneSelect = document.getElementById('timezoneSelect');
+    const currentTimeElement = document.getElementById('currentTime');
+    const currentTimezoneElement = document.getElementById('currentTimezone');
+    
+    // Trading session times in EST (baseline)
+    const sessionTimesEST = {
+        newYork: { open: 8, close: 17 },
+        london: { open: 3, close: 12 },
+        tokyo: { open: 19, close: 4 },  // Next day
+        sydney: { open: 17, close: 2 }  // Next day
+    };
+    
+    function updatePreview() {
+        const selectedTimezone = timezoneSelect.value;
+        
+        if (!selectedTimezone) return;
+        
+        try {
+            // Update current time in selected timezone
+            const now = new Date();
+            const formatter = new Intl.DateTimeFormat('en-US', {
+                timeZone: selectedTimezone,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+            
+            currentTimeElement.textContent = formatter.format(now);
+            currentTimezoneElement.textContent = selectedTimezone.replace('_', ' ');
+            
+            // Update session times preview
+            updateSessionPreview(selectedTimezone);
+            
+        } catch (error) {
+            console.error('Error updating timezone preview:', error);
+            currentTimeElement.textContent = 'Invalid timezone';
+            currentTimezoneElement.textContent = '';
+        }
+    }
+    
+    function updateSessionPreview(userTimezone) {
+        const sessions = ['newYork', 'london', 'tokyo', 'sydney'];
+        const previewIds = ['nyPreview', 'londonPreview', 'tokyoPreview', 'sydneyPreview'];
+        
+        sessions.forEach((session, index) => {
+            const previewElement = document.getElementById(previewIds[index]);
+            const sessionTime = sessionTimesEST[session];
+            
+            try {
+                // Convert EST times to user's timezone
+                const today = new Date();
+                const openTime = new Date(today);
+                openTime.setHours(sessionTime.open, 0, 0, 0);
+                
+                const closeTime = new Date(today);
+                closeTime.setHours(sessionTime.close, 0, 0, 0);
+                
+                // Handle overnight sessions
+                if (sessionTime.close < sessionTime.open) {
+                    closeTime.setDate(closeTime.getDate() + 1);
+                }
+                
+                const formatter = new Intl.DateTimeFormat('en-US', {
+                    timeZone: userTimezone,
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+                
+                const openTimeStr = formatter.format(openTime);
+                const closeTimeStr = formatter.format(closeTime);
+                
+                previewElement.textContent = `${openTimeStr} - ${closeTimeStr}`;
+                
+            } catch (error) {
+                previewElement.textContent = 'Error calculating time';
+            }
+        });
+    }
+    
+    // Update preview when timezone changes
+    timezoneSelect.addEventListener('change', updatePreview);
+    
+    // Initial preview update
+    updatePreview();
+    
+    // Update current time every second
+    setInterval(updatePreview, 1000);
+});
+</script>
+{% endblock %>
