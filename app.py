@@ -15,6 +15,7 @@ from config import get_config
 import re
 import json
 import uuid
+import pytz
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -57,6 +58,9 @@ class User(UserMixin, db.Model):
     display_name = db.Column(db.String(100), nullable=True)
     can_stream = db.Column(db.Boolean, default=False, nullable=False)
     stream_color = db.Column(db.String(7), default='#10B981', nullable=False)
+    
+    # Timezone field - NEW
+    timezone = db.Column(db.String(50), default='America/Chicago', nullable=False)
     
     # Relationships
     progress = db.relationship('UserProgress', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -347,6 +351,29 @@ class RecommendationForm(FlaskForm):
     is_active = BooleanField('Active', default=True)
     order_index = IntegerField('Order', default=0)
 
+# NEW FORM FOR USER SETTINGS
+class UserSettingsForm(FlaskForm):
+    timezone = SelectField('Timezone', choices=[
+        ('America/New_York', 'Eastern Time (ET) - New York'),
+        ('America/Chicago', 'Central Time (CT) - Chicago'),
+        ('America/Denver', 'Mountain Time (MT) - Denver'),
+        ('America/Los_Angeles', 'Pacific Time (PT) - Los Angeles'),
+        ('America/Toronto', 'Eastern Time (ET) - Toronto'),
+        ('America/Vancouver', 'Pacific Time (PT) - Vancouver'),
+        ('Europe/London', 'Greenwich Mean Time (GMT) - London'),
+        ('Europe/Berlin', 'Central European Time (CET) - Berlin'),
+        ('Europe/Zurich', 'Central European Time (CET) - Zurich'),
+        ('Asia/Tokyo', 'Japan Standard Time (JST) - Tokyo'),
+        ('Asia/Shanghai', 'China Standard Time (CST) - Shanghai'),
+        ('Asia/Hong_Kong', 'Hong Kong Time (HKT) - Hong Kong'),
+        ('Asia/Singapore', 'Singapore Standard Time (SGT) - Singapore'),
+        ('Asia/Kolkata', 'India Standard Time (IST) - Mumbai'),
+        ('Australia/Sydney', 'Australian Eastern Time (AET) - Sydney'),
+        ('Australia/Melbourne', 'Australian Eastern Time (AET) - Melbourne'),
+        ('Pacific/Auckland', 'New Zealand Standard Time (NZST) - Auckland'),
+        ('UTC', 'Coordinated Universal Time (UTC)'),
+    ], validators=[DataRequired()])
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -577,6 +604,7 @@ def initialize_streamers():
             ray.display_name = 'Ray'
             ray.can_stream = True
             ray.stream_color = '#10B981'
+            ray.timezone = ray.timezone or 'America/Chicago'  # Set default timezone
         
         jordan = User.query.filter_by(username='jordan').first()
         if not jordan:
@@ -587,7 +615,8 @@ def initialize_streamers():
                 is_admin=True,
                 display_name='Jordan',
                 can_stream=True,
-                stream_color='#3B82F6'
+                stream_color='#3B82F6',
+                timezone='America/Chicago'  # Default timezone
             )
             db.session.add(jordan)
         else:
@@ -595,6 +624,7 @@ def initialize_streamers():
             jordan.can_stream = True
             jordan.stream_color = '#3B82F6'
             jordan.is_admin = True
+            jordan.timezone = jordan.timezone or 'America/Chicago'  # Set default timezone
         
         db.session.commit()
         print("✅ Streamers initialized: Ray (Green) and Jordan (Blue)")
@@ -602,6 +632,34 @@ def initialize_streamers():
     except Exception as e:
         print(f"❌ Error initializing streamers: {e}")
         db.session.rollback()
+
+def migrate_user_timezones():
+    """Run this once to add timezone to existing users"""
+    try:
+        # First, try to add the column if it doesn't exist
+        try:
+            db.session.execute('ALTER TABLE users ADD COLUMN timezone VARCHAR(50) DEFAULT "America/Chicago"')
+            db.session.commit()
+            print("✓ Added timezone column to users table")
+        except Exception as e:
+            # Column probably already exists
+            db.session.rollback()
+            print("✓ Timezone column already exists or error adding:", str(e))
+        
+        # Update users without timezone
+        users_without_timezone = User.query.filter(
+            db.or_(User.timezone.is_(None), User.timezone == '')
+        ).all()
+        
+        for user in users_without_timezone:
+            user.timezone = 'America/Chicago'  # Default to CST
+        
+        db.session.commit()
+        print(f"✓ Updated {len(users_without_timezone)} users with default timezone")
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error migrating user timezones: {e}")
 
 # Custom Jinja2 filters
 @app.template_filter('nl2br')
@@ -685,7 +743,8 @@ def signup():
         user = User(
             username=form.username.data,
             email=form.email.data,
-            password_hash=generate_password_hash(form.password.data)
+            password_hash=generate_password_hash(form.password.data),
+            timezone='America/Chicago'  # Default timezone for new users
         )
         db.session.add(user)
         db.session.commit()
@@ -704,6 +763,25 @@ def signup():
 def logout():
     logout_user()
     return redirect(url_for('index'))
+
+# NEW SETTINGS ROUTE
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def user_settings():
+    form = UserSettingsForm(obj=current_user)
+    
+    if form.validate_on_submit():
+        # Validate timezone
+        try:
+            pytz.timezone(form.timezone.data)  # This will raise an exception if invalid
+            current_user.timezone = form.timezone.data
+            db.session.commit()
+            flash('Settings updated successfully!', 'success')
+            return redirect(url_for('user_settings'))
+        except pytz.exceptions.UnknownTimeZoneError:
+            flash('Invalid timezone selected.', 'error')
+    
+    return render_template('settings.html', form=form)
 
 @app.route('/courses')
 @login_required
@@ -843,14 +921,24 @@ def download_file(file_id):
 @app.route('/subscription')
 @login_required
 def subscription():
-    return render_template('subscription.html', 
-                         stripe_key=app.config['STRIPE_PUBLISHABLE_KEY'])
+    stripe_key = app.config.get('STRIPE_PUBLISHABLE_KEY')
+    
+    if not stripe_key:
+        flash('Payment system is currently unavailable. Please try again later.', 'warning')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('subscription.html', stripe_key=stripe_key)
 
 @app.route('/donate')
 @login_required
 def donate():
-    return render_template('donate.html', 
-                         stripe_key=app.config['STRIPE_PUBLISHABLE_KEY'])
+    stripe_key = app.config.get('STRIPE_PUBLISHABLE_KEY')
+    
+    if not stripe_key:
+        flash('Donation system is currently unavailable. Please try again later.', 'warning')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('donate.html', stripe_key=stripe_key)
 
 # API Routes
 @app.route('/api/video/progress', methods=['POST'])
@@ -906,6 +994,86 @@ def toggle_favorite():
     db.session.commit()
     
     return jsonify({'success': True, 'is_favorited': is_favorited})
+
+# NEW TIMEZONE API ROUTES
+@app.route('/api/user/timezone', methods=['POST'])
+@login_required
+def update_user_timezone():
+    try:
+        data = request.get_json()
+        timezone_name = data.get('timezone')
+        
+        if not timezone_name:
+            return jsonify({'error': 'Timezone is required'}), 400
+        
+        # Validate timezone
+        try:
+            pytz.timezone(timezone_name)
+        except pytz.exceptions.UnknownTimeZoneError:
+            return jsonify({'error': 'Invalid timezone'}), 400
+        
+        current_user.timezone = timezone_name
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'timezone': timezone_name,
+            'message': 'Timezone updated successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trading-sessions')
+@login_required
+def get_trading_sessions():
+    try:
+        user_tz = pytz.timezone(current_user.timezone or 'America/Chicago')
+        est_tz = pytz.timezone('America/New_York')
+        
+        # Define session times in EST
+        sessions_est = {
+            'sydney': {'open': 17, 'close': 2, 'days': [0, 1, 2, 3, 4]},
+            'tokyo': {'open': 19, 'close': 4, 'days': [0, 1, 2, 3, 4]},
+            'london': {'open': 3, 'close': 12, 'days': [1, 2, 3, 4, 5]},
+            'new_york': {'open': 8, 'close': 17, 'days': [1, 2, 3, 4, 5]}
+        }
+        
+        # Convert to user's timezone
+        sessions_user_tz = {}
+        for session_name, session_data in sessions_est.items():
+            # Create EST datetime for today
+            now = datetime.now(est_tz)
+            est_open = now.replace(hour=session_data['open'], minute=0, second=0, microsecond=0)
+            est_close = now.replace(hour=session_data['close'], minute=0, second=0, microsecond=0)
+            
+            # Handle overnight sessions
+            if session_data['close'] < session_data['open']:
+                est_close = est_close + timedelta(days=1)
+            
+            # Convert to user timezone
+            user_open = est_open.astimezone(user_tz)
+            user_close = est_close.astimezone(user_tz)
+            
+            sessions_user_tz[session_name] = {
+                'open': user_open.strftime('%H:%M'),
+                'close': user_close.strftime('%H:%M'),
+                'open_hour': user_open.hour,
+                'open_minute': user_open.minute,
+                'close_hour': user_close.hour,
+                'close_minute': user_close.minute,
+                'days': session_data['days']
+            }
+        
+        return jsonify({
+            'sessions': sessions_user_tz,
+            'user_timezone': current_user.timezone,
+            'current_time': datetime.now(user_tz).isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Recommendations API
 @app.route('/api/recommendations/track-click', methods=['POST'])
@@ -1758,6 +1926,7 @@ def api_stop_recording():
         'recording_url': stream.recording_url
     })
 
+# CONTEXT PROCESSORS
 @app.context_processor
 def utility_processor():
     return dict(
@@ -1767,6 +1936,12 @@ def utility_processor():
         get_total_duration=get_total_duration
     )
 
+@app.context_processor
+def inject_user_timezone():
+    if current_user.is_authenticated:
+        return dict(user_timezone=current_user.timezone or 'America/Chicago')
+    return dict(user_timezone='America/Chicago')
+
 # Initialize configuration
 config_class.init_app(app)
 
@@ -1775,6 +1950,10 @@ if __name__ == '__main__':
         try:
             db.create_all()
             print("✓ Database tables created successfully")
+            
+            # Run timezone migration
+            migrate_user_timezones()
+            
         except Exception as e:
             print(f"⚠ Database initialization error: {e}")
         
@@ -1788,11 +1967,18 @@ if __name__ == '__main__':
                     is_admin=True,
                     display_name='Ray',
                     can_stream=True,
-                    stream_color='#10B981'
+                    stream_color='#10B981',
+                    timezone='America/Chicago'  # Add default timezone
                 )
                 db.session.add(admin_user)
                 db.session.commit()
                 print("✓ Admin user created")
+            else:
+                # Update existing admin user with timezone if missing
+                if not admin_user.timezone:
+                    admin_user.timezone = 'America/Chicago'
+                    db.session.commit()
+                    print("✓ Admin user timezone updated")
         except Exception as e:
             print(f"⚠ Admin user creation error: {e}")
     
