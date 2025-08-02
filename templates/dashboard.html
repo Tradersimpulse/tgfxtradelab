@@ -6,12 +6,15 @@
 <!-- Welcome Section -->
 <div class="row mb-4">
     <div class="col-12">
-        <!-- Main Welcome Content -->
-        <div class="row align-items-stretch">
-            <div class="col-lg-8 col-md-7 mb-3 mb-md-0">
-                <h1 class="text-gradient-primary mb-2">Welcome back, {{ current_user.username }}!</h1>
-                <p class="text-muted mb-3">Ready to continue your trading journey? Here's what's happening today.</p>
-                
+        <!-- Welcome Text -->
+        <div class="mb-4">
+            <h1 class="text-gradient-primary mb-2">Welcome back, {{ current_user.username }}!</h1>
+            <p class="text-muted mb-0">Ready to continue your trading journey? Here's what's happening today.</p>
+        </div>
+        
+        <!-- Cards Row -->
+        <div class="row align-items-stretch g-3">
+            <div class="col-lg-8 col-md-7">
                 <!-- Inspirational Quote -->
                 <div class="card quote-card h-100">
                     <div class="card-body d-flex align-items-center">
@@ -24,10 +27,8 @@
                 </div>
             </div>
             
-            <!-- Subscription Status -->
             <div class="col-lg-4 col-md-5">
-                <!-- Spacer to align with quote card -->
-                <div style="height: 4.75rem;"></div>
+                <!-- Subscription Status -->
                 <div class="card subscription-card h-100">
                     <div class="card-body text-center d-flex flex-column justify-content-center">
                         <div class="d-flex align-items-center justify-content-center mb-2">
@@ -667,14 +668,6 @@
 }
 
 /* Mobile responsiveness */
-@media (max-width: 991px) {
-    /* Hide spacer on tablet and mobile */
-    .col-lg-4 > div[style*="height: 4.75rem"],
-    .col-md-5 > div[style*="height: 4.75rem"] {
-        display: none;
-    }
-}
-
 @media (max-width: 768px) {
     .quote-icon {
         font-size: 1.5rem;
