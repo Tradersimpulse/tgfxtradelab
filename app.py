@@ -2612,15 +2612,19 @@ if __name__ == '__main__':
     # Start background cleanup task
     background_cleanup()
     
-    # Run with SocketIO instead of app.run()
+    # Get port from environment (for Heroku deployment)
+    port = int(os.environ.get('PORT', 5000))
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    
     print("🚀 Starting Flask app with WebSocket support...")
-    print("🔌 WebSocket endpoints available at //")
-    print("🎬 Enhanced livestream with real audio and screen sharing ready!")
+    print(f"🔌 WebSocket endpoints available at /socket.io/")
+    print(f"🎬 Enhanced livestream with real audio and screen sharing ready!")
+    print(f"🌐 Running on port {port}")
     
     socketio.run(
         app, 
-        debug=True, 
+        debug=debug_mode,
         host='0.0.0.0', 
-        port=5000,
-        allow_unsafe_werkzeug=True  # For development only
+        port=port,
+        allow_unsafe_werkzeug=debug_mode  # Only for development
     )
