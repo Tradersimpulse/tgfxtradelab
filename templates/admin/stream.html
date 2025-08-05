@@ -2,6 +2,11 @@
 
 {% block title %}Dual Stream Control - TGFX Trade Lab Admin{% endblock %}
 
+{% block head %}
+<!-- Socket.IO for real-time communication -->
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
     <div class="col-12">
@@ -336,18 +341,154 @@ window.streamState = {
     isRecording: false,
     audioContext: null,
     mediaStream: null,
-    screenStream: null
+    screenStream: null,
+    audioChunks: [],
+    mediaRecorder: null
 };
 
-// Simple communication system using localStorage polling
-window.streamingComm = {
+// WebSocket Manager for real-time communication
+window.WebSocketManager = {
+    socket: null,
+    isConnected: false,
+    reconnectAttempts: 0,
+    maxReconnectAttempts: 5,
+    currentStreamId: null,
+    
     init: function() {
-        console.log('🔄 Initializing simplified streaming communication');
+        console.log('🔌 Initializing WebSocket connection...');
         
-        // Poll every 500ms to update status
+        try {
+            this.socket = io({
+                transports: ['websocket', 'polling'],
+                timeout: 5000,
+                forceNew: true
+            });
+            
+            this.setupEventHandlers();
+            
+        } catch (error) {
+            console.error('❌ Failed to initialize WebSocket:', error);
+            this.fallbackToLocalStorage();
+        }
+    },
+    
+    setupEventHandlers: function() {
+        this.socket.on('connect', () => {
+            console.log('✅ WebSocket connected');
+            this.isConnected = true;
+            this.reconnectAttempts = 0;
+            this.showConnectionStatus('connected');
+            
+            // Join stream room if we have an active stream
+            if (this.currentStreamId) {
+                this.joinStreamAsAdmin(this.currentStreamId);
+            }
+        });
+        
+        this.socket.on('disconnect', (reason) => {
+            console.log('❌ WebSocket disconnected:', reason);
+            this.isConnected = false;
+            this.showConnectionStatus('disconnected');
+        });
+        
+        this.socket.on('connect_error', (error) => {
+            console.error('❌ WebSocket connection error:', error);
+            this.handleConnectionError();
+        });
+        
+        this.socket.on('viewer_joined', (data) => {
+            console.log('👥 Viewer joined:', data);
+            this.updateViewerCount(data.viewer_count);
+            showToast(`👥 ${data.username || 'Someone'} joined the stream`, 'info');
+        });
+        
+        this.socket.on('viewer_left', (data) => {
+            console.log('👋 Viewer left:', data);
+            this.updateViewerCount(data.viewer_count);
+        });
+        
+        this.socket.on('error', (data) => {
+            console.error('❌ WebSocket error:', data.message);
+            showToast('❌ ' + data.message, 'error');
+        });
+    },
+    
+    handleConnectionError: function() {
+        this.reconnectAttempts++;
+        
+        if (this.reconnectAttempts <= this.maxReconnectAttempts) {
+            console.log(`🔄 Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
+            setTimeout(() => {
+                this.socket.connect();
+            }, 2000 * this.reconnectAttempts);
+        } else {
+            console.log('❌ Max reconnection attempts reached, using localStorage fallback');
+            this.fallbackToLocalStorage();
+        }
+    },
+    
+    fallbackToLocalStorage: function() {
+        console.log('📡 Using localStorage fallback communication');
+        this.initLocalStorageFallback();
+    },
+    
+    initLocalStorageFallback: function() {
         setInterval(() => {
             this.updateStatus();
-        }, 500);
+        }, 100);
+    },
+    
+    joinStreamAsAdmin: function(streamId) {
+        this.currentStreamId = streamId;
+        if (this.isConnected) {
+            this.socket.emit('join_stream', { stream_id: streamId });
+            console.log('🎬 Admin joined stream room:', streamId);
+        }
+    },
+    
+    sendStreamControl: function(streamId, controlType, data) {
+        if (this.isConnected) {
+            this.socket.emit('stream_control', {
+                stream_id: streamId,
+                type: controlType,
+                data: data
+            });
+        } else {
+            this.localStorageFallback('control', { type: controlType, data: data });
+        }
+    },
+    
+    sendScreenFrame: function(streamId, frameData) {
+        if (this.isConnected) {
+            this.socket.emit('screen_frame', {
+                stream_id: streamId,
+                frame_data: frameData
+            });
+        } else {
+            this.localStorageFallback('screen_frame', { imageData: frameData });
+        }
+    },
+    
+    sendAudioChunk: function(streamId, audioData) {
+        if (this.isConnected) {
+            this.socket.emit('audio_chunk', {
+                stream_id: streamId,
+                audio_data: audioData
+            });
+        } else {
+            this.localStorageFallback('audio_chunk', { audioData: audioData });
+        }
+    },
+    
+    sendStatusUpdate: function(streamId, status) {
+        if (this.isConnected) {
+            this.socket.emit('status_update', {
+                stream_id: streamId,
+                status: status
+            });
+        } else {
+            this.localStorageFallback('status_update', status);
+        }
     },
     
     updateStatus: function() {
@@ -360,17 +501,53 @@ window.streamingComm = {
         localStorage.setItem('admin_stream_status', JSON.stringify(status));
     },
     
-    broadcastScreenFrame: function(imageData) {
-        const frameData = {
-            imageData: imageData,
+    localStorageFallback: function(type, data) {
+        const key = `admin_${type}`;
+        const payload = {
+            ...data,
             timestamp: Date.now()
         };
         
-        localStorage.setItem('admin_screen_frame', JSON.stringify(frameData));
+        try {
+            localStorage.setItem(key, JSON.stringify(payload));
+        } catch (e) {
+            console.warn('⚠️ localStorage fallback failed:', e);
+        }
+    },
+    
+    updateViewerCount: function(count) {
+        document.querySelectorAll('.stream-viewer-count').forEach(el => {
+            el.textContent = count === 1 ? '1 viewer' : count + ' viewers';
+        });
+        
+        const totalViewersEl = document.getElementById('totalViewersCount');
+        if (totalViewersEl) {
+            totalViewersEl.textContent = count;
+        }
+    },
+    
+    showConnectionStatus: function(status) {
+        let indicator = document.querySelector('.connection-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'connection-indicator';
+            indicator.style.cssText = 'position:fixed;top:10px;left:10px;background:rgba(0,0,0,0.8);color:white;padding:4px 8px;border-radius:4px;font-size:12px;z-index:1001;';
+            document.body.appendChild(indicator);
+        }
+        
+        if (status === 'connected') {
+            indicator.textContent = '🟢 Connected';
+            indicator.style.background = 'rgba(16, 185, 129, 0.8)';
+            setTimeout(() => indicator.style.display = 'none', 3000);
+        } else {
+            indicator.textContent = '🔴 Disconnected';
+            indicator.style.background = 'rgba(239, 68, 68, 0.8)';
+            indicator.style.display = 'block';
+        }
     }
 };
 
-// Audio streaming functions
+// Enhanced audio streaming functions
 window.toggleMicrophone = async function() {
     if (window.streamState.isAudioActive) {
         stopAudio();
@@ -381,56 +558,108 @@ window.toggleMicrophone = async function() {
 
 async function startAudio() {
     try {
-        console.log('🎤 Starting audio capture...');
+        console.log('🎤 Starting enhanced audio capture...');
         
-        // Get microphone access
         window.streamState.mediaStream = await navigator.mediaDevices.getUserMedia({
             audio: {
                 echoCancellation: true,
                 noiseSuppression: true,
-                autoGainControl: true
+                autoGainControl: true,
+                sampleRate: 44100,
+                channelCount: 1
             }
         });
         
-        // Create audio context
-        window.streamState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        window.streamState.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+            sampleRate: 44100
+        });
         
         if (window.streamState.audioContext.state === 'suspended') {
             await window.streamState.audioContext.resume();
         }
         
-        // Set up audio analysis
         const source = window.streamState.audioContext.createMediaStreamSource(window.streamState.mediaStream);
         const analyser = window.streamState.audioContext.createAnalyser();
         analyser.fftSize = 256;
         
         source.connect(analyser);
         
-        // Start audio visualization
+        // Start real audio recording for streaming
+        startAudioRecording();
+        
+        // Start visualization
         startAudioVisualization(analyser);
         
-        // Update state
         window.streamState.isAudioActive = true;
         updateAudioUI(true);
         
-        // Store audio data for viewers
-        storeAudioData(analyser);
+        // Notify WebSocket
+        const streamId = getCurrentStreamId();
+        if (streamId) {
+            window.WebSocketManager.sendStreamControl(streamId, 'audio_start', {});
+            window.WebSocketManager.sendStatusUpdate(streamId, {
+                audio: true,
+                screen: window.streamState.isScreenSharing
+            });
+        }
         
-        showToast('🎤 Microphone started - Viewers can now hear you!', 'success');
+        showToast('🎤 Microphone started - Audio is now streaming!', 'success');
         
     } catch (error) {
         console.error('❌ Failed to start audio:', error);
-        
         if (error.name === 'NotAllowedError') {
-            showToast('⚠️ Microphone access denied. Please allow microphone permissions and try again.', 'warning');
+            showToast('⚠️ Microphone access denied. Please allow microphone permissions.', 'warning');
         } else {
             showToast('❌ Failed to start microphone: ' + error.message, 'error');
         }
     }
 }
 
+function startAudioRecording() {
+    try {
+        const streamId = getCurrentStreamId();
+        
+        window.streamState.mediaRecorder = new MediaRecorder(window.streamState.mediaStream, {
+            mimeType: 'audio/webm;codecs=opus',
+            audioBitsPerSecond: 64000
+        });
+        
+        window.streamState.audioChunks = [];
+        
+        window.streamState.mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    // Send audio chunk for real playback
+                    if (streamId) {
+                        window.WebSocketManager.sendAudioChunk(streamId, reader.result);
+                    }
+                };
+                reader.readAsDataURL(event.data);
+            }
+        };
+        
+        window.streamState.mediaRecorder.onerror = (event) => {
+            console.error('MediaRecorder error:', event.error);
+        };
+        
+        // Start recording in small chunks for real-time streaming
+        window.streamState.mediaRecorder.start(50); // 50ms chunks
+        
+        console.log('🎵 Real-time audio recording started');
+        
+    } catch (error) {
+        console.error('❌ Failed to start audio recording:', error);
+    }
+}
+
 function stopAudio() {
     console.log('🔇 Stopping audio...');
+    
+    if (window.streamState.mediaRecorder && window.streamState.mediaRecorder.state !== 'inactive') {
+        window.streamState.mediaRecorder.stop();
+        window.streamState.mediaRecorder = null;
+    }
     
     if (window.streamState.mediaStream) {
         window.streamState.mediaStream.getTracks().forEach(track => track.stop());
@@ -443,10 +672,21 @@ function stopAudio() {
     }
     
     window.streamState.isAudioActive = false;
+    window.streamState.audioChunks = [];
     updateAudioUI(false);
     
-    // Clear audio data
+    // Notify WebSocket
+    const streamId = getCurrentStreamId();
+    if (streamId) {
+        window.WebSocketManager.sendStreamControl(streamId, 'audio_stop', {});
+        window.WebSocketManager.sendStatusUpdate(streamId, {
+            audio: false,
+            screen: window.streamState.isScreenSharing
+        });
+    }
+    
     localStorage.removeItem('admin_audio_data');
+    localStorage.removeItem('admin_audio_chunk');
     
     showToast('🔇 Microphone stopped', 'info');
 }
@@ -460,7 +700,6 @@ function startAudioVisualization(analyser) {
         
         analyser.getByteFrequencyData(dataArray);
         
-        // Update audio bars
         const bars = document.querySelectorAll('.audio-bar');
         const audioLevel = Array.from(dataArray).reduce((a, b) => a + b) / bufferLength;
         
@@ -479,7 +718,6 @@ function startAudioVisualization(analyser) {
             }
         });
         
-        // Update audio level text
         const audioLevelText = document.getElementById('audioLevelText');
         if (audioLevelText) {
             if (audioLevel > 10) {
@@ -495,33 +733,6 @@ function startAudioVisualization(analyser) {
     }
     
     updateBars();
-}
-
-function storeAudioData(analyser) {
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    
-    function broadcastAudio() {
-        if (!window.streamState.isAudioActive) return;
-        
-        analyser.getByteFrequencyData(dataArray);
-        
-        const audioLevel = Array.from(dataArray).reduce((a, b) => a + b) / bufferLength;
-        
-        if (audioLevel > 5) {
-            const audioData = {
-                level: audioLevel,
-                frequency: Array.from(dataArray.slice(0, 32)),
-                timestamp: Date.now()
-            };
-            
-            localStorage.setItem('admin_audio_data', JSON.stringify(audioData));
-        }
-        
-        setTimeout(broadcastAudio, 100); // 10 times per second
-    }
-    
-    broadcastAudio();
 }
 
 function updateAudioUI(isActive) {
@@ -547,7 +758,6 @@ function updateAudioUI(isActive) {
         audioStatus.className = 'badge bg-info';
         audioLevelText.textContent = 'Microphone Off';
         
-        // Reset audio bars
         const bars = document.querySelectorAll('.audio-bar');
         bars.forEach(bar => {
             bar.style.height = '10%';
@@ -556,7 +766,7 @@ function updateAudioUI(isActive) {
     }
 }
 
-// Screen sharing functions
+// Enhanced screen sharing functions
 window.toggleScreenShare = async function() {
     if (window.streamState.isScreenSharing) {
         stopScreenShare();
@@ -567,16 +777,15 @@ window.toggleScreenShare = async function() {
 
 async function startScreenShare() {
     try {
-        console.log('🖥️ Starting screen share...');
+        console.log('🖥️ Starting enhanced screen share...');
         
-        // Try to get real screen capture
         if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
             try {
                 window.streamState.screenStream = await navigator.mediaDevices.getDisplayMedia({
                     video: {
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 15 }
+                        width: { ideal: 1280, max: 1920 },
+                        height: { ideal: 720, max: 1080 },
+                        frameRate: { ideal: 30, max: 60 }
                     },
                     audio: false
                 });
@@ -597,13 +806,21 @@ async function startScreenShare() {
             window.streamState.screenStream = createDemoStream();
         }
         
-        // Start broadcasting frames
-        startScreenBroadcast();
+        startEnhancedScreenBroadcast();
         
         window.streamState.isScreenSharing = true;
         updateScreenShareUI(true);
         
-        // Handle stream end
+        // Notify WebSocket
+        const streamId = getCurrentStreamId();
+        if (streamId) {
+            window.WebSocketManager.sendStreamControl(streamId, 'screen_start', {});
+            window.WebSocketManager.sendStatusUpdate(streamId, {
+                audio: window.streamState.isAudioActive,
+                screen: true
+            });
+        }
+        
         if (window.streamState.screenStream.getVideoTracks) {
             window.streamState.screenStream.getVideoTracks().forEach(track => {
                 track.onended = () => {
@@ -613,12 +830,53 @@ async function startScreenShare() {
             });
         }
         
-        showToast('🖥️ Screen sharing started - Viewers can now see your screen!', 'success');
+        showToast('🖥️ Screen sharing started - Enhanced quality streaming!', 'success');
         
     } catch (error) {
         console.error('❌ Screen share failed:', error);
         showToast('❌ Screen sharing failed: ' + error.message, 'error');
     }
+}
+
+function startEnhancedScreenBroadcast() {
+    const streamId = getCurrentStreamId();
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.muted = true;
+    video.srcObject = window.streamState.screenStream;
+    
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    video.addEventListener('loadedmetadata', () => {
+        canvas.width = Math.min(1280, video.videoWidth);
+        canvas.height = Math.min(720, video.videoHeight);
+        
+        let frameCount = 0;
+        
+        function captureFrame() {
+            if (!window.streamState.isScreenSharing) return;
+            
+            if (video.readyState >= 2) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                
+                if (streamId) {
+                    window.WebSocketManager.sendScreenFrame(streamId, imageData);
+                }
+                
+                frameCount++;
+            }
+            
+            if (window.streamState.isScreenSharing) {
+                requestAnimationFrame(captureFrame); // 60 FPS capture
+            }
+        }
+        
+        video.play().then(() => {
+            captureFrame();
+        });
+    });
 }
 
 function stopScreenShare() {
@@ -634,45 +892,19 @@ function stopScreenShare() {
     window.streamState.isScreenSharing = false;
     updateScreenShareUI(false);
     
-    // Clear screen data
+    // Notify WebSocket
+    const streamId = getCurrentStreamId();
+    if (streamId) {
+        window.WebSocketManager.sendStreamControl(streamId, 'screen_stop', {});
+        window.WebSocketManager.sendStatusUpdate(streamId, {
+            audio: window.streamState.isAudioActive,
+            screen: false
+        });
+    }
+    
     localStorage.removeItem('admin_screen_frame');
     
     showToast('🛑 Screen sharing stopped', 'info');
-}
-
-function startScreenBroadcast() {
-    const video = document.createElement('video');
-    video.autoplay = true;
-    video.muted = true;
-    video.srcObject = window.streamState.screenStream;
-    
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    video.addEventListener('loadedmetadata', () => {
-        canvas.width = 1280;
-        canvas.height = 720;
-        
-        function captureFrame() {
-            if (!window.streamState.isScreenSharing) return;
-            
-            if (video.readyState >= 2) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = canvas.toDataURL('image/jpeg', 0.8);
-                
-                // Broadcast frame
-                window.streamingComm.broadcastScreenFrame(imageData);
-            }
-            
-            if (window.streamState.isScreenSharing) {
-                setTimeout(captureFrame, 100); // 10 FPS
-            }
-        }
-        
-        video.play().then(() => {
-            captureFrame();
-        });
-    });
 }
 
 function createDemoStream() {
@@ -683,37 +915,50 @@ function createDemoStream() {
     
     let frame = 0;
     function animate() {
-        ctx.fillStyle = '#1a1a1a';
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, '#1a1a1a');
+        gradient.addColorStop(1, '#2a2a2a');
+        
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         ctx.fillStyle = '#10B981';
         ctx.font = 'bold 48px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Admin Live Screen Share', 640, 150);
+        ctx.fillText('🔴 LIVE Demo Stream', 640, 150);
         
         ctx.fillStyle = '#ffffff';
         ctx.font = '24px Arial';
-        ctx.fillText('Demo Mode - Real screen sharing available', 640, 200);
+        ctx.fillText('Enhanced streaming with real audio support', 640, 200);
         
         // Animated chart
         ctx.strokeStyle = '#10B981';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        for (let i = 100; i < 1180; i += 10) {
-            const y = 400 + Math.sin((i + frame * 2) * 0.01) * 100;
+        
+        for (let i = 100; i < 1180; i += 8) {
+            const baseY = 400;
+            const amplitude = 80;
+            const frequency = 0.02;
+            const speed = frame * 0.05;
+            
+            const y = baseY + Math.sin((i * frequency) + speed) * amplitude + 
+                     Math.sin((i * frequency * 2.5) + speed * 1.5) * (amplitude * 0.3);
+            
             if (i === 100) ctx.moveTo(i, y);
             else ctx.lineTo(i, y);
         }
         ctx.stroke();
         
         // Live indicator
+        const pulseSize = 12 + Math.sin(frame * 0.2) * 3;
         ctx.fillStyle = '#ff0000';
         ctx.beginPath();
-        ctx.arc(100, 100, 12, 0, 2 * Math.PI);
+        ctx.arc(100, 100, pulseSize, 0, 2 * Math.PI);
         ctx.fill();
         
         ctx.fillStyle = '#ffffff';
-        ctx.font = '20px Arial';
+        ctx.font = 'bold 20px Arial';
         ctx.textAlign = 'left';
         ctx.fillText('● LIVE', 120, 110);
         
@@ -724,7 +969,7 @@ function createDemoStream() {
     }
     animate();
     
-    return canvas.captureStream(15);
+    return canvas.captureStream(30);
 }
 
 function updateScreenShareUI(isActive) {
@@ -822,6 +1067,8 @@ window.handleStartUserStream = async function(e) {
         
         if (data.success) {
             showToast('✅ Your stream started successfully!', 'success');
+            // Set current stream ID for WebSocket
+            window.WebSocketManager.currentStreamId = data.stream.id;
             setTimeout(() => location.reload(), 1000);
         } else {
             throw new Error(data.error || 'Failed to start stream');
@@ -840,7 +1087,6 @@ window.stopUserStream = async function() {
         return;
     }
     
-    // Stop screen sharing and audio first
     if (window.streamState.isScreenSharing) {
         stopScreenShare();
     }
@@ -866,6 +1112,7 @@ window.stopUserStream = async function() {
         
         if (data.success) {
             showToast('✅ Your stream ended successfully', 'success');
+            window.WebSocketManager.currentStreamId = null;
             setTimeout(() => location.reload(), 1000);
         } else {
             throw new Error(data.error || 'Failed to stop stream');
@@ -914,6 +1161,11 @@ async function updateStreamStats() {
     }
 }
 
+function getCurrentStreamId() {
+    const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+    return userActiveStream ? userActiveStream.id : null;
+}
+
 function showToast(message, type) {
     const toast = document.createElement('div');
     const alertType = type === 'error' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
@@ -937,10 +1189,16 @@ function showToast(message, type) {
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 Admin control page loaded');
+    console.log('📱 Enhanced admin control page loaded');
     
-    // Initialize communication system
-    window.streamingComm.init();
+    // Initialize WebSocket communication
+    window.WebSocketManager.init();
+    
+    // Set current stream ID if available
+    const streamId = getCurrentStreamId();
+    if (streamId) {
+        window.WebSocketManager.currentStreamId = streamId;
+    }
     
     // Set up form handlers
     const startStreamForm = document.getElementById('startUserStreamForm');
@@ -952,7 +1210,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateStreamStats, 5000);
     updateStreamStats();
     
-    console.log('✅ Simplified admin stream control loaded');
+    console.log('✅ Enhanced admin stream control loaded with WebSocket support');
 });
 
 // Cleanup on page unload
@@ -1005,6 +1263,21 @@ window.addEventListener('beforeunload', function() {
 .card:hover {
     transform: translateY(-1px);
 }
+
+.connection-indicator {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1001;
+}
+
+.connection-indicator.good { background: rgba(16, 185, 129, 0.8); }
+.connection-indicator.poor { background: rgba(239, 68, 68, 0.8); }
 
 @media (max-width: 768px) {
     .col-lg-6 {
