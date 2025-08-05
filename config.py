@@ -11,43 +11,54 @@ class Config:
     # Flask Core Settings
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     
-    # MySQL Database Configuration
+    # MySQL Database Configuration - FIXED
     @staticmethod
     def get_database_uri():
         """Build MySQL database URI from environment variables"""
         # Check for direct DATABASE_URL first (Heroku style)
         database_url = os.environ.get('DATABASE_URL')
         if database_url:
-            # Handle potential postgres:// URLs from Heroku and convert to mysql://
-            if database_url.startswith('postgres://'):
-                # Convert postgres to mysql format if needed
-                pass
+            # Ensure it's using pymysql driver
+            if database_url.startswith('mysql://'):
+                database_url = database_url.replace('mysql://', 'mysql+pymysql://', 1)
             return database_url
         
         # Build MySQL URI from individual components
-        db_host = os.environ.get('DB_HOST', 'localhost')
-        db_user = os.environ.get('DB_USER', 'root')
-        db_password = os.environ.get('DB_PASSWORD', '')
-        db_name = os.environ.get('DB_NAME', 'tgfx_trade_lab')
+        db_host = os.environ.get('DB_HOST')
+        db_user = os.environ.get('DB_USER')
+        db_password = os.environ.get('DB_PASSWORD')
+        db_name = os.environ.get('DB_NAME')
         db_port = os.environ.get('DB_PORT', '3306')
         
-        if all([db_host, db_user, db_name]):
-            return f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        if all([db_host, db_user, db_password, db_name]):
+            # Build URI with connection parameters for RDS
+            return (f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+                   f"?charset=utf8mb4&autocommit=true&connect_timeout=60&read_timeout=60"
+                   f"&write_timeout=60&binary_prefix=true")
         
         # Fallback to SQLite for local development
         return 'sqlite:///tgfx_trade_lab.db'
     
-    SQLALCHEMY_DATABASE_URI = get_database_uri.__func__()
+    # FIXED: Call the method properly
+    SQLALCHEMY_DATABASE_URI = get_database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # MySQL-specific engine options
+    # Enhanced MySQL engine options for RDS
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_pre_ping': True,
-        'pool_recycle': 300,
-        'pool_size': 10,
-        'max_overflow': 20,
-        'pool_timeout': 30,
-        'echo': False
+        'pool_pre_ping': True,          # Validate connections before use
+        'pool_recycle': 280,            # Recycle every 4.6 minutes (MySQL default is 8 hours)
+        'pool_size': 5,                 # Conservative for Heroku
+        'max_overflow': 10,             # Allow burst connections
+        'pool_timeout': 30,             # Wait for connection
+        'echo': False,                  # Set to True for SQL debugging
+        'connect_args': {
+            'connect_timeout': 60,      # PyMySQL connection timeout
+            'read_timeout': 60,         # Read timeout
+            'write_timeout': 60,        # Write timeout
+            'charset': 'utf8mb4',       # Full UTF-8 support
+            'autocommit': True,         # Auto-commit transactions
+            'sql_mode': 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'
+        }
     }
     
     # AWS S3 Configuration
@@ -94,12 +105,12 @@ class Config:
     CACHE_TYPE = 'simple'
     CACHE_DEFAULT_TIMEOUT = 300
 
-        # AWS Chime SDK Configuration
-    AWS_CHIME_REGION = os.environ.get('AWS_CHIME_REGION') or 'us-east-1'
+    # AWS Chime SDK Configuration
+    AWS_CHIME_REGION = os.environ.get('AWS_CHIME_REGION', 'us-east-1')
     
     # S3 bucket for stream recordings
-    STREAM_RECORDINGS_BUCKET = os.environ.get('STREAM_RECORDINGS_BUCKET') or 'tgfx-tradelab'
-    STREAM_RECORDINGS_PREFIX = os.environ.get('STREAM_RECORDINGS_PREFIX') or 'livestream-recordings/'
+    STREAM_RECORDINGS_BUCKET = os.environ.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+    STREAM_RECORDINGS_PREFIX = os.environ.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
     
     # Chime SDK settings
     CHIME_MEETING_EXPIRY_MINUTES = int(os.environ.get('CHIME_MEETING_EXPIRY_MINUTES', 240))  # 4 hours default
@@ -107,6 +118,15 @@ class Config:
     @staticmethod
     def init_app(app):
         """Initialize application-specific configuration"""
+        # Debug database configuration
+        db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        if 'mysql' in db_uri:
+            print(f"✓ MySQL Database configured: {db_uri.split('@')[1] if '@' in db_uri else 'Unknown host'}")
+        elif 'sqlite' in db_uri:
+            print("⚠ Using SQLite database (development mode)")
+        else:
+            print("❌ Database configuration issue!")
+        
         # Validate required AWS Chime settings
         required_vars = [
             'AWS_ACCESS_KEY_ID',
@@ -124,7 +144,6 @@ class Config:
             print("  Live streaming features may not work properly.")
         else:
             print("✓ AWS Chime SDK configuration loaded")
-    
 
 class DevelopmentConfig(Config):
     """Development configuration"""
@@ -139,7 +158,14 @@ class DevelopmentConfig(Config):
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'echo': True  # Log SQL queries in development
+        'pool_size': 3,             # Smaller pool for development
+        'max_overflow': 5,
+        'echo': True,               # Log SQL queries in development
+        'connect_args': {
+            'connect_timeout': 60,
+            'charset': 'utf8mb4',
+            'autocommit': True
+        }
     }
 
     AWS_CHIME_REGION = 'us-east-1'
@@ -156,22 +182,23 @@ class ProductionConfig(Config):
     # Production Chime settings
     AWS_CHIME_REGION = os.environ.get('AWS_CHIME_REGION', 'us-east-1')
     
-    # Optimized MySQL settings for production
+    # Optimized MySQL settings for production RDS
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
-        'pool_recycle': 300,
-        'pool_size': 10,
-        'max_overflow': 20,
+        'pool_recycle': 280,            # Just under MySQL's 300s default
+        'pool_size': 8,                 # Good for production load
+        'max_overflow': 15,             # Handle traffic spikes
         'pool_timeout': 30,
+        'echo': False,                  # No SQL logging in production
         'connect_args': {
             'connect_timeout': 60,
             'read_timeout': 60,
             'write_timeout': 60,
             'charset': 'utf8mb4',
+            'autocommit': True,
             'sql_mode': 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'
         }
     }
-    
     
     @classmethod
     def init_app(cls, app):
@@ -203,6 +230,25 @@ class TestingConfig(Config):
 
 class HerokuConfig(ProductionConfig):
     """Heroku-specific configuration"""
+    
+    # Heroku-optimized database settings
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 250,            # Shorter for Heroku's dynamic environment
+        'pool_size': 5,                 # Conservative for Heroku dyno limits
+        'max_overflow': 8,              # Reasonable overflow
+        'pool_timeout': 25,             # Shorter timeout for Heroku
+        'echo': False,
+        'connect_args': {
+            'connect_timeout': 60,
+            'read_timeout': 60,
+            'write_timeout': 60,
+            'charset': 'utf8mb4',
+            'autocommit': True,
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'binary_prefix': True
+        }
+    }
     
     @classmethod
     def init_app(cls, app):
@@ -239,7 +285,11 @@ def get_config():
     # Auto-detect Heroku environment
     if os.environ.get('DYNO'):
         env = 'heroku'
+        print("🚀 Detected Heroku environment")
     elif os.environ.get('DATABASE_URL') and 'mysql' in os.environ.get('DATABASE_URL', ''):
         env = 'production'
+        print("🏭 Detected production environment with MySQL")
+    else:
+        print("💻 Using development environment")
     
     return config.get(env, config['default'])
