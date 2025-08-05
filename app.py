@@ -26,6 +26,12 @@ app = Flask(__name__)
 config_class = get_config()
 app.config.from_object(config_class)
 
+# Initialize SocketIO BEFORE other initializations
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', logger=True, engineio_logger=True)
+# Load configuration
+config_class = get_config()
+app.config.from_object(config_class)
+
 # Initialize Stripe
 stripe.api_key = app.config.get('STRIPE_SECRET_KEY')
 
