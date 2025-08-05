@@ -1084,207 +1084,6 @@ def background_cleanup():
     cleanup_thread.start()
     print("🧹 Started background cleanup task")
 
-# UPDATE YOUR API ROUTES - ADD WEBSOCKET INTEGRATION TO EXISTING ROUTES
-
-# Update your existing /api/stream/start route to include WebSocket notification
-@app.route('/api/stream/start', methods=['POST'])
-@login_required
-def api_start_stream():
-    if not current_user.is_admin or not current_user.can_stream:
-        return jsonify({'error': 'Access denied - not authorized to stream'}), 403
-    
-    user_active_stream = Stream.query.filter_by(
-        created_by=current_user.id,
-        is_active=True
-    ).first()
-    if user_active_stream:
-        return jsonify({'error': 'You already have an active stream'}), 400
-    
-    active_stream_count = Stream.query.filter_by(is_active=True).count()
-    if active_stream_count >= 2:
-        return jsonify({'error': 'Maximum concurrent streams reached (2)'}), 400
-    
-    data = request.get_json()
-    title = data.get('title', 'Live Stream')
-    description = data.get('description', '')
-    stream_type = data.get('stream_type', 'general')
-    
-    streamer_name = current_user.display_name or current_user.username
-    
-    if streamer_name not in title:
-        title = f"{streamer_name}'s {title}"
-    
-    external_meeting_id = f"stream-{streamer_name.lower()}-{uuid.uuid4().hex[:12]}"
-    
-    meeting_data = create_chime_meeting(title, external_meeting_id)
-    if not meeting_data:
-        return jsonify({'error': 'Failed to create meeting'}), 500
-    
-    admin_external_id = f"admin-{current_user.id}-{uuid.uuid4().hex[:8]}"
-    admin_attendee = create_chime_attendee(
-        meeting_data['MeetingId'],
-        admin_external_id,
-        f"{streamer_name}-Admin"
-    )
-    
-    if not admin_attendee:
-        delete_chime_meeting(meeting_data['MeetingId'])
-        return jsonify({'error': 'Failed to create admin attendee'}), 500
-    
-    stream = Stream(
-        title=title,
-        description=description,
-        meeting_id=meeting_data['MeetingId'],
-        attendee_id=admin_attendee['AttendeeId'],
-        external_meeting_id=external_meeting_id,
-        media_region=meeting_data['MediaRegion'],
-        media_placement_audio_host_url=meeting_data['MediaPlacement']['AudioHostUrl'],
-        media_placement_screen_sharing_url=meeting_data['MediaPlacement']['ScreenSharingUrl'],
-        media_placement_screen_data_url=meeting_data['MediaPlacement']['ScreenDataUrl'],
-        signaling_url=meeting_data['MediaPlacement'].get('SignalingUrl'),
-        is_active=True,
-        started_at=datetime.utcnow(),
-        created_by=current_user.id,
-        streamer_name=streamer_name,
-        stream_type=stream_type
-    )
-    
-    db.session.add(stream)
-    db.session.commit()
-    
-    # Broadcast notification about new stream via WebSocket
-    socketio.emit('new_stream_started', {
-        'stream_id': stream.id,
-        'title': stream.title,
-        'streamer_name': stream.streamer_name,
-        'message': f'{streamer_name} is now live!'
-    }, broadcast=True)
-    
-    # Also send traditional notification
-    broadcast_notification(
-        'Live Stream Started!',
-        f'{streamer_name} is now live: "{title}"',
-        'live_stream'
-    )
-    
-    return jsonify({
-        'success': True,
-        'stream': {
-            'id': stream.id,
-            'title': stream.title,
-            'streamer_name': stream.streamer_name,
-            'meeting_id': stream.meeting_id,
-            'meeting_data': meeting_data,
-            'admin_attendee': admin_attendee
-        }
-    })
-
-# Update your existing /api/stream/stop route
-@app.route('/api/stream/stop', methods=['POST'])
-@login_required
-def api_stop_stream():
-    if not current_user.is_admin:
-        return jsonify({'error': 'Access denied'}), 403
-    
-    data = request.get_json()
-    stream_id = data.get('stream_id')
-    
-    if stream_id:
-        stream = Stream.query.filter_by(
-            id=stream_id,
-            created_by=current_user.id,
-            is_active=True
-        ).first()
-    else:
-        stream = Stream.query.filter_by(
-            created_by=current_user.id,
-            is_active=True
-        ).first()
-    
-    if not stream:
-        return jsonify({'error': 'No active stream found or access denied'}), 400
-    
-    # Notify WebSocket clients before stopping
-    room_id = f"stream_{stream.id}"
-    if room_id in stream_rooms:
-        socketio.emit('stream_ended', {
-            'stream_id': stream.id,
-            'message': f'{stream.streamer_name} has ended the stream'
-        }, room=room_id)
-    
-    if stream.meeting_id:
-        delete_chime_meeting(stream.meeting_id)
-    
-    stream.is_active = False
-    stream.ended_at = datetime.utcnow()
-    
-    StreamViewer.query.filter_by(stream_id=stream.id, is_active=True).update({
-        'is_active': False,
-        'left_at': datetime.utcnow()
-    })
-    
-    db.session.commit()
-    
-    # Clean up WebSocket room
-    if room_id in stream_rooms:
-        del stream_rooms[room_id]
-    
-    return jsonify({
-        'success': True,
-        'message': f'{stream.streamer_name}\'s stream ended'
-    })
-
-# REPLACE THE if __name__ == '__main__': SECTION WITH THIS:
-
-if __name__ == '__main__':
-    with app.app_context():
-        try:
-            db.create_all()
-            print("✓ Database tables created successfully")
-            migrate_user_timezones()
-        except Exception as e:
-            print(f"⚠ Database initialization error: {e}")
-        
-        try:
-            admin_user = User.query.filter_by(username='admin').first()
-            if not admin_user:
-                admin_user = User(
-                    username='admin',
-                    email='ray@tgfx-academy.com',
-                    password_hash=generate_password_hash('admin123!345gdfb3f35'),
-                    is_admin=True,
-                    display_name='Ray',
-                    can_stream=True,
-                    stream_color='#10B981',
-                    timezone='America/Chicago'
-                )
-                db.session.add(admin_user)
-                db.session.commit()
-                print("✓ Admin user created")
-            else:
-                if not admin_user.timezone:
-                    admin_user.timezone = 'America/Chicago'
-                    db.session.commit()
-                    print("✓ Admin user timezone updated")
-        except Exception as e:
-            print(f"⚠ Admin user creation error: {e}")
-    
-    # Start background cleanup task
-    background_cleanup()
-    
-    # Run with SocketIO instead of app.run()
-    print("🚀 Starting Flask app with WebSocket support...")
-    print("🔌 WebSocket endpoints available at /socket.io/")
-    print("🎬 Enhanced livestream with real audio and screen sharing ready!")
-    
-    socketio.run(
-        app, 
-        debug=True, 
-        host='0.0.0.0', 
-        port=5000,
-        allow_unsafe_werkzeug=True  # For development only
-    )
-
 # Routes
 @app.route('/')
 def index():
@@ -2544,7 +2343,7 @@ def api_delete_video(video_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-# Streaming API Routes
+# Update your existing /api/stream/start route to include WebSocket notification
 @app.route('/api/stream/start', methods=['POST'])
 @login_required
 def api_start_stream():
@@ -2610,7 +2409,15 @@ def api_start_stream():
     db.session.add(stream)
     db.session.commit()
     
-    # Broadcast notification about new stream
+    # Broadcast notification about new stream via WebSocket
+    socketio.emit('new_stream_started', {
+        'stream_id': stream.id,
+        'title': stream.title,
+        'streamer_name': stream.streamer_name,
+        'message': f'{streamer_name} is now live!'
+    }, broadcast=True)
+    
+    # Also send traditional notification
     broadcast_notification(
         'Live Stream Started!',
         f'{streamer_name} is now live: "{title}"',
@@ -2629,6 +2436,7 @@ def api_start_stream():
         }
     })
 
+# Update your existing /api/stream/stop route
 @app.route('/api/stream/stop', methods=['POST'])
 @login_required
 def api_stop_stream():
@@ -2653,6 +2461,14 @@ def api_stop_stream():
     if not stream:
         return jsonify({'error': 'No active stream found or access denied'}), 400
     
+    # Notify WebSocket clients before stopping
+    room_id = f"stream_{stream.id}"
+    if room_id in stream_rooms:
+        socketio.emit('stream_ended', {
+            'stream_id': stream.id,
+            'message': f'{stream.streamer_name} has ended the stream'
+        }, room=room_id)
+    
     if stream.meeting_id:
         delete_chime_meeting(stream.meeting_id)
     
@@ -2666,11 +2482,15 @@ def api_stop_stream():
     
     db.session.commit()
     
+    # Clean up WebSocket room
+    if room_id in stream_rooms:
+        del stream_rooms[room_id]
+    
     return jsonify({
         'success': True,
         'message': f'{stream.streamer_name}\'s stream ended'
     })
-
+    
 @app.route('/api/stream/status')
 @login_required
 def api_stream_status():
@@ -2803,10 +2623,7 @@ if __name__ == '__main__':
         try:
             db.create_all()
             print("✓ Database tables created successfully")
-            
-            # Run timezone migration
             migrate_user_timezones()
-            
         except Exception as e:
             print(f"⚠ Database initialization error: {e}")
         
@@ -2821,13 +2638,12 @@ if __name__ == '__main__':
                     display_name='Ray',
                     can_stream=True,
                     stream_color='#10B981',
-                    timezone='America/Chicago'  # Add default timezone
+                    timezone='America/Chicago'
                 )
                 db.session.add(admin_user)
                 db.session.commit()
                 print("✓ Admin user created")
             else:
-                # Update existing admin user with timezone if missing
                 if not admin_user.timezone:
                     admin_user.timezone = 'America/Chicago'
                     db.session.commit()
@@ -2835,4 +2651,18 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"⚠ Admin user creation error: {e}")
     
-    app.run(debug=True)
+    # Start background cleanup task
+    background_cleanup()
+    
+    # Run with SocketIO instead of app.run()
+    print("🚀 Starting Flask app with WebSocket support...")
+    print("🔌 WebSocket endpoints available at /socket.io/")
+    print("🎬 Enhanced livestream with real audio and screen sharing ready!")
+    
+    socketio.run(
+        app, 
+        debug=True, 
+        host='0.0.0.0', 
+        port=5000,
+        allow_unsafe_werkzeug=True  # For development only
+    )
