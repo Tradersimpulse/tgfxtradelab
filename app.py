@@ -22,23 +22,28 @@ import time
 # Initialize Flask app
 app = Flask(__name__)
 
-# Load configuration
-config_class = get_config()
-app.config.from_object(config_class)
-
-# Initialize SocketIO BEFORE other initializations
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', logger=True, engineio_logger=True)
-# Load configuration
+# Load configuration ONCE
 config_class = get_config()
 app.config.from_object(config_class)
 
 # Initialize Stripe
 stripe.api_key = app.config.get('STRIPE_SECRET_KEY')
 
-# Initialize database with MySQL optimizations
+# Initialize SocketIO ONCE
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='threading',
+    logger=False,  # Set to False for production
+    engineio_logger=False,  # Set to False for production
+    ping_timeout=60,
+    ping_interval=25
+)
+
+# Initialize database ONCE
 db = SQLAlchemy(app)
 
-# Configure Login Manager
+# Configure Login Manager ONCE
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
