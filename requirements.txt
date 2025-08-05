@@ -36,5 +36,6 @@ click==8.1.7
 # WebSocket support for real-time features (optional)
 Flask-SocketIO==5.3.4
 python-socketio==5.8.0
+eventlet==0.33.3
 
 pytz==2023.3
