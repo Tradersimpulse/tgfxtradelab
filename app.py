@@ -1,3 +1,15 @@
+# FIXED: Import order and gevent configuration for better compatibility
+import os
+import sys
+
+# FIXED: Use gevent instead of eventlet for better stability
+try:
+    from gevent import monkey
+    monkey.patch_all()
+    print("✓ Gevent monkey patching applied")
+except ImportError:
+    print("⚠ Gevent not available, using default threading")
+
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -7,7 +19,6 @@ from wtforms.validators import DataRequired, Email, Length, Optional
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
-import os
 import boto3
 from botocore.exceptions import NoCredentialsError, ClientError
 import stripe
@@ -19,40 +30,106 @@ import pytz
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
 
+# FIXED: Better error handling for database connections
+import logging
+import signal
+import threading
+
 # Initialize Flask app
 app = Flask(__name__)
 
-# Load configuration ONCE
-config_class = get_config()
-app.config.from_object(config_class)
+# FIXED: Load configuration with better error handling
+try:
+    config_class = get_config()
+    app.config.from_object(config_class)
+    print("✓ Configuration loaded successfully")
+except Exception as e:
+    print(f"❌ Configuration error: {e}")
+    sys.exit(1)
 
-# Initialize Stripe
-stripe.api_key = app.config.get('STRIPE_SECRET_KEY')
+# FIXED: Initialize Stripe with error handling
+try:
+    stripe.api_key = app.config.get('STRIPE_SECRET_KEY')
+    if stripe.api_key:
+        print("✓ Stripe API key configured")
+    else:
+        print("⚠ Stripe API key not found")
+except Exception as e:
+    print(f"⚠ Stripe initialization error: {e}")
 
-# Initialize SocketIO ONCE
-socketio = SocketIO(
-    app, 
-    cors_allowed_origins="*", 
-    async_mode='threading',
-    logger=False,  # Set to False for production
-    engineio_logger=False,  # Set to False for production
-    ping_timeout=60,
-    ping_interval=25
-)
+# FIXED: Initialize SocketIO with gevent and better configuration
+try:
+    socketio = SocketIO(
+        app, 
+        cors_allowed_origins="*", 
+        async_mode='gevent',  # Changed from threading to gevent
+        logger=False,
+        engineio_logger=False,
+        ping_timeout=60,
+        ping_interval=25,
+        # FIXED: Add additional stability options
+        allow_upgrades=True,
+        transports=['websocket', 'polling']
+    )
+    print("✓ SocketIO initialized with gevent")
+except Exception as e:
+    print(f"❌ SocketIO initialization error: {e}")
+    # Fallback without SocketIO
+    socketio = None
 
-# Initialize database ONCE
-db = SQLAlchemy(app)
+# FIXED: Initialize database with better error handling and retry logic
+db = None
+max_retries = 3
+retry_count = 0
 
-# Configure Login Manager ONCE
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
+while retry_count < max_retries:
+    try:
+        db = SQLAlchemy(app)
+        # Test the database connection
+        with app.app_context():
+            db.engine.connect()
+        print("✓ Database connection established successfully")
+        break
+    except Exception as e:
+        retry_count += 1
+        print(f"❌ Database connection attempt {retry_count} failed: {e}")
+        if retry_count >= max_retries:
+            print("❌ Maximum database connection retries exceeded")
+            if 'sqlite' not in app.config.get('SQLALCHEMY_DATABASE_URI', ''):
+                print("⚠ Falling back to SQLite for development")
+                app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///fallback.db'
+                try:
+                    db = SQLAlchemy(app)
+                    with app.app_context():
+                        db.engine.connect()
+                    print("✓ Fallback SQLite database connected")
+                    break
+                except Exception as fallback_error:
+                    print(f"❌ Even SQLite fallback failed: {fallback_error}")
+                    sys.exit(1)
+        else:
+            time.sleep(2)  # Wait before retry
+
+if db is None:
+    print("❌ Database initialization completely failed")
+    sys.exit(1)
+
+# FIXED: Configure Login Manager with better error handling
+try:
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
+    print("✓ Login manager configured")
+except Exception as e:
+    print(f"❌ Login manager error: {e}")
+    sys.exit(1)
 
 # Association table for many-to-many relationship between videos and tags
 video_tags = db.Table('video_tags',
     db.Column('video_id', db.Integer, db.ForeignKey('videos.id'), primary_key=True),
     db.Column('tag_id', db.Integer, db.ForeignKey('tags.id'), primary_key=True)
 )
+
 
 # Models - MySQL Optimized
 class User(UserMixin, db.Model):
