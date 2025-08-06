@@ -11,9 +11,12 @@ SQLAlchemy==2.0.23
 # MySQL Database - FIXED versions
 PyMySQL==1.1.0
 cryptography==41.0.7
-# AWS Services - ALREADY GOOD! (boto3 1.34.0 > 1.29.0 required)
+# AWS Services - REDUCED (only for S3 recordings, removed Chime dependencies)
 boto3==1.34.0
 botocore==1.34.0
+# LiveKit - NEW for real-time streaming
+livekit==0.10.1
+livekit-api==0.5.6
 # Payment Processing
 stripe==6.7.0
 # Environment & Configuration
@@ -35,10 +38,10 @@ gevent-websocket==0.10.1
 dnspython==2.4.2
 # Timezone support - FIXED
 pytz==2023.3
-# REMOVED: greenlet version pin - let pip resolve automatically for compatibility
-# greenlet==2.0.2  # This caused the conflict!
 # FIXED: Add additional dependencies for stability
 six==1.16.0
 urllib3==1.26.18
 # FIXED: Add wsgi-request-logger for better logging on Heroku
 wsgi-request-logger==0.4.6
+# JWT for LiveKit tokens
+PyJWT==2.8.0
