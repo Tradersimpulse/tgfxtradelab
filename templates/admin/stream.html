@@ -334,378 +334,18 @@
 
 {% block scripts %}
 <script>
-// Global state
-window.streamState = {
-    isAudioActive: false,
-    isScreenSharing: false,
-    isRecording: false,
-    audioContext: null,
-    mediaStream: null,
-    screenStream: null,
-    audioChunks: [],
-    mediaRecorder: null
-};
+// Complete Stream Control Functions - Add this to your existing script section
 
-// Enhanced WebSocket Manager with better debugging and error handling
-window.WebSocketManager = {
-    socket: null,
-    isConnected: false,
-    reconnectAttempts: 0,
-    maxReconnectAttempts: 5,
-    currentStreamId: null,
-    isAdmin: false,
-    canBroadcast: false,
-    
-    init: function() {
-        console.log('🔌 Initializing enhanced WebSocket connection...');
-        
-        try {
-            this.socket = io({
-                transports: ['websocket', 'polling'],
-                timeout: 10000,
-                forceNew: true
-            });
-            
-            this.setupEventHandlers();
-            
-        } catch (error) {
-            console.error('❌ Failed to initialize WebSocket:', error);
-            this.fallbackToLocalStorage();
-        }
-    },
-    
-    setupEventHandlers: function() {
-        this.socket.on('connect', () => {
-            console.log('✅ WebSocket connected');
-            this.isConnected = true;
-            this.reconnectAttempts = 0;
-            this.showConnectionStatus('connected');
-            
-            // Request debug info to verify our status
-            this.socket.emit('debug_info', {});
-            
-            // Join stream room if we have an active stream
-            if (this.currentStreamId) {
-                this.joinStreamAsAdmin(this.currentStreamId);
-            }
-        });
-        
-        this.socket.on('disconnect', (reason) => {
-            console.log('❌ WebSocket disconnected:', reason);
-            this.isConnected = false;
-            this.canBroadcast = false;
-            this.showConnectionStatus('disconnected');
-        });
-        
-        this.socket.on('connect_error', (error) => {
-            console.error('❌ WebSocket connection error:', error);
-            this.handleConnectionError();
-        });
-        
-        // Enhanced connection status handler
-        this.socket.on('connection_status', (data) => {
-            console.log('📊 Connection status:', data);
-            if (data.user_info) {
-                this.isAdmin = data.user_info.is_admin;
-                console.log(`👤 User admin status: ${this.isAdmin}`);
-            }
-        });
-        
-        // Admin/viewer status handlers
-        this.socket.on('admin_status', (data) => {
-            console.log('🎬 Admin status received:', data);
-            this.canBroadcast = data.can_broadcast;
-            this.isAdmin = data.is_admin;
-            showToast('✅ Connected as stream admin', 'success');
-        });
-        
-        this.socket.on('viewer_status', (data) => {
-            console.log('👥 Viewer status received:', data);
-            this.canBroadcast = false;
-            this.isAdmin = false;
-        });
-        
-        // Debug response handler
-        this.socket.on('debug_response', (data) => {
-            console.log('🔍 Debug response:', data);
-            this.isAdmin = data.user_info.is_admin || false;
-            this.canBroadcast = this.isAdmin && data.user_info.can_stream;
-            
-            if (this.canBroadcast) {
-                console.log('✅ Broadcasting permissions verified');
-            } else {
-                console.log('❌ No broadcasting permissions');
-                console.log('  - Admin:', data.user_info.is_admin);
-                console.log('  - Can Stream:', data.user_info.can_stream);
-                console.log('  - Authenticated:', data.current_user_authenticated);
-            }
-        });
-        
-        this.socket.on('stream_update', (data) => {
-            console.log('📡 Stream update received:', data);
-            this.handleStreamUpdate(data);
-        });
-        
-        this.socket.on('screen_frame', (data) => {
-            this.handleScreenFrame(data);
-        });
-        
-        this.socket.on('audio_chunk', (data) => {
-            this.handleAudioChunk(data);
-        });
-        
-        this.socket.on('status_update', (data) => {
-            this.handleStatusUpdate(data);
-        });
-        
-        this.socket.on('viewer_joined', (data) => {
-            console.log('👥 Another viewer joined:', data);
-            this.updateViewerCounts();
-        });
-        
-        this.socket.on('viewer_left', (data) => {
-            console.log('👋 Viewer left:', data);
-            this.updateViewerCounts();
-        });
-        
-        this.socket.on('admin_joined', (data) => {
-            console.log('🎬 Admin joined stream:', data);
-            showToast('🎬 Stream admin is online!', 'success');
-        });
-        
-        this.socket.on('admin_left', (data) => {
-            console.log('👋 Admin left stream:', data);
-            showToast('👋 Stream admin went offline', 'info');
-        });
-        
-        this.socket.on('error', (data) => {
-            console.error('❌ WebSocket error:', data.message);
-            
-            // Enhanced error handling
-            if (data.message.includes('Not authorized')) {
-                console.log('🔐 Authorization error - requesting debug info...');
-                this.socket.emit('debug_info', {});
-                
-                // Show more helpful error message
-                if (data.message.includes('broadcast audio')) {
-                    showToast('❌ Audio broadcast failed - checking permissions...', 'error');
-                    this.debugBroadcastPermissions();
-                } else if (data.message.includes('broadcast screen')) {
-                    showToast('❌ Screen broadcast failed - checking permissions...', 'error');
-                    this.debugBroadcastPermissions();
-                } else {
-                    showToast('❌ ' + data.message, 'error');
-                }
-            } else {
-                showToast('❌ ' + data.message, 'error');
-            }
-        });
-    },
-    
-    debugBroadcastPermissions: function() {
-        console.log('🔍 Debugging broadcast permissions:');
-        console.log('  - Connected:', this.isConnected);
-        console.log('  - Is Admin:', this.isAdmin);
-        console.log('  - Can Broadcast:', this.canBroadcast);
-        console.log('  - Current Stream ID:', this.currentStreamId);
-        
-        // Request fresh debug info
-        if (this.isConnected) {
-            this.socket.emit('debug_info', {});
-        }
-    },
-    
-    joinStreamAsAdmin: function(streamId) {
-        this.currentStreamId = streamId;
-        if (this.isConnected) {
-            console.log(`🎬 Attempting to join stream ${streamId} as admin...`);
-            this.socket.emit('join_stream', { stream_id: streamId });
-        }
-    },
-    
-    sendStreamControl: function(streamId, controlType, data) {
-        if (!this.isConnected) {
-            console.log('⚠️ Not connected - using localStorage fallback');
-            this.localStorageFallback('control', { type: controlType, data: data });
-            return;
-        }
-        
-        console.log(`🎛️ Sending stream control: ${controlType} for stream ${streamId}`);
-        this.socket.emit('stream_control', {
-            stream_id: streamId,
-            type: controlType,
-            data: data
-        });
-    },
-    
-    sendScreenFrame: function(streamId, frameData) {
-        if (!this.isConnected) {
-            this.localStorageFallback('screen_frame', { imageData: frameData });
-            return;
-        }
-        
-        if (!this.canBroadcast) {
-            console.log('❌ Cannot broadcast - no permissions');
-            this.debugBroadcastPermissions();
-            return;
-        }
-        
-        // Limit frame size before sending
-        if (frameData.length > 2000000) {
-            console.warn('⚠️ Frame too large, skipping:', frameData.length);
-            return;
-        }
-        
-        this.socket.emit('screen_frame', {
-            stream_id: streamId,
-            frame_data: frameData
-        });
-    },
-    
-    sendAudioChunk: function(streamId, audioData) {
-        if (!this.isConnected) {
-            this.localStorageFallback('audio_chunk', { audioData: audioData });
-            return;
-        }
-        
-        if (!this.canBroadcast) {
-            console.log('❌ Cannot broadcast audio - no permissions');
-            this.debugBroadcastPermissions();
-            showToast('❌ Audio broadcast permission denied', 'error');
-            return;
-        }
-        
-        // Limit audio chunk size
-        if (audioData.length > 1000000) {
-            console.warn('⚠️ Audio chunk too large, skipping:', audioData.length);
-            return;
-        }
-        
-        console.log('🎵 Sending audio chunk:', audioData.substring(0, 50) + '...');
-        this.socket.emit('audio_chunk', {
-            stream_id: streamId,
-            audio_data: audioData
-        });
-    },
-    
-    sendStatusUpdate: function(streamId, status) {
-        if (!this.isConnected) {
-            this.localStorageFallback('status_update', status);
-            return;
-        }
-        
-        if (!this.canBroadcast) {
-            console.log('❌ Cannot update status - no permissions');
-            return;
-        }
-        
-        this.socket.emit('status_update', {
-            stream_id: streamId,
-            status: status
-        });
-    },
-    
-    handleConnectionError: function() {
-        this.reconnectAttempts++;
-        
-        if (this.reconnectAttempts <= this.maxReconnectAttempts) {
-            console.log(`🔄 Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
-            setTimeout(() => {
-                this.socket.connect();
-            }, 2000 * this.reconnectAttempts);
-        } else {
-            console.log('❌ Max reconnection attempts reached, using localStorage fallback');
-            this.fallbackToLocalStorage();
-        }
-    },
-    
-    fallbackToLocalStorage: function() {
-        console.log('📡 Using localStorage fallback communication');
-        this.initLocalStorageFallback();
-    },
-    
-    initLocalStorageFallback: function() {
-        setInterval(() => {
-            this.updateStatus();
-        }, 100);
-    },
-    
-    updateStatus: function() {
-        const status = {
-            audio: window.streamState.isAudioActive,
-            screen: window.streamState.isScreenSharing,
-            timestamp: Date.now()
-        };
-        
-        localStorage.setItem('admin_stream_status', JSON.stringify(status));
-    },
-    
-    localStorageFallback: function(type, data) {
-        const key = `admin_${type}`;
-        const payload = {
-            ...data,
-            timestamp: Date.now()
-        };
-        
-        try {
-            localStorage.setItem(key, JSON.stringify(payload));
-        } catch (e) {
-            console.warn('⚠️ localStorage fallback failed:', e);
-        }
-    },
-    
-    handleStreamUpdate: function(data) {
-        // Handle stream control updates from other admins
-        console.log('📡 Stream update received:', data);
-        // Implementation for handling stream updates
-    },
-    
-    handleScreenFrame: function(data) {
-        // Handle incoming screen frames (for viewer mode)
-        console.log('🖥️ Screen frame received');
-    },
-    
-    handleAudioChunk: function(data) {
-        // Handle incoming audio chunks (for viewer mode)
-        console.log('🎵 Audio chunk received');
-    },
-    
-    handleStatusUpdate: function(data) {
-        // Handle status updates
-        console.log('📊 Status update received:', data);
-    },
-    
-    updateViewerCounts: function() {
-        // Update viewer count displays
-        document.querySelectorAll('.stream-viewer-count').forEach(el => {
-            const currentCount = parseInt(el.textContent) || 0;
-            el.textContent = currentCount === 1 ? '1 viewer' : currentCount + ' viewers';
-        });
-    },
-    
-    showConnectionStatus: function(status) {
-        let indicator = document.querySelector('.connection-indicator');
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.className = 'connection-indicator';
-            indicator.style.cssText = 'position:fixed;top:10px;left:10px;background:rgba(0,0,0,0.8);color:white;padding:4px 8px;border-radius:4px;font-size:12px;z-index:1001;';
-            document.body.appendChild(indicator);
-        }
-        
-        if (status === 'connected') {
-            indicator.textContent = '🟢 Connected' + (this.canBroadcast ? ' (Can Broadcast)' : ' (View Only)');
-            indicator.style.background = 'rgba(16, 185, 129, 0.8)';
-            setTimeout(() => indicator.style.display = 'none', 5000);
-        } else {
-            indicator.textContent = '🔴 Disconnected';
-            indicator.style.background = 'rgba(239, 68, 68, 0.8)';
-            indicator.style.display = 'block';
-        }
+// Enhanced audio functions with better permission checking
+window.toggleMicrophone = async function() {
+    if (window.streamState.isAudioActive) {
+        stopAudio();
+    } else {
+        await startAudio();
     }
 };
 
-// Enhanced audio functions with better permission checking
-window.startAudio = async function() {
+async function startAudio() {
     try {
         console.log('🎤 Starting enhanced audio capture...');
         
@@ -772,25 +412,623 @@ window.startAudio = async function() {
             showToast('❌ Failed to start microphone: ' + error.message, 'error');
         }
     }
-};
+}
 
-// Enhanced debug function
-window.debugStreamConnection = function(streamId) {
-    console.log('=== 🔍 ENHANCED DEBUG STREAM CONNECTION ===');
-    console.log('Stream ID:', streamId);
-    console.log('WebSocket Connected:', window.WebSocketManager.isConnected);
-    console.log('Is Admin:', window.WebSocketManager.isAdmin);
-    console.log('Can Broadcast:', window.WebSocketManager.canBroadcast);
-    console.log('Current Stream ID:', window.WebSocketManager.currentStreamId);
-    console.log('Stream State:', window.streamState);
+function startAudioRecording() {
+    try {
+        const streamId = getCurrentStreamId();
+        
+        window.streamState.mediaRecorder = new MediaRecorder(window.streamState.mediaStream, {
+            mimeType: 'audio/webm;codecs=opus',
+            audioBitsPerSecond: 64000
+        });
+        
+        window.streamState.audioChunks = [];
+        
+        window.streamState.mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    // Send audio chunk for real playback
+                    if (streamId) {
+                        window.WebSocketManager.sendAudioChunk(streamId, reader.result);
+                    }
+                };
+                reader.readAsDataURL(event.data);
+            }
+        };
+        
+        window.streamState.mediaRecorder.onerror = (event) => {
+            console.error('MediaRecorder error:', event.error);
+        };
+        
+        // Start recording in small chunks for real-time streaming
+        window.streamState.mediaRecorder.start(50); // 50ms chunks
+        
+        console.log('🎵 Real-time audio recording started');
+        
+    } catch (error) {
+        console.error('❌ Failed to start audio recording:', error);
+    }
+}
+
+function stopAudio() {
+    console.log('🔇 Stopping audio...');
     
-    // Request fresh debug info from server
-    if (window.WebSocketManager.isConnected) {
-        window.WebSocketManager.socket.emit('debug_info', {});
+    if (window.streamState.mediaRecorder && window.streamState.mediaRecorder.state !== 'inactive') {
+        window.streamState.mediaRecorder.stop();
+        window.streamState.mediaRecorder = null;
     }
     
-    showToast('🔍 Enhanced debug info logged to console (F12)', 'info');
+    if (window.streamState.mediaStream) {
+        window.streamState.mediaStream.getTracks().forEach(track => track.stop());
+        window.streamState.mediaStream = null;
+    }
+    
+    if (window.streamState.audioContext && window.streamState.audioContext.state !== 'closed') {
+        window.streamState.audioContext.close();
+        window.streamState.audioContext = null;
+    }
+    
+    window.streamState.isAudioActive = false;
+    window.streamState.audioChunks = [];
+    updateAudioUI(false);
+    
+    // Notify WebSocket
+    const streamId = getCurrentStreamId();
+    if (streamId) {
+        window.WebSocketManager.sendStreamControl(streamId, 'audio_stop', {});
+        window.WebSocketManager.sendStatusUpdate(streamId, {
+            audio: false,
+            screen: window.streamState.isScreenSharing
+        });
+    }
+    
+    localStorage.removeItem('admin_audio_data');
+    localStorage.removeItem('admin_audio_chunk');
+    
+    showToast('🔇 Microphone stopped', 'info');
+}
+
+function startAudioVisualization(analyser) {
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    function updateBars() {
+        if (!window.streamState.isAudioActive) return;
+        
+        analyser.getByteFrequencyData(dataArray);
+        
+        const bars = document.querySelectorAll('.audio-bar');
+        const audioLevel = Array.from(dataArray).reduce((a, b) => a + b) / bufferLength;
+        
+        bars.forEach((bar, index) => {
+            const value = dataArray[index * 8] || 0;
+            const height = Math.max(10, (value / 255) * 100);
+            
+            bar.style.height = height + '%';
+            
+            if (value > 100) {
+                bar.style.backgroundColor = '#10B981';
+            } else if (value > 50) {
+                bar.style.backgroundColor = '#fbbf24';
+            } else {
+                bar.style.backgroundColor = '#6b7280';
+            }
+        });
+        
+        const audioLevelText = document.getElementById('audioLevelText');
+        if (audioLevelText) {
+            if (audioLevel > 10) {
+                audioLevelText.textContent = 'Speaking...';
+                audioLevelText.style.color = '#10B981';
+            } else {
+                audioLevelText.textContent = 'Microphone Active';
+                audioLevelText.style.color = '#6b7280';
+            }
+        }
+        
+        requestAnimationFrame(updateBars);
+    }
+    
+    updateBars();
+}
+
+function updateAudioUI(isActive) {
+    const micBtn = document.getElementById('toggleMicBtn');
+    const micIcon = document.getElementById('micIcon');
+    const audioStatus = document.getElementById('audioStatus');
+    const audioLevelText = document.getElementById('audioLevelText');
+    
+    if (isActive) {
+        micBtn.className = 'btn btn-success btn-sm w-100';
+        micBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">mic_off</span>Stop Audio';
+        micIcon.style.color = '#10B981';
+        micIcon.textContent = 'mic';
+        audioStatus.textContent = 'Audio: Live';
+        audioStatus.className = 'badge bg-success';
+        audioLevelText.textContent = 'Microphone Active';
+    } else {
+        micBtn.className = 'btn btn-primary btn-sm w-100';
+        micBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">mic</span>Start Audio';
+        micIcon.style.color = '#6b7280';
+        micIcon.textContent = 'mic_off';
+        audioStatus.textContent = 'Audio: Off';
+        audioStatus.className = 'badge bg-info';
+        audioLevelText.textContent = 'Microphone Off';
+        
+        const bars = document.querySelectorAll('.audio-bar');
+        bars.forEach(bar => {
+            bar.style.height = '10%';
+            bar.style.backgroundColor = '#6b7280';
+        });
+    }
+}
+
+// Enhanced screen sharing functions
+window.toggleScreenShare = async function() {
+    if (window.streamState.isScreenSharing) {
+        stopScreenShare();
+    } else {
+        await startScreenShare();
+    }
 };
+
+async function startScreenShare() {
+    try {
+        console.log('🖥️ Starting enhanced screen share...');
+        
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            try {
+                window.streamState.screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        width: { ideal: 1280, max: 1920 },
+                        height: { ideal: 720, max: 1080 },
+                        frameRate: { ideal: 30, max: 60 }
+                    },
+                    audio: false
+                });
+                
+                console.log('✅ Real screen capture successful');
+                
+            } catch (error) {
+                if (error.name === 'NotAllowedError') {
+                    showToast('⚠️ Screen sharing was denied. Please allow screen access.', 'warning');
+                    return;
+                }
+                
+                console.log('ℹ️ Real screen capture failed, using demo');
+                window.streamState.screenStream = createDemoStream();
+            }
+        } else {
+            console.log('🎭 Using demo screen share');
+            window.streamState.screenStream = createDemoStream();
+        }
+        
+        startEnhancedScreenBroadcast();
+        
+        window.streamState.isScreenSharing = true;
+        updateScreenShareUI(true);
+        
+        // Notify WebSocket
+        const streamId = getCurrentStreamId();
+        if (streamId) {
+            window.WebSocketManager.sendStreamControl(streamId, 'screen_start', {});
+            window.WebSocketManager.sendStatusUpdate(streamId, {
+                audio: window.streamState.isAudioActive,
+                screen: true
+            });
+        }
+        
+        if (window.streamState.screenStream.getVideoTracks) {
+            window.streamState.screenStream.getVideoTracks().forEach(track => {
+                track.onended = () => {
+                    console.log('🛑 Screen share ended by user');
+                    stopScreenShare();
+                };
+            });
+        }
+        
+        showToast('🖥️ Screen sharing started - Enhanced quality streaming!', 'success');
+        
+    } catch (error) {
+        console.error('❌ Screen share failed:', error);
+        showToast('❌ Screen sharing failed: ' + error.message, 'error');
+    }
+}
+
+function startEnhancedScreenBroadcast() {
+    const streamId = getCurrentStreamId();
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.muted = true;
+    video.srcObject = window.streamState.screenStream;
+    
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    video.addEventListener('loadedmetadata', () => {
+        canvas.width = Math.min(1280, video.videoWidth);
+        canvas.height = Math.min(720, video.videoHeight);
+        
+        let frameCount = 0;
+        
+        function captureFrame() {
+            if (!window.streamState.isScreenSharing) return;
+            
+            if (video.readyState >= 2) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/jpeg', 0.8);
+                
+                if (streamId) {
+                    window.WebSocketManager.sendScreenFrame(streamId, imageData);
+                }
+                
+                frameCount++;
+            }
+            
+            if (window.streamState.isScreenSharing) {
+                requestAnimationFrame(captureFrame); // 60 FPS capture
+            }
+        }
+        
+        video.play().then(() => {
+            captureFrame();
+        });
+    });
+}
+
+function stopScreenShare() {
+    console.log('🛑 Stopping screen share...');
+    
+    if (window.streamState.screenStream) {
+        if (window.streamState.screenStream.getTracks) {
+            window.streamState.screenStream.getTracks().forEach(track => track.stop());
+        }
+        window.streamState.screenStream = null;
+    }
+    
+    window.streamState.isScreenSharing = false;
+    updateScreenShareUI(false);
+    
+    // Notify WebSocket
+    const streamId = getCurrentStreamId();
+    if (streamId) {
+        window.WebSocketManager.sendStreamControl(streamId, 'screen_stop', {});
+        window.WebSocketManager.sendStatusUpdate(streamId, {
+            audio: window.streamState.isAudioActive,
+            screen: false
+        });
+    }
+    
+    localStorage.removeItem('admin_screen_frame');
+    
+    showToast('🛑 Screen sharing stopped', 'info');
+}
+
+function createDemoStream() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+    
+    let frame = 0;
+    function animate() {
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, '#1a1a1a');
+        gradient.addColorStop(1, '#2a2a2a');
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#10B981';
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('🔴 LIVE Demo Stream', 640, 150);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '24px Arial';
+        ctx.fillText('Enhanced streaming with real audio support', 640, 200);
+        
+        // Animated chart
+        ctx.strokeStyle = '#10B981';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        
+        for (let i = 100; i < 1180; i += 8) {
+            const baseY = 400;
+            const amplitude = 80;
+            const frequency = 0.02;
+            const speed = frame * 0.05;
+            
+            const y = baseY + Math.sin((i * frequency) + speed) * amplitude + 
+                     Math.sin((i * frequency * 2.5) + speed * 1.5) * (amplitude * 0.3);
+            
+            if (i === 100) ctx.moveTo(i, y);
+            else ctx.lineTo(i, y);
+        }
+        ctx.stroke();
+        
+        // Live indicator
+        const pulseSize = 12 + Math.sin(frame * 0.2) * 3;
+        ctx.fillStyle = '#ff0000';
+        ctx.beginPath();
+        ctx.arc(100, 100, pulseSize, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('● LIVE', 120, 110);
+        
+        frame++;
+        if (window.streamState.isScreenSharing) {
+            requestAnimationFrame(animate);
+        }
+    }
+    animate();
+    
+    return canvas.captureStream(30);
+}
+
+function updateScreenShareUI(isActive) {
+    const screenBtn = document.getElementById('toggleScreenBtn');
+    const screenStatus = document.getElementById('screenShareStatus');
+    
+    if (isActive) {
+        screenBtn.className = 'btn btn-success btn-sm w-100';
+        screenBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">stop_screen_share</span>Stop Share';
+        screenStatus.textContent = 'Screen: Live';
+        screenStatus.className = 'badge bg-success';
+    } else {
+        screenBtn.className = 'btn btn-warning btn-sm w-100';
+        screenBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">screen_share</span>Share Screen';
+        screenStatus.textContent = 'Screen: Off';
+        screenStatus.className = 'badge bg-info';
+    }
+}
+
+// Recording functions
+window.toggleRecording = async function() {
+    const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+    if (!userActiveStream) return;
+    
+    const recordingBtn = document.getElementById('toggleRecordingBtn');
+    const recordingIcon = document.getElementById('recordingIcon');
+    const recordingText = document.getElementById('recordingText');
+    const isRecording = window.streamState.isRecording;
+    
+    try {
+        const endpoint = isRecording ? '/api/stream/recording/stop' : '/api/stream/recording/start';
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                stream_id: userActiveStream.id
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            window.streamState.isRecording = !isRecording;
+            
+            if (window.streamState.isRecording) {
+                recordingIcon.textContent = 'stop';
+                recordingText.textContent = 'Stop Recording';
+                recordingBtn.className = 'btn btn-danger btn-sm w-100';
+                showToast('🔴 Recording started', 'success');
+            } else {
+                recordingIcon.textContent = 'fiber_manual_record';
+                recordingText.textContent = 'Start Recording';
+                recordingBtn.className = 'btn btn-outline-secondary btn-sm w-100';
+                showToast('⏹️ Recording stopped', 'info');
+            }
+        } else {
+            throw new Error(data.error || 'Failed to toggle recording');
+        }
+    } catch (error) {
+        console.error('Error toggling recording:', error);
+        showToast('❌ ' + error.message, 'error');
+    }
+};
+
+// Stream management functions
+window.handleStartUserStream = async function(e) {
+    e.preventDefault();
+    
+    console.log('🚀 Starting user stream...');
+    
+    const submitBtn = document.querySelector('#startUserStreamForm button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
+    
+    try {
+        const title = document.getElementById('userStreamTitle').value;
+        const description = document.getElementById('userStreamDescription').value;
+        const streamType = document.getElementById('userStreamType').value;
+        
+        console.log('📊 Stream data:', { title, description, streamType });
+        
+        const response = await fetch('/api/stream/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                title: title,
+                description: description,
+                stream_type: streamType
+            })
+        });
+        
+        const data = await response.json();
+        console.log('📡 Server response:', data);
+        
+        if (data.success) {
+            showToast('✅ Your stream started successfully!', 'success');
+            // Set current stream ID for WebSocket
+            window.WebSocketManager.currentStreamId = data.stream.id;
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            throw new Error(data.error || 'Failed to start stream');
+        }
+    } catch (error) {
+        console.error('Error starting stream:', error);
+        showToast('❌ ' + error.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }
+};
+
+window.stopUserStream = async function() {
+    if (!confirm('Are you sure you want to end your stream? This action cannot be undone.')) {
+        return;
+    }
+    
+    if (window.streamState.isScreenSharing) {
+        stopScreenShare();
+    }
+    
+    if (window.streamState.isAudioActive) {
+        stopAudio();
+    }
+    
+    try {
+        const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+        
+        const response = await fetch('/api/stream/stop', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                stream_id: userActiveStream ? userActiveStream.id : null
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast('✅ Your stream ended successfully', 'success');
+            window.WebSocketManager.currentStreamId = null;
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            throw new Error(data.error || 'Failed to stop stream');
+        }
+    } catch (error) {
+        console.error('Error stopping stream:', error);
+        showToast('❌ ' + error.message, 'error');
+    }
+};
+
+window.shareStream = function(streamId) {
+    const streamUrl = window.location.origin + '/livestream';
+    
+    if (navigator.share) {
+        navigator.share({
+            title: 'TGFX Trade Lab Live Streams',
+            text: 'Join the live trading sessions!',
+            url: streamUrl
+        });
+    } else {
+        navigator.clipboard.writeText(streamUrl).then(function() {
+            showToast('📋 Stream link copied to clipboard', 'success');
+        });
+    }
+};
+
+async function updateStreamStats() {
+    try {
+        const response = await fetch('/api/stream/status');
+        const data = await response.json();
+        
+        if (data.active && data.streams) {
+            const totalViewers = data.streams.reduce((sum, stream) => sum + (stream.viewer_count || 0), 0);
+            const recordingCount = data.streams.filter(stream => stream.is_recording).length;
+            
+            const activeStreamCountEl = document.getElementById('activeStreamCount');
+            const totalViewersCountEl = document.getElementById('totalViewersCount');
+            const recordingStreamsCountEl = document.getElementById('recordingStreamsCount');
+            
+            if (activeStreamCountEl) activeStreamCountEl.textContent = data.count;
+            if (totalViewersCountEl) totalViewersCountEl.textContent = totalViewers;
+            if (recordingStreamsCountEl) recordingStreamsCountEl.textContent = recordingCount;
+        }
+    } catch (error) {
+        console.error('Error updating stream stats:', error);
+    }
+}
+
+function getCurrentStreamId() {
+    const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+    return userActiveStream ? userActiveStream.id : null;
+}
+
+function showToast(message, type) {
+    const toast = document.createElement('div');
+    const alertType = type === 'error' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+    
+    toast.className = 'alert alert-' + alertType + ' position-fixed';
+    toast.style.top = '20px';
+    toast.style.right = '20px';
+    toast.style.zIndex = '9999';
+    toast.style.minWidth = '320px';
+    toast.style.fontSize = '14px';
+    toast.innerHTML = '<div>' + message + '</div>';
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 4000);
+}
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📱 Enhanced admin control page loaded');
+    
+    // Initialize WebSocket communication
+    window.WebSocketManager.init();
+    
+    // Set current stream ID if available
+    const streamId = getCurrentStreamId();
+    if (streamId) {
+        window.WebSocketManager.currentStreamId = streamId;
+    }
+    
+    // Set up form handlers - THIS WAS MISSING!
+    const startStreamForm = document.getElementById('startUserStreamForm');
+    if (startStreamForm) {
+        console.log('✅ Setting up stream form handler');
+        startStreamForm.addEventListener('submit', window.handleStartUserStream);
+    } else {
+        console.log('ℹ️ No stream form found (user may already have active stream)');
+    }
+    
+    // Poll for updates
+    setInterval(updateStreamStats, 5000);
+    updateStreamStats();
+    
+    console.log('✅ Enhanced admin stream control loaded with WebSocket support');
+});
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    if (window.streamState.isScreenSharing) {
+        stopScreenShare();
+    }
+    if (window.streamState.isAudioActive) {
+        stopAudio();
+    }
+});
 </script>
 
 <style>
