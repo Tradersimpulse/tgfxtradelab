@@ -19,8 +19,71 @@
     <!-- Material Icons -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
     
-    <!-- LiveKit JavaScript SDK - Professional Streaming -->
-    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.15.4/dist/livekit-client.umd.min.js"></script>
+    <!-- LiveKit JavaScript SDK - Professional Streaming with Fallback -->
+    <script>
+        // LiveKit CDN loader with fallback
+        (function() {
+            let livekitLoaded = false;
+            let loadAttempts = 0;
+            const maxAttempts = 3;
+            
+            function loadLiveKitSDK(url, callback) {
+                const script = document.createElement('script');
+                script.src = url;
+                script.async = true;
+                
+                script.onload = function() {
+                    // Check if LivekitClient is available (note: lowercase 'k')
+                    if (typeof LivekitClient !== 'undefined') {
+                        console.log('✅ LiveKit SDK loaded successfully from:', url);
+                        livekitLoaded = true;
+                        // Make it available as both LivekitClient and LiveKitClient for compatibility
+                        window.LiveKitClient = window.LivekitClient;
+                        callback(true);
+                    } else {
+                        console.warn('⚠️ LiveKit SDK loaded but LivekitClient not found');
+                        callback(false);
+                    }
+                };
+                
+                script.onerror = function() {
+                    console.error('❌ Failed to load LiveKit SDK from:', url);
+                    callback(false);
+                };
+                
+                document.head.appendChild(script);
+            }
+            
+            function tryLoadLiveKit() {
+                loadAttempts++;
+                const cdnUrls = [
+                    'https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js',
+                    'https://unpkg.com/livekit-client/dist/livekit-client.umd.min.js',
+                    'https://cdnjs.cloudflare.com/ajax/libs/livekit-client/2.15.4/livekit-client.umd.min.js'
+                ];
+                
+                const currentUrl = cdnUrls[loadAttempts - 1];
+                
+                if (loadAttempts <= maxAttempts && currentUrl) {
+                    console.log(`🔄 Attempting to load LiveKit SDK (attempt ${loadAttempts}):`, currentUrl);
+                    loadLiveKitSDK(currentUrl, function(success) {
+                        if (!success && loadAttempts < maxAttempts) {
+                            setTimeout(tryLoadLiveKit, 1000); // Wait 1 second before retry
+                        } else if (!success) {
+                            console.error('❌ All LiveKit SDK loading attempts failed');
+                            window.livekitLoadError = true;
+                        }
+                    });
+                } else {
+                    console.error('❌ No more CDN URLs to try for LiveKit SDK');
+                    window.livekitLoadError = true;
+                }
+            }
+            
+            // Start loading LiveKit
+            tryLoadLiveKit();
+        })();
+    </script>
     
     <!-- Socket.IO for Real-time Communication -->
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
@@ -1167,7 +1230,7 @@
             utils: {
                 // Check if LiveKit is available
                 isLiveKitAvailable() {
-                    return typeof LiveKitClient !== 'undefined';
+                    return typeof LivekitClient !== 'undefined' || typeof LiveKitClient !== 'undefined' || !window.livekitLoadError;
                 },
 
                 // Generate participant identity
@@ -1179,12 +1242,15 @@
 
                 // Format connection quality
                 formatConnectionQuality(quality) {
+                    const LiveKitClient = window.LivekitClient || window.LiveKitClient;
+                    if (!LiveKitClient) return { text: 'Unknown', class: 'connection-quality-unknown' };
+                    
                     switch (quality) {
-                        case LiveKitClient?.ConnectionQuality?.Excellent:
+                        case LiveKitClient.ConnectionQuality?.Excellent:
                             return { text: 'Excellent', class: 'connection-quality-excellent' };
-                        case LiveKitClient?.ConnectionQuality?.Good:
+                        case LiveKitClient.ConnectionQuality?.Good:
                             return { text: 'Good', class: 'connection-quality-good' };
-                        case LiveKitClient?.ConnectionQuality?.Poor:
+                        case LiveKitClient.ConnectionQuality?.Poor:
                             return { text: 'Poor', class: 'connection-quality-poor' };
                         default:
                             return { text: 'Unknown', class: 'connection-quality-unknown' };
@@ -1375,8 +1441,9 @@
                     console.log('Active Streams:', window.TGFXLiveKit.state.activeStreams.length);
                     
                     if (this.isLiveKitAvailable()) {
-                        console.log('LiveKit Version:', LiveKitClient.version || 'Unknown');
-                        console.log('LiveKit Room States:', LiveKitClient.RoomState || 'Not available');
+                        const LiveKitClient = window.LivekitClient || window.LiveKitClient;
+                        console.log('LiveKit Version:', LiveKitClient?.version || 'Unknown');
+                        console.log('LiveKit Room States:', LiveKitClient?.RoomState || 'Not available');
                     }
                     
                     return {
@@ -1396,9 +1463,17 @@
             // Check LiveKit availability
             if (!window.TGFXLiveKit.utils.isLiveKitAvailable()) {
                 console.warn('⚠️ LiveKit client not available');
-                window.TGFXLiveKit.utils.showNotification('warning', 'LiveKit streaming client not loaded. Some features may not work.', 6000);
+                if (window.livekitLoadError) {
+                    window.TGFXLiveKit.utils.showNotification('error', 'LiveKit streaming client failed to load. Please refresh the page.', 8000);
+                } else {
+                    window.TGFXLiveKit.utils.showNotification('warning', 'LiveKit streaming client is loading...', 3000);
+                }
             } else {
                 console.log('✅ LiveKit client loaded successfully');
+                const LiveKitClient = window.LivekitClient || window.LiveKitClient;
+                if (LiveKitClient?.version) {
+                    console.log('📦 LiveKit Version:', LiveKitClient.version);
+                }
             }
 
             // Initialize real-time updates
