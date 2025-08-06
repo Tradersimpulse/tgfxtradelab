@@ -35,8 +35,8 @@ gevent-websocket==0.10.1
 dnspython==2.4.2
 # Timezone support - FIXED
 pytz==2023.3
-# FIXED: Add greenlet with specific version for compatibility
-greenlet==2.0.2
+# REMOVED: greenlet version pin - let pip resolve automatically for compatibility
+# greenlet==2.0.2  # This caused the conflict!
 # FIXED: Add additional dependencies for stability
 six==1.16.0
 urllib3==1.26.18
