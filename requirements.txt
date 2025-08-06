@@ -6,52 +6,39 @@ Flask-WTF==1.1.1
 WTForms==3.0.1
 Werkzeug==2.3.7
 Jinja2==3.1.2
-
 # SQLAlchemy (ensure compatibility) - FIXED
 SQLAlchemy==2.0.23
-
 # MySQL Database - FIXED versions
 PyMySQL==1.1.0
 cryptography==41.0.7
-
-# AWS Services - FIXED versions to avoid conflicts
+# AWS Services - ALREADY GOOD! (boto3 1.34.0 > 1.29.0 required)
 boto3==1.34.0
 botocore==1.34.0
-
 # Payment Processing
 stripe==6.7.0
-
 # Environment & Configuration
 python-dotenv==1.0.0
-
 # WSGI Server for Heroku - FIXED
 gunicorn==21.2.0
-
 # Additional utilities - FIXED versions
 email-validator==2.0.0
 itsdangerous==2.1.2
 MarkupSafe==2.1.3
 click==8.1.7
-
-# FIXED: WebSocket support with compatible versions
-Flask-SocketIO==5.3.4
-python-socketio==5.8.0
-# FIXED: Use gevent instead of eventlet for better stability
-gevent==23.7.0
+# UPDATED: WebSocket support - newer versions for better audio streaming
+Flask-SocketIO==5.3.6
+python-socketio==5.10.0
+# UPDATED: Use newer gevent for better WebSocket stability
+gevent==23.9.1
 gevent-websocket==0.10.1
-
 # FIXED: Add dnspython for DNS resolution issues
 dnspython==2.4.2
-
 # Timezone support - FIXED
 pytz==2023.3
-
 # FIXED: Add greenlet with specific version for compatibility
 greenlet==2.0.2
-
 # FIXED: Add additional dependencies for stability
 six==1.16.0
 urllib3==1.26.18
-
 # FIXED: Add wsgi-request-logger for better logging on Heroku
 wsgi-request-logger==0.4.6
