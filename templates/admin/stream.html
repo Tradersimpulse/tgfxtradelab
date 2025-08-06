@@ -709,7 +709,7 @@ window.WebSocketManager = {
 };
 
 // Enhanced LiveKit Media Functions
-window.toggleCamera = async function() {
+window.window.toggleCamera = async function() {
     if (!window.streamState.isConnected) {
         showNotification('warning', 'Please wait for connection to complete');
         return;
@@ -719,52 +719,23 @@ window.toggleCamera = async function() {
     const isEnabled = window.streamState.publishers.camera;
     
     try {
-        updateStatus(isEnabled ? 'Turning off camera...' : 'Starting camera...');
-        
         if (isEnabled) {
-            // Turn off camera
-            const publication = room.localParticipant.getTrack(LiveKitClient.Track.Source.Camera);
-            if (publication) {
-                await room.localParticipant.unpublishTrack(publication.track);
-                publication.track.stop();
-            }
-            
-            // Clear preview
-            clearPreview('main');
+            await room.localParticipant.setCameraEnabled(false);
             window.streamState.publishers.camera = false;
             updateCameraButton(false);
             updateMediaCard('camera', false);
-            
+            clearPreview('main');
             showNotification('info', 'Camera turned off');
-            
         } else {
-            // Turn on camera
-            const track = await LiveKitClient.createLocalVideoTrack({
-                resolution: getVideoResolution(),
-                facingMode: 'user'
-            });
-            
-            await room.localParticipant.publishTrack(track, {
-                videoEncoding: getVideoEncodingSettings()
-            });
-            
-            // Show preview
-            showPreview(track, 'main');
-            
-            window.streamState.localTracks.camera = track;
+            await room.localParticipant.setCameraEnabled(true);
             window.streamState.publishers.camera = true;
             updateCameraButton(true);
             updateMediaCard('camera', true, 'Streaming');
-            
             showNotification('success', 'Camera started successfully');
         }
-        
-        updateStatus('Ready');
-        
     } catch (error) {
         console.error('❌ Camera error:', error);
         showNotification('error', 'Camera error: ' + error.message);
-        updateStatus('Camera error');
     }
 };
 
@@ -778,53 +749,22 @@ window.toggleMicrophone = async function() {
     const isEnabled = window.streamState.publishers.microphone;
     
     try {
-        updateStatus(isEnabled ? 'Muting microphone...' : 'Starting microphone...');
-        
         if (isEnabled) {
-            // Turn off microphone
-            const publication = room.localParticipant.getTrack(LiveKitClient.Track.Source.Microphone);
-            if (publication) {
-                await room.localParticipant.unpublishTrack(publication.track);
-                publication.track.stop();
-            }
-            
+            await room.localParticipant.setMicrophoneEnabled(false);
             window.streamState.publishers.microphone = false;
             updateMicrophoneButton(false);
             updateMediaCard('mic', false);
-            
             showNotification('info', 'Microphone muted');
-            
         } else {
-            // Turn on microphone
-            const track = await LiveKitClient.createLocalAudioTrack({
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            });
-            
-            await room.localParticipant.publishTrack(track, {
-                audioEncoding: getAudioEncodingSettings()
-            });
-            
-            window.streamState.localTracks.microphone = track;
+            await room.localParticipant.setMicrophoneEnabled(true);
             window.streamState.publishers.microphone = true;
             updateMicrophoneButton(true);
             updateMediaCard('mic', true, 'Broadcasting');
-            
             showNotification('success', 'Microphone started successfully');
         }
-        
-        updateStatus('Ready');
-        
     } catch (error) {
         console.error('❌ Microphone error:', error);
-        
-        if (error.name === 'NotAllowedError') {
-            showNotification('error', 'Microphone access denied. Please check your browser permissions.');
-        } else {
-            showNotification('error', 'Microphone error: ' + error.message);
-        }
-        updateStatus('Microphone error');
+        showNotification('error', 'Microphone error: ' + error.message);
     }
 };
 
@@ -838,76 +778,22 @@ window.toggleScreenShare = async function() {
     const isEnabled = window.streamState.publishers.screen;
     
     try {
-        updateStatus(isEnabled ? 'Stopping screen share...' : 'Starting screen share...');
-        
         if (isEnabled) {
-            // Stop screen sharing
-            const publication = room.localParticipant.getTrack(LiveKitClient.Track.Source.ScreenShare);
-            if (publication) {
-                await room.localParticipant.unpublishTrack(publication.track);
-                publication.track.stop();
-            }
-            
-            // If camera is on, switch back to camera view
-            if (window.streamState.publishers.camera) {
-                showPreview(window.streamState.localTracks.camera, 'main');
-            } else {
-                clearPreview('main');
-            }
-            
+            await room.localParticipant.setScreenShareEnabled(false);
             window.streamState.publishers.screen = false;
             updateScreenShareButton(false);
             updateMediaCard('screen', false);
-            
             showNotification('info', 'Screen sharing stopped');
-            
         } else {
-            // Start screen sharing
-            const track = await LiveKitClient.createLocalScreenShareTrack({
-                resolution: LiveKitClient.ScreenSharePresets.h1080fps15.resolution
-            });
-            
-            await room.localParticipant.publishTrack(track);
-            
-            // Show screen share in main view, move camera to PiP if active
-            if (window.streamState.publishers.camera) {
-                showPreview(window.streamState.localTracks.camera, 'pip');
-            }
-            showPreview(track, 'main');
-            
-            // Handle screen share end by user
-            track.mediaStreamTrack.onended = () => {
-                console.log('Screen share ended by user');
-                window.streamState.publishers.screen = false;
-                updateScreenShareButton(false);
-                updateMediaCard('screen', false);
-                
-                // Move camera back to main if active
-                if (window.streamState.publishers.camera) {
-                    showPreview(window.streamState.localTracks.camera, 'main');
-                }
-                clearPreview('pip');
-            };
-            
-            window.streamState.localTracks.screen = track;
+            await room.localParticipant.setScreenShareEnabled(true);
             window.streamState.publishers.screen = true;
             updateScreenShareButton(true);
             updateMediaCard('screen', true, 'Sharing');
-            
             showNotification('success', 'Screen sharing started successfully');
         }
-        
-        updateStatus('Ready');
-        
     } catch (error) {
         console.error('❌ Screen share error:', error);
-        
-        if (error.name === 'NotAllowedError') {
-            showNotification('error', 'Screen sharing was denied. Please try again and allow access.');
-        } else {
-            showNotification('error', 'Screen sharing error: ' + error.message);
-        }
-        updateStatus('Screen share error');
+        showNotification('error', 'Screen sharing error: ' + error.message);
     }
 };
 
