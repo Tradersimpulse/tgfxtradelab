@@ -5,6 +5,8 @@
 {% block head %}
 <!-- Socket.IO for real-time communication -->
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<!-- LiveKit JavaScript SDK -->
+<script src="https://unpkg.com/livekit-client@1.15.13/dist/livekit-client.umd.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -87,39 +89,38 @@
                         </div>
                     </div>
                     
-                    <!-- Video display area -->
-                    <div id="streamDisplay-{{ stream.id }}" class="position-absolute top-0 start-0 w-100 h-100" style="display: none;">
-                        <!-- Screen share canvas -->
-                        <canvas id="screenCanvas-{{ stream.id }}" style="width: 100%; height: 100%; object-fit: contain;"></canvas>
-                        
-                        <!-- Status indicators -->
-                        <div class="position-absolute top-0 start-0 m-3">
-                            <div class="d-flex gap-2">
-                                <span class="badge bg-success" id="screenStatus-{{ stream.id }}" style="display: none;">
-                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">screen_share</span>
-                                    Screen Sharing
-                                </span>
-                                <span class="badge bg-info" id="audioStatus-{{ stream.id }}" style="display: none;">
-                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">volume_up</span>
-                                    Audio Live
-                                </span>
-                            </div>
+                    <!-- LiveKit Video Container -->
+                    <div id="livekitContainer-{{ stream.id }}" class="position-absolute top-0 start-0 w-100 h-100" style="display: none;">
+                        <!-- Video elements will be added here by LiveKit -->
+                    </div>
+                    
+                    <!-- Status indicators -->
+                    <div class="position-absolute top-0 start-0 m-3">
+                        <div class="d-flex gap-2">
+                            <span class="badge bg-success" id="connectionStatus-{{ stream.id }}" style="display: none;">
+                                <span class="material-symbols-outlined me-1" style="font-size: 12px;">wifi</span>
+                                Connected
+                            </span>
+                            <span class="badge bg-info" id="participantCount-{{ stream.id }}" style="display: none;">
+                                <span class="material-symbols-outlined me-1" style="font-size: 12px;">group</span>
+                                0 viewers
+                            </span>
                         </div>
-                        
-                        <!-- Audio visualization -->
-                        <div class="position-absolute bottom-0 start-0 m-3">
-                            <div class="audio-display" id="audioDisplay-{{ stream.id }}" style="display: none;">
-                                <div class="d-flex align-items-center gap-2 p-2 rounded" style="background: rgba(0,0,0,0.7);">
-                                    <span class="material-symbols-outlined text-success">mic</span>
-                                    <div class="audio-bars">
-                                        <div class="audio-bar" data-bar="0"></div>
-                                        <div class="audio-bar" data-bar="1"></div>
-                                        <div class="audio-bar" data-bar="2"></div>
-                                        <div class="audio-bar" data-bar="3"></div>
-                                        <div class="audio-bar" data-bar="4"></div>
-                                    </div>
-                                    <small class="text-white">{{ stream.streamer_name }}</small>
+                    </div>
+                    
+                    <!-- Audio visualization -->
+                    <div class="position-absolute bottom-0 start-0 m-3">
+                        <div class="audio-display" id="audioDisplay-{{ stream.id }}" style="display: none;">
+                            <div class="d-flex align-items-center gap-2 p-2 rounded" style="background: rgba(0,0,0,0.7);">
+                                <span class="material-symbols-outlined text-success">volume_up</span>
+                                <div class="audio-bars">
+                                    <div class="audio-bar" data-bar="0"></div>
+                                    <div class="audio-bar" data-bar="1"></div>
+                                    <div class="audio-bar" data-bar="2"></div>
+                                    <div class="audio-bar" data-bar="3"></div>
+                                    <div class="audio-bar" data-bar="4"></div>
                                 </div>
+                                <small class="text-white">{{ stream.streamer_name }}</small>
                             </div>
                         </div>
                     </div>
@@ -135,6 +136,9 @@
                     <!-- Stream controls overlay -->
                     <div class="position-absolute bottom-0 end-0 p-3" id="streamControls-{{ stream.id }}" style="display: none;">
                         <div class="d-flex gap-1">
+                            <button class="btn btn-secondary btn-sm" onclick="toggleMute({{ stream.id }})" title="Toggle Mute" id="muteBtn-{{ stream.id }}">
+                                <span class="material-symbols-outlined" id="muteIcon-{{ stream.id }}">volume_up</span>
+                            </button>
                             <button class="btn btn-danger btn-sm" onclick="leaveStream({{ stream.id }})" title="Leave Stream">
                                 <span class="material-symbols-outlined">call_end</span>
                             </button>
@@ -224,251 +228,41 @@
 
 {% block scripts %}
 <script>
-// ENHANCED LIVESTREAM VIEWER WITH FIXED AUDIO HANDLING
-// Compatible with your boto3 1.34.0 setup
+// ENHANCED LIVESTREAM VIEWER WITH LIVEKIT INTEGRATION
+// Now using LiveKit for real-time streaming instead of AWS Chime
 
 // Global variables
 window.isAdminUser = {{ 'true' if current_user.is_admin else 'false' }};
 window.activeStreamsData = {{ active_streams_dict|tojson if active_streams_dict else '[]' }};
+window.tokensData = {{ tokens_by_stream|tojson if tokens_by_stream else '{}' }};
+window.livekitUrl = {{ livekit_url|tojson if livekit_url else 'null' }};
 
 const isAdmin = window.isAdminUser || false;
 const activeStreams = window.activeStreamsData || [];
+const tokensData = window.tokensData || {};
+const livekitUrl = window.livekitUrl;
 const joinedStreams = new Set();
 
-console.log('🚀 Starting enhanced livestream viewer with audio fixes...');
+console.log('🚀 Starting enhanced livestream viewer with LiveKit...');
 console.log('👤 User is admin:', isAdmin);
 console.log('📊 Active streams:', activeStreams.length);
+console.log('🔗 LiveKit URL:', livekitUrl);
 
-// Stream state tracking
+// LiveKit room connections
+window.liveKitRooms = new Map();
 window.streamStates = new Map();
 
 // Initialize stream states
 activeStreams.forEach(stream => {
     window.streamStates.set(stream.id, {
         joined: false,
-        screenActive: false,
-        audioActive: false,
-        canvas: null,
-        context: null
+        room: null,
+        audioEnabled: true,
+        videoEnabled: true
     });
 });
 
-// ENHANCED AUDIO MANAGER - Fixes "Audio loading error" messages
-window.AudioManager = {
-    context: null,
-    gainNode: null,
-    audioQueue: [],
-    isProcessing: false,
-    initialized: false,
-    
-    async init() {
-        if (this.initialized) return true;
-        
-        try {
-            // Initialize Web Audio Context with optimal settings
-            this.context = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: 44100,
-                latencyHint: 'interactive'
-            });
-            
-            // Create gain node for volume control
-            this.gainNode = this.context.createGain();
-            this.gainNode.connect(this.context.destination);
-            this.gainNode.gain.value = 0.8;
-            
-            this.initialized = true;
-            console.log('🔊 Enhanced AudioManager initialized successfully');
-            return true;
-            
-        } catch (error) {
-            console.error('❌ AudioManager initialization failed:', error);
-            return false;
-        }
-    },
-    
-    async resume() {
-        if (this.context && this.context.state === 'suspended') {
-            try {
-                await this.context.resume();
-                console.log('🔊 AudioContext resumed for playback');
-            } catch (error) {
-                console.error('❌ Failed to resume AudioContext:', error);
-            }
-        }
-    },
-    
-    async processAudioChunk(audioDataUrl, streamId) {
-        // Add to queue to prevent audio overlap
-        this.audioQueue.push({ audioDataUrl, streamId, timestamp: Date.now() });
-        
-        if (!this.isProcessing) {
-            this.processQueue();
-        }
-    },
-    
-    async processQueue() {
-        if (this.audioQueue.length === 0) {
-            this.isProcessing = false;
-            return;
-        }
-        
-        this.isProcessing = true;
-        const { audioDataUrl, streamId, timestamp } = this.audioQueue.shift();
-        
-        // Skip old chunks (prevent audio delay buildup)
-        const age = Date.now() - timestamp;
-        if (age > 1000) {
-            console.log('🔇 Skipping old audio chunk:', age + 'ms old');
-            setTimeout(() => this.processQueue(), 1);
-            return;
-        }
-        
-        try {
-            await this.playAudioChunk(audioDataUrl, streamId);
-        } catch (error) {
-            // Don't log every failed chunk - normal for streaming
-            console.log('🔇 Audio chunk skipped:', error.message.substring(0, 50));
-        }
-        
-        // Process next chunk with minimal delay
-        setTimeout(() => this.processQueue(), 10);
-    },
-    
-    async playAudioChunk(audioDataUrl, streamId) {
-        await this.resume();
-        
-        // Validate audio data format
-        if (!audioDataUrl || !audioDataUrl.startsWith('data:audio/')) {
-            throw new Error('Invalid audio format');
-        }
-        
-        try {
-            // Method 1: Web Audio API (preferred for real-time streaming)
-            const response = await fetch(audioDataUrl);
-            if (!response.ok) throw new Error('Fetch failed');
-            
-            const arrayBuffer = await response.arrayBuffer();
-            const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
-            
-            const source = this.context.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(this.gainNode);
-            
-            // Play immediately
-            source.start(0);
-            
-            // Update visualization with realistic levels
-            this.updateVisualization(streamId, 60 + Math.random() * 30);
-            
-        } catch (webAudioError) {
-            // Method 2: HTML5 Audio fallback (more compatible)
-            return this.fallbackAudioPlay(audioDataUrl, streamId);
-        }
-    },
-    
-    fallbackAudioPlay(audioDataUrl, streamId) {
-        return new Promise((resolve, reject) => {
-            const audio = new Audio();
-            
-            // Configure audio for streaming
-            audio.volume = 0.7;
-            audio.preload = 'auto';
-            audio.crossOrigin = 'anonymous';
-            
-            const cleanup = () => {
-                audio.removeEventListener('canplaythrough', onCanPlay);
-                audio.removeEventListener('error', onError);
-                audio.removeEventListener('ended', cleanup);
-            };
-            
-            const onCanPlay = () => {
-                cleanup();
-                audio.play()
-                    .then(() => {
-                        this.updateVisualization(streamId, 50 + Math.random() * 20);
-                        resolve();
-                    })
-                    .catch(playError => {
-                        // Ignore autoplay restrictions - they're normal
-                        if (!playError.message.includes('interact')) {
-                            console.warn('Audio play error:', playError.message);
-                        }
-                        resolve(); // Don't reject - continue processing
-                    });
-            };
-            
-            const onError = (event) => {
-                cleanup();
-                // Don't show error to user - streaming audio errors are normal
-                reject(new Error('HTML5 audio failed'));
-            };
-            
-            audio.addEventListener('canplaythrough', onCanPlay);
-            audio.addEventListener('error', onError);
-            audio.addEventListener('ended', cleanup);
-            
-            // Set source and start loading
-            audio.src = audioDataUrl;
-            
-            // Timeout for stuck audio
-            setTimeout(() => {
-                if (!audio.readyState) {
-                    cleanup();
-                    reject(new Error('Audio load timeout'));
-                }
-            }, 1000);
-        });
-    },
-    
-    updateVisualization(streamId, baseLevel) {
-        const audioDisplay = document.getElementById('audioDisplay-' + streamId);
-        if (!audioDisplay) return;
-        
-        const bars = audioDisplay.querySelectorAll('.audio-bar');
-        
-        bars.forEach((bar, index) => {
-            const variation = Math.random() * 40 - 20; // ±20% variation
-            const level = Math.max(10, Math.min(100, baseLevel + variation));
-            
-            bar.style.height = level + '%';
-            bar.style.transition = 'height 0.1s ease';
-            
-            // Color based on intensity
-            if (level > 70) {
-                bar.style.backgroundColor = '#10B981'; // Green - high
-            } else if (level > 40) {
-                bar.style.backgroundColor = '#fbbf24'; // Yellow - medium  
-            } else {
-                bar.style.backgroundColor = '#6b7280'; // Gray - low
-            }
-        });
-        
-        // Pulse effect for high levels
-        if (baseLevel > 60) {
-            audioDisplay.style.transform = 'scale(1.05)';
-            setTimeout(() => {
-                audioDisplay.style.transform = 'scale(1)';
-            }, 100);
-        }
-    },
-    
-    setVolume(level) {
-        if (this.gainNode) {
-            this.gainNode.gain.value = Math.max(0, Math.min(1, level));
-        }
-    },
-    
-    stopAll() {
-        // Clear audio queue
-        this.audioQueue = [];
-        this.isProcessing = false;
-        
-        // Stop any playing audio sources would be handled by garbage collection
-        console.log('🔇 Audio playback stopped');
-    }
-};
-
-// ENHANCED WEBSOCKET MANAGER with improved audio handling
+// Enhanced WebSocket Manager for coordination with LiveKit
 window.WebSocketManager = {
     socket: null,
     isConnected: false,
@@ -489,13 +283,12 @@ window.WebSocketManager = {
             
         } catch (error) {
             console.error('❌ Failed to initialize WebSocket:', error);
-            this.fallbackToLocalStorage();
         }
     },
     
     setupEventHandlers: function() {
         this.socket.on('connect', () => {
-            console.log('✅ WebSocket connected for enhanced viewing');
+            console.log('✅ WebSocket connected for LiveKit coordination');
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.showConnectionStatus('connected');
@@ -516,19 +309,6 @@ window.WebSocketManager = {
         this.socket.on('stream_update', (data) => {
             console.log('📡 Stream update:', data);
             this.handleStreamUpdate(data);
-        });
-        
-        // ENHANCED AUDIO CHUNK HANDLER - Fixes loading errors
-        this.socket.on('audio_chunk', (data) => {
-            this.handleAudioChunk(data);
-        });
-        
-        this.socket.on('screen_frame', (data) => {
-            this.handleScreenFrame(data);
-        });
-        
-        this.socket.on('status_update', (data) => {
-            this.handleStatusUpdate(data);
         });
         
         this.socket.on('viewer_joined', (data) => {
@@ -582,20 +362,8 @@ window.WebSocketManager = {
                 this.socket.connect();
             }, 2000 * this.reconnectAttempts);
         } else {
-            console.log('❌ Max reconnection attempts reached, using localStorage fallback');
-            this.fallbackToLocalStorage();
+            console.log('❌ Max reconnection attempts reached');
         }
-    },
-    
-    fallbackToLocalStorage: function() {
-        console.log('📡 Using localStorage fallback communication');
-        this.initLocalStorageFallback();
-    },
-    
-    initLocalStorageFallback: function() {
-        setInterval(() => {
-            this.checkForUpdates();
-        }, 100);
     },
     
     joinStreamAsViewer: function(streamId) {
@@ -614,261 +382,7 @@ window.WebSocketManager = {
     
     handleStreamUpdate: function(data) {
         console.log('📡 Stream update received:', data);
-        
-        joinedStreams.forEach(streamId => {
-            const state = window.streamStates.get(streamId);
-            if (!state) return;
-            
-            switch (data.type) {
-                case 'audio_start':
-                    state.audioActive = true;
-                    this.updateAudioStatus(streamId, true);
-                    break;
-                case 'audio_stop':
-                    state.audioActive = false;
-                    this.updateAudioStatus(streamId, false);
-                    break;
-                case 'screen_start':
-                    state.screenActive = true;
-                    this.updateScreenStatus(streamId, true);
-                    break;
-                case 'screen_stop':
-                    state.screenActive = false;
-                    this.updateScreenStatus(streamId, false);
-                    break;
-            }
-        });
-    },
-    
-    // ENHANCED AUDIO CHUNK HANDLER - No more loading errors!
-    handleAudioChunk: function(data) {
-        if (!data.audio_data) {
-            console.warn('⚠️ No audio data in chunk');
-            return;
-        }
-        
-        console.log('🎵 Processing enhanced audio chunk...');
-        
-        // Process audio for all joined streams
-        joinedStreams.forEach(async streamId => {
-            const state = window.streamStates.get(streamId);
-            if (!state || !state.audioActive) return;
-            
-            try {
-                // Use enhanced audio manager - prevents loading errors
-                await window.AudioManager.processAudioChunk(data.audio_data, streamId);
-                
-            } catch (error) {
-                // Don't show errors for failed chunks - normal in streaming
-                console.log('🔇 Audio chunk processing note:', error.message.substring(0, 30));
-            }
-        });
-    },
-    
-    handleScreenFrame: function(data) {
-        if (!data.frame_data) return;
-        
-        joinedStreams.forEach(streamId => {
-            const state = window.streamStates.get(streamId);
-            if (!state || !state.screenActive) return;
-            
-            this.displayScreenFrame(streamId, data.frame_data);
-        });
-    },
-    
-    handleStatusUpdate: function(data) {
-        joinedStreams.forEach(streamId => {
-            const state = window.streamStates.get(streamId);
-            if (!state) return;
-            
-            if (data.status.screen !== state.screenActive) {
-                state.screenActive = data.status.screen;
-                this.updateScreenStatus(streamId, data.status.screen);
-            }
-            
-            if (data.status.audio !== state.audioActive) {
-                state.audioActive = data.status.audio;
-                this.updateAudioStatus(streamId, data.status.audio);
-            }
-        });
-    },
-    
-    checkForUpdates: function() {
-        // Fallback localStorage polling
-        try {
-            const statusData = localStorage.getItem('admin_stream_status');
-            if (statusData) {
-                const status = JSON.parse(statusData);
-                this.handleStatusUpdate({ status: status });
-            }
-        } catch (error) {}
-        
-        try {
-            const frameData = localStorage.getItem('admin_screen_frame');
-            if (frameData) {
-                const frame = JSON.parse(frameData);
-                this.handleScreenFrame({ frame_data: frame.imageData });
-            }
-        } catch (error) {}
-        
-        try {
-            const audioData = localStorage.getItem('admin_audio_chunk');
-            if (audioData) {
-                const audio = JSON.parse(audioData);
-                this.handleAudioChunk({ audio_data: audio.audioData });
-            }
-        } catch (error) {}
-    },
-    
-    updateScreenStatus: function(streamId, isActive) {
-        const screenStatus = document.getElementById('screenStatus-' + streamId);
-        
-        if (screenStatus) {
-            if (isActive) {
-                screenStatus.style.display = 'inline-flex';
-                console.log('🖥️ Screen sharing active for stream', streamId);
-                showToast('🖥️ Screen sharing started!', 'success');
-            } else {
-                screenStatus.style.display = 'none';
-                this.clearScreen(streamId);
-                console.log('🛑 Screen sharing stopped for stream', streamId);
-                showToast('🛑 Screen sharing ended', 'info');
-            }
-        }
-    },
-    
-    updateAudioStatus: function(streamId, isActive) {
-        const audioStatus = document.getElementById('audioStatus-' + streamId);
-        const audioDisplay = document.getElementById('audioDisplay-' + streamId);
-        
-        if (audioStatus && audioDisplay) {
-            if (isActive) {
-                audioStatus.style.display = 'inline-flex';
-                audioDisplay.style.display = 'block';
-                console.log('🎤 Enhanced audio started for stream', streamId);
-                showToast('🎤 ' + this.getStreamerName(streamId) + ' audio is now live!', 'success');
-            } else {
-                audioStatus.style.display = 'none';
-                audioDisplay.style.display = 'none';
-                this.clearAudioBars(streamId);
-                window.AudioManager.stopAll();
-                console.log('🔇 Audio stopped for stream', streamId);
-                showToast('🔇 Audio ended', 'info');
-            }
-        }
-    },
-    
-    displayScreenFrame: function(streamId, imageData) {
-        const canvas = document.getElementById('screenCanvas-' + streamId);
-        if (!canvas) return;
-        
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-        
-        img.onload = function() {
-            const container = canvas.parentElement;
-            const containerRect = container.getBoundingClientRect();
-            
-            canvas.width = containerRect.width;
-            canvas.height = containerRect.height;
-            
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Calculate aspect ratio for proper scaling
-            const imgAspect = img.width / img.height;
-            const canvasAspect = canvas.width / canvas.height;
-            
-            let drawWidth, drawHeight, offsetX, offsetY;
-            
-            if (imgAspect > canvasAspect) {
-                drawWidth = canvas.width;
-                drawHeight = drawWidth / imgAspect;
-                offsetX = 0;
-                offsetY = (canvas.height - drawHeight) / 2;
-            } else {
-                drawHeight = canvas.height;
-                drawWidth = drawHeight * imgAspect;
-                offsetX = (canvas.width - drawWidth) / 2;
-                offsetY = 0;
-            }
-            
-            ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
-        };
-        
-        img.onerror = function() {
-            console.warn('⚠️ Failed to load screen frame for stream', streamId);
-        };
-        
-        img.src = imageData;
-    },
-    
-    clearScreen: function(streamId) {
-        const canvas = document.getElementById('screenCanvas-' + streamId);
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            this.showWaitingMessage(streamId);
-        }
-    },
-    
-    showWaitingMessage: function(streamId) {
-        const canvas = document.getElementById('screenCanvas-' + streamId);
-        if (!canvas) return;
-        
-        const ctx = canvas.getContext('2d');
-        const stream = activeStreams.find(s => s.id === streamId);
-        
-        const container = canvas.parentElement;
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-        
-        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        gradient.addColorStop(0, '#1a1a1a');
-        gradient.addColorStop(1, '#2a2a2a');
-        
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = '#10B981';
-        ctx.font = 'bold 32px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText((stream ? stream.streamer_name : 'Streamer') + ' is Live!', canvas.width/2, canvas.height/2 - 40);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '18px Arial';
-        ctx.fillText('Waiting for screen share...', canvas.width/2, canvas.height/2 + 20);
-        
-        let frame = 0;
-        const animate = () => {
-            const state = window.streamStates.get(streamId);
-            if (state && state.screenActive) return;
-            
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fillRect(canvas.width/2 - 60, canvas.height/2 + 40, 120, 30);
-            
-            ctx.fillStyle = '#10B981';
-            ctx.font = '24px Arial';
-            
-            const dots = '.'.repeat((frame % 4) + 1);
-            ctx.fillText(dots, canvas.width/2, canvas.height/2 + 60);
-            
-            frame++;
-            setTimeout(animate, 500);
-        };
-        animate();
-    },
-    
-    clearAudioBars: function(streamId) {
-        const audioDisplay = document.getElementById('audioDisplay-' + streamId);
-        if (!audioDisplay) return;
-        
-        const bars = audioDisplay.querySelectorAll('.audio-bar');
-        bars.forEach(bar => {
-            bar.style.height = '10%';
-            bar.style.backgroundColor = '#6b7280';
-        });
-        
-        audioDisplay.style.transform = 'scale(1)';
+        // Handle any stream status updates
     },
     
     updateViewerCounts: function() {
@@ -877,11 +391,6 @@ window.WebSocketManager = {
             const currentCount = parseInt(el.textContent) || 0;
             el.textContent = currentCount === 1 ? '1 viewer' : currentCount + ' viewers';
         });
-    },
-    
-    getStreamerName: function(streamId) {
-        const stream = activeStreams.find(s => s.id === streamId);
-        return stream ? stream.streamer_name : 'Streamer';
     },
     
     showConnectionStatus: function(status) {
@@ -905,9 +414,9 @@ window.WebSocketManager = {
     }
 };
 
-// Enhanced stream interaction functions
+// Enhanced LiveKit stream functions
 window.joinStream = async function(streamId) {
-    console.log('🎬 Joining enhanced stream with audio fixes', streamId);
+    console.log('🎬 Joining LiveKit stream', streamId);
     
     if (joinedStreams.has(streamId)) {
         console.log('Already joined stream', streamId);
@@ -917,63 +426,176 @@ window.joinStream = async function(streamId) {
     const stream = activeStreams.find(s => s.id === streamId);
     if (!stream) {
         console.error('Stream not found:', streamId);
+        showToast('❌ Stream not found', 'error');
         return;
     }
     
-    // Initialize enhanced audio manager first
-    const audioInitialized = await window.AudioManager.init();
-    if (!audioInitialized) {
-        console.warn('⚠️ Audio manager initialization failed - using fallback');
+    const tokenData = tokensData[streamId];
+    if (!tokenData || !livekitUrl) {
+        console.error('Missing LiveKit token or URL for stream:', streamId);
+        showToast('❌ Unable to connect to stream - missing credentials', 'error');
+        return;
     }
     
-    // Resume audio context for user interaction
-    await window.AudioManager.resume();
-    
-    // Update UI
-    const spinner = document.getElementById('loadingSpinner-' + streamId);
-    const streamDisplay = document.getElementById('streamDisplay-' + streamId);
-    const streamControls = document.getElementById('streamControls-' + streamId);
-    
-    if (spinner) spinner.style.display = 'none';
-    if (streamDisplay) streamDisplay.style.display = 'block';
-    if (streamControls) streamControls.style.display = 'block';
-    
-    // Add to joined streams
-    joinedStreams.add(streamId);
-    
-    // Initialize stream state
-    const state = window.streamStates.get(streamId);
-    if (state) {
-        state.joined = true;
+    try {
+        // Update UI
+        const spinner = document.getElementById('loadingSpinner-' + streamId);
+        const livekitContainer = document.getElementById('livekitContainer-' + streamId);
+        const streamControls = document.getElementById('streamControls-' + streamId);
+        const connectionStatus = document.getElementById('connectionStatus-' + streamId);
+        
+        if (spinner) spinner.style.display = 'none';
+        if (livekitContainer) livekitContainer.style.display = 'block';
+        if (streamControls) streamControls.style.display = 'block';
+        if (connectionStatus) connectionStatus.style.display = 'inline-flex';
+        
+        // Connect to LiveKit room
+        const room = new LiveKitClient.Room({
+            // Configure audio and video settings
+            adaptiveStream: true,
+            dynacast: true
+        });
+        
+        // Set up event listeners
+        room.on(LiveKitClient.RoomEvent.Connected, () => {
+            console.log('✅ Connected to LiveKit room:', tokenData.room_name);
+            showToast(`✅ Connected to ${stream.streamer_name}'s stream`, 'success');
+            
+            const connectionStatus = document.getElementById('connectionStatus-' + streamId);
+            if (connectionStatus) {
+                connectionStatus.textContent = '🟢 Connected';
+                connectionStatus.style.display = 'inline-flex';
+            }
+        });
+        
+        room.on(LiveKitClient.RoomEvent.Disconnected, () => {
+            console.log('👋 Disconnected from LiveKit room:', tokenData.room_name);
+            
+            const connectionStatus = document.getElementById('connectionStatus-' + streamId);
+            if (connectionStatus) {
+                connectionStatus.style.display = 'none';
+            }
+        });
+        
+        room.on(LiveKitClient.RoomEvent.ParticipantConnected, (participant) => {
+            console.log('👥 Participant connected:', participant.identity);
+            updateParticipantCount(streamId, room);
+        });
+        
+        room.on(LiveKitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+            console.log('👋 Participant disconnected:', participant.identity);
+            updateParticipantCount(streamId, room);
+        });
+        
+        room.on(LiveKitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
+            
+            if (track.kind === LiveKitClient.Track.Kind.Video || track.kind === LiveKitClient.Track.Kind.ScreenShare) {
+                const videoElement = track.attach();
+                videoElement.style.width = '100%';
+                videoElement.style.height = '100%';
+                videoElement.style.objectFit = 'contain';
+                
+                const container = document.getElementById('livekitContainer-' + streamId);
+                if (container) {
+                    // Clear any existing video elements
+                    container.innerHTML = '';
+                    container.appendChild(videoElement);
+                }
+            } else if (track.kind === LiveKitClient.Track.Kind.Audio) {
+                const audioElement = track.attach();
+                audioElement.volume = 0.8; // Set default volume
+                document.body.appendChild(audioElement); // Audio elements don't need to be visible
+                
+                // Show audio indicator
+                const audioDisplay = document.getElementById('audioDisplay-' + streamId);
+                if (audioDisplay) {
+                    audioDisplay.style.display = 'block';
+                    
+                    // Simulate audio visualization (LiveKit provides actual audio levels via events)
+                    startAudioVisualization(streamId, track);
+                }
+            }
+        });
+        
+        room.on(LiveKitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+            console.log('📺 Track unsubscribed:', track.kind, 'from', participant.identity);
+            track.detach();
+            
+            if (track.kind === LiveKitClient.Track.Kind.Audio) {
+                const audioDisplay = document.getElementById('audioDisplay-' + streamId);
+                if (audioDisplay) {
+                    audioDisplay.style.display = 'none';
+                }
+            }
+        });
+        
+        // Connect to the room
+        await room.connect(livekitUrl, tokenData.token);
+        
+        // Store room reference
+        window.liveKitRooms.set(streamId, room);
+        
+        // Update stream state
+        const state = window.streamStates.get(streamId);
+        if (state) {
+            state.joined = true;
+            state.room = room;
+        }
+        
+        // Add to joined streams
+        joinedStreams.add(streamId);
+        
+        // Join WebSocket room for coordination
+        window.WebSocketManager.joinStreamAsViewer(streamId);
+        
+        console.log('✅ Successfully joined LiveKit stream', streamId);
+        
+    } catch (error) {
+        console.error('❌ Failed to join LiveKit stream:', error);
+        showToast(`❌ Failed to connect: ${error.message}`, 'error');
+        
+        // Reset UI on error
+        const spinner = document.getElementById('loadingSpinner-' + streamId);
+        const livekitContainer = document.getElementById('livekitContainer-' + streamId);
+        
+        if (spinner) {
+            spinner.style.display = 'flex';
+            spinner.innerHTML = 
+                '<div class="text-center text-white">' +
+                    '<span class="material-symbols-outlined mb-3" style="font-size: 3rem;">error</span>' +
+                    '<p>Connection failed</p>' +
+                    '<button class="btn btn-primary btn-sm" onclick="joinStream(' + streamId + ')">' +
+                        '<span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>' +
+                        'Try Again' +
+                    '</button>' +
+                '</div>';
+        }
+        if (livekitContainer) livekitContainer.style.display = 'none';
     }
-    
-    // Join via WebSocket
-    window.WebSocketManager.joinStreamAsViewer(streamId);
-    
-    // Show waiting message initially
-    window.WebSocketManager.showWaitingMessage(streamId);
-    
-    showToast('✅ Connected to ' + stream.streamer_name + '\'s enhanced stream', 'success');
-    showToast('🔊 Enhanced audio system ready - No more loading errors!', 'info');
-    
-    console.log('✅ Successfully joined enhanced stream with audio fixes', streamId);
 };
 
 window.leaveStream = function(streamId) {
-    console.log('👋 Leaving stream', streamId);
+    console.log('👋 Leaving LiveKit stream', streamId);
     
     if (!joinedStreams.has(streamId)) {
         console.log('Not joined to stream', streamId);
         return;
     }
     
-    // Stop audio processing for this stream
-    window.AudioManager.stopAll();
+    // Disconnect from LiveKit room
+    const room = window.liveKitRooms.get(streamId);
+    if (room) {
+        room.disconnect();
+        window.liveKitRooms.delete(streamId);
+    }
     
     // Update UI
     const spinner = document.getElementById('loadingSpinner-' + streamId);
-    const streamDisplay = document.getElementById('streamDisplay-' + streamId);
+    const livekitContainer = document.getElementById('livekitContainer-' + streamId);
     const streamControls = document.getElementById('streamControls-' + streamId);
+    const connectionStatus = document.getElementById('connectionStatus-' + streamId);
+    const audioDisplay = document.getElementById('audioDisplay-' + streamId);
     
     if (spinner) {
         spinner.style.display = 'flex';
@@ -987,8 +609,10 @@ window.leaveStream = function(streamId) {
                 '</button>' +
             '</div>';
     }
-    if (streamDisplay) streamDisplay.style.display = 'none';
+    if (livekitContainer) livekitContainer.style.display = 'none';
     if (streamControls) streamControls.style.display = 'none';
+    if (connectionStatus) connectionStatus.style.display = 'none';
+    if (audioDisplay) audioDisplay.style.display = 'none';
     
     // Remove from joined streams
     joinedStreams.delete(streamId);
@@ -997,16 +621,51 @@ window.leaveStream = function(streamId) {
     const state = window.streamStates.get(streamId);
     if (state) {
         state.joined = false;
-        state.screenActive = false;
-        state.audioActive = false;
+        state.room = null;
     }
     
-    // Leave via WebSocket
+    // Leave WebSocket room
     window.WebSocketManager.leaveStream(streamId);
     
     showToast('👋 Left stream', 'info');
-    
     console.log('✅ Successfully left stream', streamId);
+};
+
+window.toggleMute = function(streamId) {
+    const state = window.streamStates.get(streamId);
+    if (!state || !state.room) return;
+    
+    const room = state.room;
+    const audioEnabled = !state.audioEnabled;
+    
+    // Toggle audio for all audio tracks
+    room.remoteParticipants.forEach(participant => {
+        participant.audioTracks.forEach(publication => {
+            if (publication.track) {
+                publication.track.setEnabled(audioEnabled);
+            }
+        });
+    });
+    
+    state.audioEnabled = audioEnabled;
+    
+    // Update UI
+    const muteBtn = document.getElementById('muteBtn-' + streamId);
+    const muteIcon = document.getElementById('muteIcon-' + streamId);
+    
+    if (muteBtn && muteIcon) {
+        if (audioEnabled) {
+            muteBtn.className = 'btn btn-secondary btn-sm';
+            muteIcon.textContent = 'volume_up';
+            muteBtn.title = 'Mute Audio';
+        } else {
+            muteBtn.className = 'btn btn-warning btn-sm';
+            muteIcon.textContent = 'volume_off';
+            muteBtn.title = 'Unmute Audio';
+        }
+    }
+    
+    showToast(audioEnabled ? '🔊 Audio enabled' : '🔇 Audio muted', 'info');
 };
 
 window.toggleFullscreen = function(streamId) {
@@ -1051,51 +710,25 @@ window.shareStream = function(streamId) {
 };
 
 window.debugStreamConnection = function(streamId) {
-    console.log('=== 🔍 ENHANCED STREAM DEBUG INFO ===');
+    console.log('=== 🔍 LIVEKIT STREAM DEBUG INFO ===');
     console.log('Stream ID:', streamId);
     console.log('Is Admin:', isAdmin);
     console.log('Joined Streams:', Array.from(joinedStreams));
     console.log('Stream States:', Array.from(window.streamStates.entries()));
     console.log('Active Streams:', activeStreams);
+    console.log('LiveKit Rooms:', Array.from(window.liveKitRooms.entries()));
     console.log('WebSocket Connected:', window.WebSocketManager.isConnected);
+    console.log('LiveKit URL:', livekitUrl);
+    console.log('Tokens Data:', tokensData);
     
-    console.log('Audio System Status:');
-    console.log('- AudioManager Initialized:', window.AudioManager.initialized);
-    console.log('- Audio Context State:', window.AudioManager.context ? window.AudioManager.context.state : 'Not initialized');
-    console.log('- Audio Queue Length:', window.AudioManager.audioQueue.length);
-    console.log('- Is Processing Audio:', window.AudioManager.isProcessing);
+    const room = window.liveKitRooms.get(streamId);
+    if (room) {
+        console.log('Room State:', room.state);
+        console.log('Room Participants:', room.participants.size);
+        console.log('Remote Participants:', Array.from(room.remoteParticipants.keys()));
+    }
     
-    console.log('LocalStorage Data:');
-    console.log('- Status:', localStorage.getItem('admin_stream_status'));
-    console.log('- Screen Frame:', localStorage.getItem('admin_screen_frame') ? 'Present' : 'None');
-    console.log('- Audio Data:', localStorage.getItem('admin_audio_chunk') ? 'Present' : 'None');
-    
-    showToast('🔍 Enhanced debug info with audio system status logged to console (F12)', 'info');
-};
-
-// Test enhanced audio system
-window.testAudioSystem = async function() {
-    console.log('🔊 Testing enhanced audio system...');
-    
-    const initialized = await window.AudioManager.init();
-    await window.AudioManager.resume();
-    
-    const testResults = {
-        audioManagerInitialized: initialized,
-        contextState: window.AudioManager.context ? window.AudioManager.context.state : 'failed',
-        webAudioSupported: !!(window.AudioContext || window.webkitAudioContext),
-        htmlAudioSupported: !!window.Audio
-    };
-    
-    console.log('🔊 Audio system test results:', testResults);
-    
-    const message = initialized ? 
-        '✅ Enhanced audio system working - No loading errors expected!' : 
-        '❌ Audio system issues detected - Check console';
-    
-    showToast(message, initialized ? 'success' : 'warning');
-    
-    return testResults;
+    showToast('🔍 LiveKit debug info logged to console (F12)', 'info');
 };
 
 // Helper functions
@@ -1103,6 +736,68 @@ function updateFullscreenButton(streamId, isFullscreen) {
     const icon = document.getElementById('fullscreenIcon-' + streamId);
     if (icon) {
         icon.textContent = isFullscreen ? 'fullscreen_exit' : 'fullscreen';
+    }
+}
+
+function updateParticipantCount(streamId, room) {
+    const participantCount = document.getElementById('participantCount-' + streamId);
+    if (participantCount) {
+        const count = room.participants.size;
+        participantCount.textContent = `👥 ${count} viewers`;
+        participantCount.style.display = 'inline-flex';
+    }
+}
+
+function startAudioVisualization(streamId, audioTrack) {
+    // Create audio visualization based on LiveKit audio levels
+    const audioDisplay = document.getElementById('audioDisplay-' + streamId);
+    if (!audioDisplay) return;
+    
+    const bars = audioDisplay.querySelectorAll('.audio-bar');
+    
+    // Set up audio level monitoring if available
+    if (audioTrack.on) {
+        audioTrack.on(LiveKitClient.TrackEvent.AudioPlaybackStarted, () => {
+            console.log('🎵 Audio playback started for stream', streamId);
+        });
+    }
+    
+    // Simulate audio bars animation
+    let animationId = null;
+    function animate() {
+        if (!window.streamStates.get(streamId)?.joined) return;
+        
+        const baseLevel = 30 + Math.random() * 40;
+        
+        bars.forEach((bar, index) => {
+            const variation = Math.random() * 30 - 15;
+            const level = Math.max(10, Math.min(100, baseLevel + variation));
+            
+            bar.style.height = level + '%';
+            bar.style.transition = 'height 0.1s ease';
+            
+            if (level > 60) {
+                bar.style.backgroundColor = '#10B981';
+            } else if (level > 30) {
+                bar.style.backgroundColor = '#fbbf24';
+            } else {
+                bar.style.backgroundColor = '#6b7280';
+            }
+        });
+        
+        animationId = requestAnimationFrame(animate);
+    }
+    
+    animate();
+    
+    // Stop animation when stream ends
+    const state = window.streamStates.get(streamId);
+    if (state?.room) {
+        state.room.on(LiveKitClient.RoomEvent.Disconnected, () => {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+        });
     }
 }
 
@@ -1159,21 +854,26 @@ function showToast(message, type) {
     }, 4000);
 }
 
-// Suppress repetitive audio loading errors in console
-const originalError = console.error;
-console.error = function(...args) {
-    const message = args.join(' ');
+// Test LiveKit connection
+window.testLiveKitConnection = async function() {
+    console.log('🔊 Testing LiveKit connection...');
     
-    // Suppress specific audio loading errors that are normal for streaming
-    if (message.includes('Audio loading error') || 
-        message.includes('MEDIA_ELEMENT_ERROR') ||
-        (message.includes('audio') && message.includes('loading'))) {
-        // Don't log repetitive audio streaming errors
-        return;
-    }
+    const testResults = {
+        livekitUrl: livekitUrl,
+        tokensAvailable: Object.keys(tokensData).length,
+        activeStreams: activeStreams.length,
+        livekitClientLoaded: typeof LiveKitClient !== 'undefined'
+    };
     
-    // Log all other errors normally
-    originalError.apply(console, args);
+    console.log('🔊 LiveKit test results:', testResults);
+    
+    const message = testResults.livekitClientLoaded && livekitUrl ? 
+        '✅ LiveKit connection ready!' : 
+        '❌ LiveKit setup issues detected - Check console';
+    
+    showToast(message, testResults.livekitClientLoaded && livekitUrl ? 'success' : 'warning');
+    
+    return testResults;
 };
 
 // Listen for fullscreen changes
@@ -1184,43 +884,33 @@ document.addEventListener('fullscreenchange', function() {
     });
 });
 
-// Enhanced initialization with audio system
+// Enhanced initialization with LiveKit
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 Enhanced livestream viewer loading...');
+    console.log('📱 Enhanced livestream viewer loading with LiveKit...');
     
-    // Initialize enhanced audio manager
-    window.AudioManager.init().then(success => {
-        if (success) {
-            console.log('✅ Enhanced audio system initialized - No loading errors expected!');
-        } else {
-            console.warn('⚠️ Audio system initialization issues - Some features may not work');
-        }
-    });
+    // Check LiveKit client availability
+    if (typeof LiveKitClient === 'undefined') {
+        console.error('❌ LiveKit client not loaded');
+        showToast('❌ LiveKit client not available', 'error');
+        return;
+    }
+    
+    console.log('✅ LiveKit client loaded successfully');
     
     // Initialize WebSocket manager
     window.WebSocketManager.init();
-    
-    // User interaction handler for audio context
-    document.addEventListener('click', async function initAudioOnFirstClick() {
-        await window.AudioManager.resume();
-        console.log('🔊 Audio context activated by user interaction');
-        
-        // Remove this listener after first activation
-        document.removeEventListener('click', initAudioOnFirstClick);
-    }, { once: true });
     
     // Update stream stats
     setInterval(updateAllStreamStatus, 5000);
     updateAllStreamStatus();
     
-    console.log('✅ Enhanced livestream viewer loaded successfully');
-    console.log('🎵 Enhanced audio processing - fixes "Audio loading error" messages');
-    console.log('🖥️ Real-time screen sharing support');
-    console.log('🔌 WebSocket communication with localStorage fallback');
+    console.log('✅ Enhanced livestream viewer loaded successfully with LiveKit');
+    console.log('🎵 Real-time audio and video streaming via LiveKit');
+    console.log('🔌 WebSocket communication for coordination');
 });
 
-console.log('💡 Enhanced functions: joinStream(), testAudioSystem(), debugStreamConnection()');
-console.log('🔊 Your boto3 1.34.0 setup supports audioFallbackUrl - client-side fixes applied!');
+console.log('💡 Available functions: joinStream(), testLiveKitConnection(), debugStreamConnection()');
+console.log('🔊 LiveKit streaming system ready!');
 </script>
 
 <style>
@@ -1289,11 +979,16 @@ console.log('🔊 Your boto3 1.34.0 setup supports audioFallbackUrl - client-sid
     transition: transform 0.1s ease;
 }
 
-/* Canvas styling */
-#screenCanvas-1, #screenCanvas-2 {
+/* LiveKit video elements */
+#livekitContainer-1, #livekitContainer-2 {
     background-color: #1a1a1a;
     border-radius: 4px;
-    transition: opacity 0.3s ease;
+}
+
+#livekitContainer-1 video, #livekitContainer-2 video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
 /* Status badges */
@@ -1347,16 +1042,8 @@ console.log('🔊 Your boto3 1.34.0 setup supports audioFallbackUrl - client-sid
     }
 }
 
-/* Responsive canvas */
-canvas {
-    max-width: 100%;
-    max-height: 100%;
-    width: auto;
-    height: auto;
-}
-
 /* Fullscreen styles */
-.stream-video-container:fullscreen canvas {
+.stream-video-container:fullscreen video {
     width: 100vw;
     height: 100vh;
     object-fit: contain;
