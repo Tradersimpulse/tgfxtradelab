@@ -2450,7 +2450,7 @@ def api_start_stream():
     'title': stream.title,
     'streamer_name': stream.streamer_name,
     'message': f'{streamer_name} is now live!'
-    }
+    })
     
     # Also send traditional notification
     broadcast_notification(
