@@ -5,8 +5,8 @@
 {% block head %}
 <!-- Socket.IO for real-time communication -->
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-<!-- LiveKit JavaScript SDK -->
-<script src="https://unpkg.com/livekit-client@1.15.13/dist/livekit-client.umd.min.js"></script>
+<!-- LiveKit JavaScript SDK - Updated to compatible version -->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.15.4/dist/livekit-client.umd.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -16,139 +16,255 @@
             <div>
                 <h1 class="text-gradient-primary mb-2">
                     <span class="material-symbols-outlined me-2" style="font-size: 2rem;">live_tv</span>
-                    Live Streams
+                    Live Trading Sessions
                 </h1>
-                <p class="text-muted mb-0">Join Ray and Jordan's live trading sessions</p>
+                <p class="text-muted mb-0">Join Ray and Jordan's professional trading streams</p>
             </div>
-            <div class="d-flex gap-2 align-items-center" id="streamStatus">
-                <span class="badge bg-secondary" id="statusBadge">Loading...</span>
-                <span class="text-muted" id="totalViewers">0 total viewers</span>
+            <div class="d-flex gap-2 align-items-center">
+                <div class="stream-status-indicator" id="streamStatusIndicator">
+                    <span class="badge bg-secondary" id="statusBadge">
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        Loading...
+                    </span>
+                    <span class="text-muted ms-2" id="totalViewers">0 viewers online</span>
+                </div>
+                {% if current_user.is_admin %}
+                <button class="btn btn-outline-info btn-sm" onclick="testConnectionSystem()">
+                    <span class="material-symbols-outlined me-1" style="font-size: 14px;">settings</span>
+                    Test System
+                </button>
+                {% endif %}
+                <button class="btn btn-outline-secondary btn-sm" onclick="refreshStreams()">
+                    <span class="material-symbols-outlined me-1" style="font-size: 14px;">refresh</span>
+                    Refresh
+                </button>
             </div>
         </div>
     </div>
 </div>
 
 {% if active_streams %}
-<!-- Active Streams Container -->
-<div class="row">
+<!-- Live Streams Container -->
+<div class="row" id="streamsContainer">
     {% for stream in active_streams %}
     <div class="col-lg-6 mb-4">
-        <div class="card stream-card" data-stream-id="{{ stream.id }}" style="border-left: 4px solid {{ stream.creator.stream_color }};">
+        <div class="card stream-card h-100" 
+             data-stream-id="{{ stream.id }}" 
+             style="border-left: 4px solid {{ stream.creator.stream_color }};">
+            
+            <!-- Stream Header -->
             <div class="card-header d-flex justify-content-between align-items-center">
-                <div>
-                    <h5 class="mb-1 text-white">{{ stream.title }}</h5>
-                    <div class="d-flex gap-2 align-items-center">
-                        <span class="badge" style="background-color: {{ stream.creator.stream_color }};">
-                            <span class="material-symbols-outlined me-1" style="font-size: 10px;">radio_button_checked</span>
-                            {{ stream.streamer_name }} LIVE
-                        </span>
-                        <span class="text-muted stream-viewer-count" data-stream-id="{{ stream.id }}">
-                            {{ stream.viewer_count }} viewers
+                <div class="flex-grow-1">
+                    <div class="d-flex align-items-center mb-1">
+                        <h5 class="mb-0 me-2 text-white">{{ stream.title }}</h5>
+                        <span class="live-pulse-badge" style="background-color: {{ stream.creator.stream_color }};">
+                            <span class="material-symbols-outlined" style="font-size: 10px;">radio_button_checked</span>
+                            LIVE
                         </span>
                     </div>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <span class="badge bg-gradient" style="background: linear-gradient(45deg, {{ stream.creator.stream_color }}, {{ stream.creator.stream_color }}80);">
+                            <span class="material-symbols-outlined me-1" style="font-size: 10px;">person</span>
+                            {{ stream.streamer_name }}
+                        </span>
+                        <span class="text-muted stream-viewer-count" data-stream-id="{{ stream.id }}" id="viewerCount-{{ stream.id }}">
+                            <span class="material-symbols-outlined me-1" style="font-size: 12px;">visibility</span>
+                            {{ stream.viewer_count }} viewers
+                        </span>
+                        <span class="text-muted stream-duration" data-started="{{ stream.started_at.isoformat() if stream.started_at else '' }}">
+                            <span class="material-symbols-outlined me-1" style="font-size: 12px;">schedule</span>
+                            <span id="duration-{{ stream.id }}">Live</span>
+                        </span>
+                        {% if stream.is_recording %}
+                        <span class="badge bg-danger recording-indicator">
+                            <span class="material-symbols-outlined" style="font-size: 10px;">fiber_manual_record</span>
+                            REC
+                        </span>
+                        {% endif %}
+                    </div>
                 </div>
+                
+                <!-- Stream Menu -->
                 <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" 
+                            type="button" 
+                            data-bs-toggle="dropdown"
+                            title="Stream Options">
                         <span class="material-symbols-outlined">more_vert</span>
                     </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="#" onclick="joinStream({{ stream.id }})">
-                            <span class="material-symbols-outlined me-2">login</span>Join Stream
-                        </a></li>
-                        <li><a class="dropdown-item" href="#" onclick="toggleFullscreen({{ stream.id }})">
-                            <span class="material-symbols-outlined me-2">fullscreen</span>Fullscreen
-                        </a></li>
-                        <li><a class="dropdown-item" href="#" onclick="shareStream({{ stream.id }})">
-                            <span class="material-symbols-outlined me-2">share</span>Share
-                        </a></li>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <a class="dropdown-item" href="#" onclick="joinStream({{ stream.id }})">
+                                <span class="material-symbols-outlined me-2">login</span>
+                                Join Stream
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="#" onclick="toggleFullscreen({{ stream.id }})">
+                                <span class="material-symbols-outlined me-2">fullscreen</span>
+                                Fullscreen
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="#" onclick="shareStream({{ stream.id }}, '{{ stream.title }}', '{{ stream.streamer_name }}')">
+                                <span class="material-symbols-outlined me-2">share</span>
+                                Share Stream
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="#" onclick="toggleStreamAudio({{ stream.id }})">
+                                <span class="material-symbols-outlined me-2" id="audioMenuIcon-{{ stream.id }}">volume_up</span>
+                                <span id="audioMenuText-{{ stream.id }}">Mute Audio</span>
+                            </a>
+                        </li>
                         {% if current_user.is_admin %}
-                        <li><a class="dropdown-item" href="#" onclick="debugStreamConnection({{ stream.id }})">
-                            <span class="material-symbols-outlined me-2">bug_report</span>Debug Info
-                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item text-info" href="#" onclick="debugStreamInfo({{ stream.id }})">
+                                <span class="material-symbols-outlined me-2">bug_report</span>
+                                Debug Info
+                            </a>
+                        </li>
                         {% endif %}
                     </ul>
                 </div>
             </div>
             
+            <!-- Video Container -->
             <div class="card-body p-0">
-                <!-- Video Container -->
-                <div id="videoContainer-{{ stream.id }}" class="stream-video-container" 
-                     style="background: #000; min-height: 300px; position: relative;" 
+                <div class="stream-video-container position-relative" 
+                     id="videoContainer-{{ stream.id }}"
+                     style="background: linear-gradient(135deg, #1a1a1a, #000); min-height: 300px;"
                      ondblclick="toggleFullscreen({{ stream.id }})">
                     
-                    <div id="loadingSpinner-{{ stream.id }}" class="d-flex align-items-center justify-content-center h-100">
-                        <div class="text-center text-white">
-                            <div class="spinner-border mb-3" style="color: {{ stream.creator.stream_color }};" role="status">
-                                <span class="visually-hidden">Loading...</span>
+                    <!-- Loading State -->
+                    <div id="loadingState-{{ stream.id }}" 
+                         class="stream-state-overlay d-flex align-items-center justify-content-center">
+                        <div class="text-center text-white loading-content">
+                            <div class="loading-animation mb-3">
+                                <div class="pulse-ring" style="border-color: {{ stream.creator.stream_color }};"></div>
+                                <span class="material-symbols-outlined pulse-icon" style="color: {{ stream.creator.stream_color }};">live_tv</span>
                             </div>
-                            <p>{{ stream.streamer_name }} is Live!</p>
-                            <button class="btn btn-success btn-sm" onclick="joinStream({{ stream.id }})">
-                                <span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>
+                            <h5 class="mb-2">{{ stream.streamer_name }} is Live!</h5>
+                            <p class="text-muted mb-3">{{ stream.description or 'Professional trading session in progress' }}</p>
+                            <button class="btn btn-primary btn-lg join-stream-btn" 
+                                    onclick="joinStream({{ stream.id }})"
+                                    style="background: {{ stream.creator.stream_color }}; border-color: {{ stream.creator.stream_color }};">
+                                <span class="material-symbols-outlined me-2">play_arrow</span>
                                 Join Stream
                             </button>
-                        </div>
-                    </div>
-                    
-                    <!-- LiveKit Video Container -->
-                    <div id="livekitContainer-{{ stream.id }}" class="position-absolute top-0 start-0 w-100 h-100" style="display: none;">
-                        <!-- Video elements will be added here by LiveKit -->
-                    </div>
-                    
-                    <!-- Status indicators -->
-                    <div class="position-absolute top-0 start-0 m-3">
-                        <div class="d-flex gap-2">
-                            <span class="badge bg-success" id="connectionStatus-{{ stream.id }}" style="display: none;">
-                                <span class="material-symbols-outlined me-1" style="font-size: 12px;">wifi</span>
-                                Connected
-                            </span>
-                            <span class="badge bg-info" id="participantCount-{{ stream.id }}" style="display: none;">
-                                <span class="material-symbols-outlined me-1" style="font-size: 12px;">group</span>
-                                0 viewers
-                            </span>
-                        </div>
-                    </div>
-                    
-                    <!-- Audio visualization -->
-                    <div class="position-absolute bottom-0 start-0 m-3">
-                        <div class="audio-display" id="audioDisplay-{{ stream.id }}" style="display: none;">
-                            <div class="d-flex align-items-center gap-2 p-2 rounded" style="background: rgba(0,0,0,0.7);">
-                                <span class="material-symbols-outlined text-success">volume_up</span>
-                                <div class="audio-bars">
-                                    <div class="audio-bar" data-bar="0"></div>
-                                    <div class="audio-bar" data-bar="1"></div>
-                                    <div class="audio-bar" data-bar="2"></div>
-                                    <div class="audio-bar" data-bar="3"></div>
-                                    <div class="audio-bar" data-bar="4"></div>
-                                </div>
-                                <small class="text-white">{{ stream.streamer_name }}</small>
+                            <div class="mt-2">
+                                <small class="text-white-50">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">info</span>
+                                    High-quality video and audio streaming
+                                </small>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Fullscreen toggle button -->
-                    <button class="btn btn-outline-light btn-sm position-absolute" 
-                            style="top: 10px; right: 10px; z-index: 1000;" 
-                            onclick="toggleFullscreen({{ stream.id }})"
-                            title="Toggle Fullscreen">
-                        <span class="material-symbols-outlined" id="fullscreenIcon-{{ stream.id }}">fullscreen</span>
-                    </button>
+                    <!-- LiveKit Video Container (Hidden Initially) -->
+                    <div id="livekitContainer-{{ stream.id }}" 
+                         class="livekit-video-container" 
+                         style="display: none;">
+                        <!-- Video elements will be dynamically added here -->
+                    </div>
                     
-                    <!-- Stream controls overlay -->
-                    <div class="position-absolute bottom-0 end-0 p-3" id="streamControls-{{ stream.id }}" style="display: none;">
-                        <div class="d-flex gap-1">
-                            <button class="btn btn-secondary btn-sm" onclick="toggleMute({{ stream.id }})" title="Toggle Mute" id="muteBtn-{{ stream.id }}">
-                                <span class="material-symbols-outlined" id="muteIcon-{{ stream.id }}">volume_up</span>
-                            </button>
-                            <button class="btn btn-danger btn-sm" onclick="leaveStream({{ stream.id }})" title="Leave Stream">
-                                <span class="material-symbols-outlined">call_end</span>
+                    <!-- Stream Status Overlays -->
+                    <div class="stream-overlays">
+                        <!-- Connection Status -->
+                        <div class="position-absolute top-0 start-0 m-3">
+                            <div class="status-badges" style="display: none;" id="statusBadges-{{ stream.id }}">
+                                <span class="badge badge-connection bg-success" id="connectionBadge-{{ stream.id }}">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 10px;">wifi</span>
+                                    Connected
+                                </span>
+                                <span class="badge bg-info ms-1" id="qualityBadge-{{ stream.id }}">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 10px;">hd</span>
+                                    HD
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- Live Indicator -->
+                        <div class="position-absolute top-0 end-0 m-3">
+                            <div class="live-indicator" style="display: none;" id="liveIndicator-{{ stream.id }}">
+                                <span class="badge bg-danger live-badge">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 10px;">radio_button_checked</span>
+                                    LIVE
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- Audio Visualization -->
+                        <div class="position-absolute bottom-0 start-0 m-3">
+                            <div class="audio-visualizer" 
+                                 style="display: none;" 
+                                 id="audioVisualizer-{{ stream.id }}">
+                                <div class="audio-indicator">
+                                    <span class="material-symbols-outlined me-2">volume_up</span>
+                                    <div class="audio-bars">
+                                        {% for i in range(5) %}
+                                        <div class="audio-bar" data-bar="{{ i }}"></div>
+                                        {% endfor %}
+                                    </div>
+                                    <span class="ms-2 text-white-75">{{ stream.streamer_name }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Stream Controls -->
+                        <div class="position-absolute bottom-0 end-0 m-3">
+                            <div class="stream-controls" 
+                                 style="display: none;" 
+                                 id="streamControls-{{ stream.id }}">
+                                <div class="btn-group">
+                                    <button class="btn btn-dark btn-sm" 
+                                            onclick="toggleStreamAudio({{ stream.id }})" 
+                                            title="Toggle Audio"
+                                            id="audioToggleBtn-{{ stream.id }}">
+                                        <span class="material-symbols-outlined" id="audioToggleIcon-{{ stream.id }}">volume_up</span>
+                                    </button>
+                                    <button class="btn btn-dark btn-sm" 
+                                            onclick="toggleFullscreen({{ stream.id }})" 
+                                            title="Toggle Fullscreen">
+                                        <span class="material-symbols-outlined" id="fullscreenIcon-{{ stream.id }}">fullscreen</span>
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" 
+                                            onclick="leaveStream({{ stream.id }})" 
+                                            title="Leave Stream">
+                                        <span class="material-symbols-outlined">call_end</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Error State (Hidden Initially) -->
+                    <div id="errorState-{{ stream.id }}" 
+                         class="stream-state-overlay d-flex align-items-center justify-content-center"
+                         style="display: none;">
+                        <div class="text-center text-white">
+                            <span class="material-symbols-outlined mb-3 text-warning" style="font-size: 4rem;">warning</span>
+                            <h5 class="mb-2">Connection Issue</h5>
+                            <p class="text-muted mb-3" id="errorMessage-{{ stream.id }}">
+                                Unable to connect to the stream
+                            </p>
+                            <button class="btn btn-outline-primary" onclick="retryConnection({{ stream.id }})">
+                                <span class="material-symbols-outlined me-2">refresh</span>
+                                Try Again
                             </button>
                         </div>
                     </div>
                 </div>
                 
+                <!-- Stream Info -->
                 {% if stream.description %}
-                <div class="p-3">
-                    <p class="text-muted mb-0">{{ stream.description }}</p>
+                <div class="px-3 py-2 border-top">
+                    <small class="text-muted">
+                        <span class="material-symbols-outlined me-1" style="font-size: 12px;">description</span>
+                        {{ stream.description }}
+                    </small>
                 </div>
                 {% endif %}
             </div>
@@ -157,7 +273,7 @@
     {% endfor %}
 </div>
 
-<!-- Stream Statistics -->
+<!-- Stream Analytics -->
 <div class="row mt-4">
     <div class="col-12">
         <div class="card">
@@ -170,24 +286,34 @@
             <div class="card-body">
                 <div class="row text-center">
                     <div class="col-md-3">
-                        <h4 class="text-gradient-primary" id="totalActiveStreams">{{ active_streams|length }}</h4>
-                        <small class="text-muted">Active Streams</small>
+                        <div class="stat-item">
+                            <h4 class="text-gradient-primary" id="totalActiveStreams">{{ active_streams|length }}</h4>
+                            <small class="text-muted">Active Streams</small>
+                        </div>
                     </div>
                     <div class="col-md-3">
-                        <h4 class="text-gradient-primary" id="combinedViewers">
-                            {{ active_streams|map(attribute='viewer_count')|sum }}
-                        </h4>
-                        <small class="text-muted">Total Viewers</small>
+                        <div class="stat-item">
+                            <h4 class="text-gradient-primary" id="combinedViewers">
+                                {{ active_streams|map(attribute='viewer_count')|sum }}
+                            </h4>
+                            <small class="text-muted">Total Viewers</small>
+                        </div>
                     </div>
                     <div class="col-md-3">
-                        <h4 class="text-gradient-primary" id="recordingCount">
-                            {{ active_streams|selectattr('is_recording')|list|length }}
-                        </h4>
-                        <small class="text-muted">Recording Now</small>
+                        <div class="stat-item">
+                            <h4 class="text-gradient-primary" id="recordingCount">
+                                {{ active_streams|selectattr('is_recording')|list|length }}
+                            </h4>
+                            <small class="text-muted">Recording Now</small>
+                        </div>
                     </div>
                     <div class="col-md-3">
-                        <h4 class="text-gradient-primary">LIVE</h4>
-                        <small class="text-muted">Status</small>
+                        <div class="stat-item">
+                            <h4 class="text-gradient-primary connection-quality" id="connectionQuality">
+                                <span class="material-symbols-outlined">signal_wifi_4_bar</span>
+                            </h4>
+                            <small class="text-muted">Connection Quality</small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -196,28 +322,78 @@
 </div>
 
 {% else %}
-<!-- No Active Streams -->
+<!-- No Active Streams State -->
 <div class="row">
     <div class="col-12">
-        <div class="card">
-            <div class="card-body text-center py-5" style="background: #1a1a1a;">
-                <span class="material-symbols-outlined text-muted mb-3" style="font-size: 4rem;">live_tv</span>
-                <h4 class="text-muted mb-3">No Live Streams Active</h4>
-                <p class="text-muted mb-4">Ray and Jordan aren't streaming right now. Check back later or follow our social media for stream announcements.</p>
-                
-                <div class="row justify-content-center">
-                    <div class="col-md-6">
-                        <div class="d-grid gap-2">
-                            <a href="{{ url_for('courses') }}" class="btn btn-primary">
-                                <span class="material-symbols-outlined me-2">school</span>
-                                Browse Courses
-                            </a>
-                            <a href="{{ url_for('favorites') }}" class="btn btn-outline-primary">
-                                <span class="material-symbols-outlined me-2">favorite</span>
-                                My Favorites
-                            </a>
+        <div class="card no-streams-card">
+            <div class="card-body text-center py-5">
+                <div class="no-streams-content">
+                    <div class="no-streams-animation mb-4">
+                        <span class="material-symbols-outlined main-icon text-muted">live_tv</span>
+                        <div class="floating-icons">
+                            <span class="material-symbols-outlined floating-icon">schedule</span>
+                            <span class="material-symbols-outlined floating-icon">notifications</span>
+                            <span class="material-symbols-outlined floating-icon">favorite</span>
                         </div>
                     </div>
+                    
+                    <h3 class="text-gradient-primary mb-3">No Live Streams</h3>
+                    <p class="text-muted mb-4">
+                        Ray and Jordan aren't streaming right now, but don't worry! <br>
+                        There's plenty of great content to explore while you wait.
+                    </p>
+                    
+                    <div class="row justify-content-center">
+                        <div class="col-md-8">
+                            <div class="d-grid gap-2 d-md-block">
+                                <a href="{{ url_for('courses') }}" class="btn btn-primary btn-lg me-2">
+                                    <span class="material-symbols-outlined me-2">school</span>
+                                    Browse Courses
+                                </a>
+                                <a href="{{ url_for('favorites') }}" class="btn btn-outline-primary btn-lg">
+                                    <span class="material-symbols-outlined me-2">favorite</span>
+                                    My Favorites
+                                </a>
+                            </div>
+                            
+                            <div class="mt-4">
+                                <h6 class="text-muted mb-3">Get notified when streams start:</h6>
+                                <div class="d-flex justify-content-center gap-2">
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="enableNotifications()">
+                                        <span class="material-symbols-outlined me-1">notifications</span>
+                                        Enable Notifications
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="refreshStreams()">
+                                        <span class="material-symbols-outlined me-1">refresh</span>
+                                        Check Again
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Streams / Upcoming Sessions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">history</span>
+                    Recent Sessions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="text-center py-3">
+                    <span class="material-symbols-outlined text-muted mb-2" style="font-size: 2rem;">history</span>
+                    <p class="text-muted mb-3">Previous trading sessions will appear here</p>
+                    <small class="text-white-50">
+                        Live streams are automatically saved and will be available in the course library
+                    </small>
                 </div>
             </div>
         </div>
@@ -228,561 +404,549 @@
 
 {% block scripts %}
 <script>
-// ENHANCED LIVESTREAM VIEWER WITH LIVEKIT INTEGRATION
-// Now using LiveKit for real-time streaming instead of AWS Chime
+// ENHANCED LIVESTREAM VIEWER WITH PROFESSIONAL LIVEKIT INTEGRATION
+// Modern streaming experience with real-time video, audio, and interactive features
 
-// Global variables
-window.isAdminUser = {{ 'true' if current_user.is_admin else 'false' }};
-window.activeStreamsData = {{ active_streams_dict|tojson if active_streams_dict else '[]' }};
-window.tokensData = {{ tokens_by_stream|tojson if tokens_by_stream else '{}' }};
-window.livekitUrl = {{ livekit_url|tojson if livekit_url else 'null' }};
+console.log('🚀 Loading Enhanced LiveKit Viewer...');
 
-const isAdmin = window.isAdminUser || false;
-const activeStreams = window.activeStreamsData || [];
-const tokensData = window.tokensData || {};
-const livekitUrl = window.livekitUrl;
-const joinedStreams = new Set();
-
-console.log('🚀 Starting enhanced livestream viewer with LiveKit...');
-console.log('👤 User is admin:', isAdmin);
-console.log('📊 Active streams:', activeStreams.length);
-console.log('🔗 LiveKit URL:', livekitUrl);
-
-// LiveKit room connections
-window.liveKitRooms = new Map();
-window.streamStates = new Map();
+// Global Configuration
+window.StreamViewerConfig = {
+    // Stream data from backend
+    isAdmin: {{ 'true' if current_user.is_admin else 'false' }},
+    activeStreams: {{ active_streams_dict|tojson if active_streams_dict else '[]' }},
+    streamTokens: {{ tokens_by_stream|tojson if tokens_by_stream else '{}' }},
+    livekitUrl: {{ livekit_url|tojson if livekit_url else 'null' }},
+    
+    // Client state
+    joinedStreams: new Set(),
+    roomConnections: new Map(),
+    streamStates: new Map(),
+    audioStates: new Map(),
+    
+    // Settings
+    autoJoinEnabled: false,
+    notificationsEnabled: false,
+    audioVisualizationEnabled: true
+};
 
 // Initialize stream states
-activeStreams.forEach(stream => {
-    window.streamStates.set(stream.id, {
+window.StreamViewerConfig.activeStreams.forEach(stream => {
+    window.StreamViewerConfig.streamStates.set(stream.id, {
         joined: false,
+        connected: false,
         room: null,
         audioEnabled: true,
-        videoEnabled: true
+        videoQuality: 'auto',
+        lastError: null,
+        startTime: new Date(stream.started_at || Date.now()),
+        viewerCount: stream.viewer_count || 0
+    });
+    
+    window.StreamViewerConfig.audioStates.set(stream.id, {
+        enabled: true,
+        volume: 0.8,
+        visualizer: null
     });
 });
 
-// Enhanced WebSocket Manager for coordination with LiveKit
-window.WebSocketManager = {
+console.log('📊 Loaded', window.StreamViewerConfig.activeStreams.length, 'active streams');
+
+// Enhanced WebSocket Manager for Real-time Coordination
+window.StreamCoordinator = {
     socket: null,
     isConnected: false,
     reconnectAttempts: 0,
-    maxReconnectAttempts: 5,
+    maxReconnectAttempts: 3,
+    heartbeatInterval: null,
     
-    init: function() {
-        console.log('🔌 Initializing enhanced WebSocket connection...');
+    init() {
+        console.log('🔌 Initializing Stream Coordinator...');
         
-        try {
-            this.socket = io({
-                transports: ['websocket', 'polling'],
-                timeout: 5000,
-                forceNew: true
-            });
-            
-            this.setupEventHandlers();
-            
-        } catch (error) {
-            console.error('❌ Failed to initialize WebSocket:', error);
-        }
+        this.socket = io({
+            transports: ['websocket', 'polling'],
+            timeout: 8000,
+            forceNew: true,
+            reconnection: true,
+            reconnectionDelay: 1000,
+            reconnectionAttempts: 3
+        });
+        
+        this.setupEventHandlers();
+        this.startHeartbeat();
     },
     
-    setupEventHandlers: function() {
+    setupEventHandlers() {
         this.socket.on('connect', () => {
-            console.log('✅ WebSocket connected for LiveKit coordination');
+            console.log('✅ Stream coordinator connected');
             this.isConnected = true;
             this.reconnectAttempts = 0;
-            this.showConnectionStatus('connected');
+            this.updateConnectionStatus(true);
         });
         
         this.socket.on('disconnect', (reason) => {
-            console.log('❌ WebSocket disconnected:', reason);
+            console.log('❌ Stream coordinator disconnected:', reason);
             this.isConnected = false;
-            this.showConnectionStatus('disconnected');
+            this.updateConnectionStatus(false);
         });
         
         this.socket.on('connect_error', (error) => {
-            console.error('❌ WebSocket connection error:', error);
+            console.warn('⚠️ Connection error:', error.message);
             this.handleConnectionError();
         });
         
         // Stream events
+        this.socket.on('viewer_joined', (data) => {
+            console.log('👥 Viewer joined stream:', data.stream_id);
+            this.updateViewerCount(data.stream_id, data.viewer_count);
+        });
+        
+        this.socket.on('viewer_left', (data) => {
+            console.log('👋 Viewer left stream:', data.stream_id);
+            this.updateViewerCount(data.stream_id, data.viewer_count);
+        });
+        
         this.socket.on('stream_update', (data) => {
             console.log('📡 Stream update:', data);
             this.handleStreamUpdate(data);
         });
         
-        this.socket.on('viewer_joined', (data) => {
-            console.log('👥 Viewer joined:', data);
-            this.updateViewerCounts();
-        });
-        
-        this.socket.on('viewer_left', (data) => {
-            console.log('👋 Viewer left:', data);
-            this.updateViewerCounts();
-        });
-        
-        this.socket.on('admin_joined', (data) => {
-            console.log('🎬 Admin joined stream:', data);
-            showToast('🎬 Streamer is now online!', 'success');
-        });
-        
-        this.socket.on('admin_left', (data) => {
-            console.log('👋 Admin left stream:', data);
-            showToast('👋 Streamer went offline', 'info');
-        });
-        
-        this.socket.on('error', (data) => {
-            console.error('❌ WebSocket error:', data.message);
-            showToast('❌ ' + data.message, 'error');
-        });
-        
-        // New stream notifications
         this.socket.on('new_stream_started', (data) => {
             console.log('🎬 New stream started:', data);
-            showToast('🎬 ' + data.message, 'success');
+            showNotification('success', `🎬 ${data.streamer_name} just went live!`, 6000);
             
-            // Auto-refresh stream list after a delay
-            setTimeout(() => {
-                window.location.reload();
-            }, 2000);
+            // Auto-refresh after delay to show new stream
+            setTimeout(() => this.refreshStreamList(), 2000);
         });
         
         this.socket.on('stream_ended', (data) => {
             console.log('📺 Stream ended:', data);
-            showToast('📺 ' + data.message, 'info');
+            showNotification('info', `📺 ${data.message}`, 4000);
+            
+            // Handle stream end
+            const streamId = data.stream_id;
+            if (window.StreamViewerConfig.joinedStreams.has(streamId)) {
+                this.handleStreamEnd(streamId);
+            }
+        });
+        
+        this.socket.on('error', (data) => {
+            console.error('❌ Stream coordinator error:', data.message);
+            showNotification('error', data.message);
         });
     },
     
-    handleConnectionError: function() {
-        this.reconnectAttempts++;
+    startHeartbeat() {
+        this.heartbeatInterval = setInterval(() => {
+            if (this.isConnected) {
+                this.socket.emit('heartbeat', { timestamp: Date.now() });
+            }
+        }, 30000); // 30 seconds
+    },
+    
+    updateConnectionStatus(isConnected) {
+        const indicator = document.getElementById('streamStatusIndicator');
+        const badge = document.getElementById('statusBadge');
         
+        if (badge) {
+            if (isConnected) {
+                badge.className = 'badge bg-success';
+                badge.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 10px;">wifi</span>Connected';
+            } else {
+                badge.className = 'badge bg-warning';
+                badge.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 10px;">wifi_off</span>Reconnecting...';
+            }
+        }
+    },
+    
+    updateViewerCount(streamId, count) {
+        const state = window.StreamViewerConfig.streamStates.get(streamId);
+        if (state) {
+            state.viewerCount = count;
+        }
+        
+        const element = document.getElementById(`viewerCount-${streamId}`);
+        if (element) {
+            element.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 12px;">visibility</span>${count} viewers`;
+        }
+        
+        // Update total viewers
+        this.updateTotalViewers();
+    },
+    
+    updateTotalViewers() {
+        let total = 0;
+        window.StreamViewerConfig.streamStates.forEach(state => {
+            total += state.viewerCount;
+        });
+        
+        const element = document.getElementById('totalViewers');
+        if (element) {
+            element.textContent = `${total} viewers online`;
+        }
+        
+        const combinedElement = document.getElementById('combinedViewers');
+        if (combinedElement) {
+            combinedElement.textContent = total;
+        }
+    },
+    
+    handleStreamUpdate(data) {
+        // Handle various stream updates
+        const streamId = data.stream_id;
+        const state = window.StreamViewerConfig.streamStates.get(streamId);
+        
+        if (state) {
+            switch (data.type) {
+                case 'quality_change':
+                    this.updateStreamQuality(streamId, data.quality);
+                    break;
+                case 'viewer_count':
+                    this.updateViewerCount(streamId, data.count);
+                    break;
+                case 'recording_status':
+                    this.updateRecordingStatus(streamId, data.is_recording);
+                    break;
+            }
+        }
+    },
+    
+    handleStreamEnd(streamId) {
+        const room = window.StreamViewerConfig.roomConnections.get(streamId);
+        if (room) {
+            room.disconnect();
+            window.StreamViewerConfig.roomConnections.delete(streamId);
+        }
+        
+        window.StreamViewerConfig.joinedStreams.delete(streamId);
+        
+        // Show stream ended state
+        this.showStreamEndedState(streamId);
+    },
+    
+    showStreamEndedState(streamId) {
+        const container = document.getElementById(`videoContainer-${streamId}`);
+        if (container) {
+            container.innerHTML = `
+                <div class="stream-state-overlay d-flex align-items-center justify-content-center">
+                    <div class="text-center text-white">
+                        <span class="material-symbols-outlined mb-3" style="font-size: 4rem;">live_tv</span>
+                        <h5 class="mb-2">Stream Ended</h5>
+                        <p class="text-muted mb-3">This stream has finished</p>
+                        <button class="btn btn-outline-primary" onclick="refreshStreams()">
+                            <span class="material-symbols-outlined me-2">refresh</span>
+                            Refresh Page
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+    },
+    
+    refreshStreamList() {
+        setTimeout(() => window.location.reload(), 1000);
+    },
+    
+    handleConnectionError() {
+        this.reconnectAttempts++;
         if (this.reconnectAttempts <= this.maxReconnectAttempts) {
-            console.log(`🔄 Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
-            setTimeout(() => {
-                this.socket.connect();
-            }, 2000 * this.reconnectAttempts);
+            console.log(`🔄 Reconnection attempt ${this.reconnectAttempts}`);
+            setTimeout(() => this.socket.connect(), 2000 * this.reconnectAttempts);
         } else {
             console.log('❌ Max reconnection attempts reached');
-        }
-    },
-    
-    joinStreamAsViewer: function(streamId) {
-        if (this.isConnected) {
-            this.socket.emit('join_stream', { stream_id: streamId });
-            console.log('👥 Viewer joined stream room:', streamId);
-        }
-    },
-    
-    leaveStream: function(streamId) {
-        if (this.isConnected) {
-            this.socket.emit('leave_stream', { stream_id: streamId });
-            console.log('👋 Left stream room:', streamId);
-        }
-    },
-    
-    handleStreamUpdate: function(data) {
-        console.log('📡 Stream update received:', data);
-        // Handle any stream status updates
-    },
-    
-    updateViewerCounts: function() {
-        // Update viewer count displays
-        document.querySelectorAll('.stream-viewer-count').forEach(el => {
-            const currentCount = parseInt(el.textContent) || 0;
-            el.textContent = currentCount === 1 ? '1 viewer' : currentCount + ' viewers';
-        });
-    },
-    
-    showConnectionStatus: function(status) {
-        let indicator = document.querySelector('.connection-indicator');
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.className = 'connection-indicator';
-            indicator.style.cssText = 'position:fixed;top:10px;left:10px;background:rgba(0,0,0,0.8);color:white;padding:4px 8px;border-radius:4px;font-size:12px;z-index:1001;';
-            document.body.appendChild(indicator);
-        }
-        
-        if (status === 'connected') {
-            indicator.textContent = '🟢 Connected';
-            indicator.style.background = 'rgba(16, 185, 129, 0.8)';
-            setTimeout(() => indicator.style.display = 'none', 3000);
-        } else {
-            indicator.textContent = '🔴 Disconnected';
-            indicator.style.background = 'rgba(239, 68, 68, 0.8)';
-            indicator.style.display = 'block';
+            showNotification('error', 'Connection lost. Please refresh the page.', 8000);
         }
     }
 };
 
-// Enhanced LiveKit stream functions
+// Enhanced LiveKit Stream Functions
 window.joinStream = async function(streamId) {
-    console.log('🎬 Joining LiveKit stream', streamId);
+    console.log('🎬 Joining stream:', streamId);
     
-    if (joinedStreams.has(streamId)) {
-        console.log('Already joined stream', streamId);
+    if (window.StreamViewerConfig.joinedStreams.has(streamId)) {
+        console.log('Already connected to this stream');
         return;
     }
     
-    const stream = activeStreams.find(s => s.id === streamId);
-    if (!stream) {
-        console.error('Stream not found:', streamId);
-        showToast('❌ Stream not found', 'error');
-        return;
-    }
+    const streamData = window.StreamViewerConfig.activeStreams.find(s => s.id === streamId);
+    const tokenData = window.StreamViewerConfig.streamTokens[streamId];
+    const livekitUrl = window.StreamViewerConfig.livekitUrl;
     
-    const tokenData = tokensData[streamId];
-    if (!tokenData || !livekitUrl) {
-        console.error('Missing LiveKit token or URL for stream:', streamId);
-        showToast('❌ Unable to connect to stream - missing credentials', 'error');
+    if (!streamData || !tokenData || !livekitUrl) {
+        console.error('Missing required data for stream:', { streamData: !!streamData, tokenData: !!tokenData, livekitUrl: !!livekitUrl });
+        showNotification('error', 'Unable to connect to stream - missing configuration');
+        showErrorState(streamId, 'Configuration Error', 'Missing stream connection data');
         return;
     }
     
     try {
-        // Update UI
-        const spinner = document.getElementById('loadingSpinner-' + streamId);
-        const livekitContainer = document.getElementById('livekitContainer-' + streamId);
-        const streamControls = document.getElementById('streamControls-' + streamId);
-        const connectionStatus = document.getElementById('connectionStatus-' + streamId);
+        // Update UI to connecting state
+        showConnectingState(streamId, streamData.streamer_name);
         
-        if (spinner) spinner.style.display = 'none';
-        if (livekitContainer) livekitContainer.style.display = 'block';
-        if (streamControls) streamControls.style.display = 'block';
-        if (connectionStatus) connectionStatus.style.display = 'inline-flex';
+        // Create and configure LiveKit room
+        const room = new LiveKitClient.Room({
+            adaptiveStream: true,
+            dynacast: true,
+            videoCaptureDefaults: {
+                resolution: LiveKitClient.VideoPresets.h720.resolution,
+            },
+            publishDefaults: {
+                videoEncoding: {
+                    maxBitrate: 3000000, // 3 Mbps
+                    maxFramerate: 30
+                },
+                videoSimulcast: true
+            }
+        });
+        
+        // Set up comprehensive event handlers
+        setupRoomEventHandlers(room, streamId, streamData);
         
         // Connect to LiveKit room
-        const room = new LiveKitClient.Room({
-            // Configure audio and video settings
-            adaptiveStream: true,
-            dynacast: true
-        });
-        
-        // Set up event listeners
-        room.on(LiveKitClient.RoomEvent.Connected, () => {
-            console.log('✅ Connected to LiveKit room:', tokenData.room_name);
-            showToast(`✅ Connected to ${stream.streamer_name}'s stream`, 'success');
-            
-            const connectionStatus = document.getElementById('connectionStatus-' + streamId);
-            if (connectionStatus) {
-                connectionStatus.textContent = '🟢 Connected';
-                connectionStatus.style.display = 'inline-flex';
-            }
-        });
-        
-        room.on(LiveKitClient.RoomEvent.Disconnected, () => {
-            console.log('👋 Disconnected from LiveKit room:', tokenData.room_name);
-            
-            const connectionStatus = document.getElementById('connectionStatus-' + streamId);
-            if (connectionStatus) {
-                connectionStatus.style.display = 'none';
-            }
-        });
-        
-        room.on(LiveKitClient.RoomEvent.ParticipantConnected, (participant) => {
-            console.log('👥 Participant connected:', participant.identity);
-            updateParticipantCount(streamId, room);
-        });
-        
-        room.on(LiveKitClient.RoomEvent.ParticipantDisconnected, (participant) => {
-            console.log('👋 Participant disconnected:', participant.identity);
-            updateParticipantCount(streamId, room);
-        });
-        
-        room.on(LiveKitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-            console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
-            
-            if (track.kind === LiveKitClient.Track.Kind.Video || track.kind === LiveKitClient.Track.Kind.ScreenShare) {
-                const videoElement = track.attach();
-                videoElement.style.width = '100%';
-                videoElement.style.height = '100%';
-                videoElement.style.objectFit = 'contain';
-                
-                const container = document.getElementById('livekitContainer-' + streamId);
-                if (container) {
-                    // Clear any existing video elements
-                    container.innerHTML = '';
-                    container.appendChild(videoElement);
-                }
-            } else if (track.kind === LiveKitClient.Track.Kind.Audio) {
-                const audioElement = track.attach();
-                audioElement.volume = 0.8; // Set default volume
-                document.body.appendChild(audioElement); // Audio elements don't need to be visible
-                
-                // Show audio indicator
-                const audioDisplay = document.getElementById('audioDisplay-' + streamId);
-                if (audioDisplay) {
-                    audioDisplay.style.display = 'block';
-                    
-                    // Simulate audio visualization (LiveKit provides actual audio levels via events)
-                    startAudioVisualization(streamId, track);
-                }
-            }
-        });
-        
-        room.on(LiveKitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-            console.log('📺 Track unsubscribed:', track.kind, 'from', participant.identity);
-            track.detach();
-            
-            if (track.kind === LiveKitClient.Track.Kind.Audio) {
-                const audioDisplay = document.getElementById('audioDisplay-' + streamId);
-                if (audioDisplay) {
-                    audioDisplay.style.display = 'none';
-                }
-            }
-        });
-        
-        // Connect to the room
+        console.log('🔗 Connecting to LiveKit room:', tokenData.room_name);
         await room.connect(livekitUrl, tokenData.token);
         
-        // Store room reference
-        window.liveKitRooms.set(streamId, room);
+        // Store room connection
+        window.StreamViewerConfig.roomConnections.set(streamId, room);
+        window.StreamViewerConfig.joinedStreams.add(streamId);
         
         // Update stream state
-        const state = window.streamStates.get(streamId);
+        const state = window.StreamViewerConfig.streamStates.get(streamId);
         if (state) {
             state.joined = true;
+            state.connected = true;
             state.room = room;
         }
         
-        // Add to joined streams
-        joinedStreams.add(streamId);
+        // Join WebSocket coordination room
+        if (window.StreamCoordinator.isConnected) {
+            window.StreamCoordinator.socket.emit('join_stream', { stream_id: streamId });
+        }
         
-        // Join WebSocket room for coordination
-        window.WebSocketManager.joinStreamAsViewer(streamId);
-        
-        console.log('✅ Successfully joined LiveKit stream', streamId);
+        console.log('✅ Successfully joined stream:', streamId);
+        showNotification('success', `Connected to ${streamData.streamer_name}'s stream!`);
         
     } catch (error) {
-        console.error('❌ Failed to join LiveKit stream:', error);
-        showToast(`❌ Failed to connect: ${error.message}`, 'error');
+        console.error('❌ Failed to join stream:', error);
         
-        // Reset UI on error
-        const spinner = document.getElementById('loadingSpinner-' + streamId);
-        const livekitContainer = document.getElementById('livekitContainer-' + streamId);
-        
-        if (spinner) {
-            spinner.style.display = 'flex';
-            spinner.innerHTML = 
-                '<div class="text-center text-white">' +
-                    '<span class="material-symbols-outlined mb-3" style="font-size: 3rem;">error</span>' +
-                    '<p>Connection failed</p>' +
-                    '<button class="btn btn-primary btn-sm" onclick="joinStream(' + streamId + ')">' +
-                        '<span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>' +
-                        'Try Again' +
-                    '</button>' +
-                '</div>';
+        let errorMessage = 'Connection failed';
+        if (error.message.includes('token')) {
+            errorMessage = 'Authentication failed';
+        } else if (error.message.includes('network')) {
+            errorMessage = 'Network connection issue';
+        } else if (error.message.includes('room')) {
+            errorMessage = 'Stream room not available';
         }
-        if (livekitContainer) livekitContainer.style.display = 'none';
+        
+        showNotification('error', `Failed to join stream: ${errorMessage}`);
+        showErrorState(streamId, 'Connection Failed', errorMessage);
     }
 };
 
-window.leaveStream = function(streamId) {
-    console.log('👋 Leaving LiveKit stream', streamId);
-    
-    if (!joinedStreams.has(streamId)) {
-        console.log('Not joined to stream', streamId);
-        return;
-    }
-    
-    // Disconnect from LiveKit room
-    const room = window.liveKitRooms.get(streamId);
-    if (room) {
-        room.disconnect();
-        window.liveKitRooms.delete(streamId);
-    }
-    
-    // Update UI
-    const spinner = document.getElementById('loadingSpinner-' + streamId);
-    const livekitContainer = document.getElementById('livekitContainer-' + streamId);
-    const streamControls = document.getElementById('streamControls-' + streamId);
-    const connectionStatus = document.getElementById('connectionStatus-' + streamId);
-    const audioDisplay = document.getElementById('audioDisplay-' + streamId);
-    
-    if (spinner) {
-        spinner.style.display = 'flex';
-        spinner.innerHTML = 
-            '<div class="text-center text-white">' +
-                '<span class="material-symbols-outlined mb-3" style="font-size: 3rem;">live_tv</span>' +
-                '<p>Left stream</p>' +
-                '<button class="btn btn-primary btn-sm" onclick="joinStream(' + streamId + ')">' +
-                    '<span class="material-symbols-outlined me-1" style="font-size: 16px;">play_arrow</span>' +
-                    'Rejoin Stream' +
-                '</button>' +
-            '</div>';
-    }
-    if (livekitContainer) livekitContainer.style.display = 'none';
-    if (streamControls) streamControls.style.display = 'none';
-    if (connectionStatus) connectionStatus.style.display = 'none';
-    if (audioDisplay) audioDisplay.style.display = 'none';
-    
-    // Remove from joined streams
-    joinedStreams.delete(streamId);
-    
-    // Update stream state
-    const state = window.streamStates.get(streamId);
-    if (state) {
-        state.joined = false;
-        state.room = null;
-    }
-    
-    // Leave WebSocket room
-    window.WebSocketManager.leaveStream(streamId);
-    
-    showToast('👋 Left stream', 'info');
-    console.log('✅ Successfully left stream', streamId);
-};
-
-window.toggleMute = function(streamId) {
-    const state = window.streamStates.get(streamId);
-    if (!state || !state.room) return;
-    
-    const room = state.room;
-    const audioEnabled = !state.audioEnabled;
-    
-    // Toggle audio for all audio tracks
-    room.remoteParticipants.forEach(participant => {
-        participant.audioTracks.forEach(publication => {
-            if (publication.track) {
-                publication.track.setEnabled(audioEnabled);
-            }
-        });
+function setupRoomEventHandlers(room, streamId, streamData) {
+    // Connection events
+    room.on(LiveKitClient.RoomEvent.Connected, () => {
+        console.log('✅ Connected to LiveKit room for stream:', streamId);
+        showConnectedState(streamId);
+        startStreamDurationUpdate(streamId);
     });
     
-    state.audioEnabled = audioEnabled;
+    room.on(LiveKitClient.RoomEvent.Disconnected, (reason) => {
+        console.log('👋 Disconnected from LiveKit room:', streamId, reason);
+        handleRoomDisconnection(streamId, reason);
+    });
     
-    // Update UI
-    const muteBtn = document.getElementById('muteBtn-' + streamId);
-    const muteIcon = document.getElementById('muteIcon-' + streamId);
+    room.on(LiveKitClient.RoomEvent.Reconnecting, () => {
+        console.log('🔄 Reconnecting to room:', streamId);
+        showReconnectingState(streamId);
+    });
     
-    if (muteBtn && muteIcon) {
-        if (audioEnabled) {
-            muteBtn.className = 'btn btn-secondary btn-sm';
-            muteIcon.textContent = 'volume_up';
-            muteBtn.title = 'Mute Audio';
-        } else {
-            muteBtn.className = 'btn btn-warning btn-sm';
-            muteIcon.textContent = 'volume_off';
-            muteBtn.title = 'Unmute Audio';
+    room.on(LiveKitClient.RoomEvent.Reconnected, () => {
+        console.log('✅ Reconnected to room:', streamId);
+        showConnectedState(streamId);
+    });
+    
+    // Participant events
+    room.on(LiveKitClient.RoomEvent.ParticipantConnected, (participant) => {
+        console.log('👥 Participant connected:', participant.identity);
+        updateParticipantCount(streamId, room);
+    });
+    
+    room.on(LiveKitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+        console.log('👋 Participant disconnected:', participant.identity);
+        updateParticipantCount(streamId, room);
+    });
+    
+    // Track events
+    room.on(LiveKitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
+        handleTrackSubscribed(streamId, track, publication, participant);
+    });
+    
+    room.on(LiveKitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+        console.log('📺 Track unsubscribed:', track.kind, 'from', participant.identity);
+        handleTrackUnsubscribed(streamId, track, publication, participant);
+    });
+    
+    // Quality events
+    room.on(LiveKitClient.RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+        if (participant.isLocal) {
+            updateConnectionQuality(streamId, quality);
         }
-    }
+    });
     
-    showToast(audioEnabled ? '🔊 Audio enabled' : '🔇 Audio muted', 'info');
-};
-
-window.toggleFullscreen = function(streamId) {
-    console.log('🖼️ Toggling fullscreen for stream', streamId);
-    
-    const videoContainer = document.getElementById('videoContainer-' + streamId);
-    if (!videoContainer) return;
-    
-    if (document.fullscreenElement) {
-        document.exitFullscreen().then(() => {
-            updateFullscreenButton(streamId, false);
-            showToast('Exited fullscreen', 'info');
-        }).catch(err => {
-            console.error('Error exiting fullscreen:', err);
-        });
-    } else {
-        videoContainer.requestFullscreen().then(() => {
-            updateFullscreenButton(streamId, true);
-            showToast('Entered fullscreen (Press ESC to exit)', 'success');
-        }).catch(err => {
-            console.error('Error entering fullscreen:', err);
-            showToast('Fullscreen not supported', 'warning');
-        });
-    }
-};
-
-window.shareStream = function(streamId) {
-    const streamUrl = window.location.origin + '/livestream';
-    const stream = activeStreams.find(s => s.id === streamId);
-    
-    if (navigator.share) {
-        navigator.share({
-            title: (stream ? stream.streamer_name : 'Live') + ' Stream - TGFX Trade Lab',
-            text: 'Join the live trading session!',
-            url: streamUrl
-        });
-    } else {
-        navigator.clipboard.writeText(streamUrl).then(function() {
-            showToast('📋 Stream link copied to clipboard', 'success');
-        });
-    }
-};
-
-window.debugStreamConnection = function(streamId) {
-    console.log('=== 🔍 LIVEKIT STREAM DEBUG INFO ===');
-    console.log('Stream ID:', streamId);
-    console.log('Is Admin:', isAdmin);
-    console.log('Joined Streams:', Array.from(joinedStreams));
-    console.log('Stream States:', Array.from(window.streamStates.entries()));
-    console.log('Active Streams:', activeStreams);
-    console.log('LiveKit Rooms:', Array.from(window.liveKitRooms.entries()));
-    console.log('WebSocket Connected:', window.WebSocketManager.isConnected);
-    console.log('LiveKit URL:', livekitUrl);
-    console.log('Tokens Data:', tokensData);
-    
-    const room = window.liveKitRooms.get(streamId);
-    if (room) {
-        console.log('Room State:', room.state);
-        console.log('Room Participants:', room.participants.size);
-        console.log('Remote Participants:', Array.from(room.remoteParticipants.keys()));
-    }
-    
-    showToast('🔍 LiveKit debug info logged to console (F12)', 'info');
-};
-
-// Helper functions
-function updateFullscreenButton(streamId, isFullscreen) {
-    const icon = document.getElementById('fullscreenIcon-' + streamId);
-    if (icon) {
-        icon.textContent = isFullscreen ? 'fullscreen_exit' : 'fullscreen';
-    }
+    // Error events
+    room.on(LiveKitClient.RoomEvent.MediaDevicesError, (error) => {
+        console.error('Media devices error:', error);
+        showNotification('warning', 'Media device issue detected');
+    });
 }
 
-function updateParticipantCount(streamId, room) {
-    const participantCount = document.getElementById('participantCount-' + streamId);
-    if (participantCount) {
-        const count = room.participants.size;
-        participantCount.textContent = `👥 ${count} viewers`;
-        participantCount.style.display = 'inline-flex';
-    }
-}
-
-function startAudioVisualization(streamId, audioTrack) {
-    // Create audio visualization based on LiveKit audio levels
-    const audioDisplay = document.getElementById('audioDisplay-' + streamId);
-    if (!audioDisplay) return;
+function handleTrackSubscribed(streamId, track, publication, participant) {
+    const container = document.getElementById(`livekitContainer-${streamId}`);
+    if (!container) return;
     
-    const bars = audioDisplay.querySelectorAll('.audio-bar');
-    
-    // Set up audio level monitoring if available
-    if (audioTrack.on) {
-        audioTrack.on(LiveKitClient.TrackEvent.AudioPlaybackStarted, () => {
-            console.log('🎵 Audio playback started for stream', streamId);
-        });
-    }
-    
-    // Simulate audio bars animation
-    let animationId = null;
-    function animate() {
-        if (!window.streamStates.get(streamId)?.joined) return;
+    if (track.kind === LiveKitClient.Track.Kind.Video || track.kind === LiveKitClient.Track.Kind.ScreenShare) {
+        // Handle video tracks
+        const videoElement = track.attach();
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = 'contain';
+        videoElement.style.borderRadius = '8px';
         
+        // Clear container and add video
+        container.innerHTML = '';
+        container.appendChild(videoElement);
+        
+        // Show video quality indicator
+        updateVideoQuality(streamId, publication);
+        
+    } else if (track.kind === LiveKitClient.Track.Kind.Audio) {
+        // Handle audio tracks
+        const audioElement = track.attach();
+        audioElement.volume = window.StreamViewerConfig.audioStates.get(streamId).volume;
+        
+        // Add to DOM (audio elements can be hidden)
+        document.body.appendChild(audioElement);
+        
+        // Start audio visualization
+        if (window.StreamViewerConfig.audioVisualizationEnabled) {
+            startAudioVisualization(streamId, track);
+        }
+        
+        // Show audio indicator
+        showAudioIndicator(streamId, true);
+    }
+}
+
+function handleTrackUnsubscribed(streamId, track, publication, participant) {
+    if (track.kind === LiveKitClient.Track.Kind.Audio) {
+        stopAudioVisualization(streamId);
+        showAudioIndicator(streamId, false);
+    }
+    
+    // Clean up track elements
+    track.detach();
+}
+
+// Stream State Management Functions
+function showConnectingState(streamId, streamerName) {
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`errorState-${streamId}`);
+    
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (container) {
+        const connectingOverlay = document.createElement('div');
+        connectingOverlay.id = `connectingState-${streamId}`;
+        connectingOverlay.className = 'stream-state-overlay d-flex align-items-center justify-content-center';
+        connectingOverlay.innerHTML = `
+            <div class="text-center text-white">
+                <div class="connecting-animation mb-3">
+                    <div class="connecting-ring"></div>
+                    <span class="material-symbols-outlined connecting-icon">wifi</span>
+                </div>
+                <h5 class="mb-2">Connecting...</h5>
+                <p class="text-muted">Joining ${streamerName}'s stream</p>
+                <div class="progress" style="width: 200px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 70%"></div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing overlays and add connecting state
+        container.querySelectorAll('.stream-state-overlay').forEach(el => el.remove());
+        container.appendChild(connectingOverlay);
+    }
+}
+
+function showConnectedState(streamId) {
+    // Hide all overlay states
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`connectingState-${streamId}`);
+    hideElement(`errorState-${streamId}`);
+    
+    // Show video container and controls
+    showElement(`livekitContainer-${streamId}`);
+    showElement(`statusBadges-${streamId}`);
+    showElement(`liveIndicator-${streamId}`);
+    showElement(`streamControls-${streamId}`);
+    
+    // Update connection badge
+    const connectionBadge = document.getElementById(`connectionBadge-${streamId}`);
+    if (connectionBadge) {
+        connectionBadge.className = 'badge badge-connection bg-success';
+        connectionBadge.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 10px;">wifi</span>Connected';
+    }
+}
+
+function showReconnectingState(streamId) {
+    const connectionBadge = document.getElementById(`connectionBadge-${streamId}`);
+    if (connectionBadge) {
+        connectionBadge.className = 'badge badge-connection bg-warning';
+        connectionBadge.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 10px;">sync</span>Reconnecting...';
+    }
+    
+    showNotification('warning', 'Stream connection lost, attempting to reconnect...');
+}
+
+function showErrorState(streamId, title, message) {
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`connectingState-${streamId}`);
+    showElement(`errorState-${streamId}`);
+    
+    const errorTitle = document.querySelector(`#errorState-${streamId} h5`);
+    const errorMessage = document.getElementById(`errorMessage-${streamId}`);
+    
+    if (errorTitle) errorTitle.textContent = title;
+    if (errorMessage) errorMessage.textContent = message;
+}
+
+// Audio Visualization Functions
+function startAudioVisualization(streamId, audioTrack) {
+    const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
+    if (!visualizer) return;
+    
+    showElement(`audioVisualizer-${streamId}`);
+    
+    const bars = visualizer.querySelectorAll('.audio-bar');
+    let animationId;
+    
+    // Create audio context for real audio analysis (if needed)
+    // For now, we'll simulate audio activity
+    function animate() {
+        if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
+            return;
+        }
+        
+        // Simulate audio levels (in real implementation, you'd use Web Audio API)
         const baseLevel = 30 + Math.random() * 40;
         
         bars.forEach((bar, index) => {
             const variation = Math.random() * 30 - 15;
             const level = Math.max(10, Math.min(100, baseLevel + variation));
             
-            bar.style.height = level + '%';
-            bar.style.transition = 'height 0.1s ease';
-            
-            if (level > 60) {
-                bar.style.backgroundColor = '#10B981';
-            } else if (level > 30) {
-                bar.style.backgroundColor = '#fbbf24';
-            } else {
-                bar.style.backgroundColor = '#6b7280';
-            }
+            bar.style.height = `${level}%`;
+            bar.style.background = level > 70 ? '#10B981' : 
+                                  level > 40 ? '#F59E0B' : '#6B7280';
         });
         
         animationId = requestAnimationFrame(animate);
@@ -790,146 +954,815 @@ function startAudioVisualization(streamId, audioTrack) {
     
     animate();
     
-    // Stop animation when stream ends
-    const state = window.streamStates.get(streamId);
-    if (state?.room) {
-        state.room.on(LiveKitClient.RoomEvent.Disconnected, () => {
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-            }
-        });
+    // Store animation ID for cleanup
+    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
+    if (audioState) {
+        audioState.visualizer = { animationId, stop: () => cancelAnimationFrame(animationId) };
     }
 }
 
-async function updateAllStreamStatus() {
+function stopAudioVisualization(streamId) {
+    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
+    if (audioState?.visualizer) {
+        audioState.visualizer.stop();
+        audioState.visualizer = null;
+    }
+    
+    hideElement(`audioVisualizer-${streamId}`);
+}
+
+function showAudioIndicator(streamId, hasAudio) {
+    const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
+    if (visualizer) {
+        visualizer.style.display = hasAudio ? 'block' : 'none';
+    }
+}
+
+// Stream Control Functions
+window.leaveStream = function(streamId) {
+    console.log('👋 Leaving stream:', streamId);
+    
+    if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
+        console.log('Not connected to this stream');
+        return;
+    }
+    
+    // Disconnect from LiveKit room
+    const room = window.StreamViewerConfig.roomConnections.get(streamId);
+    if (room) {
+        room.disconnect();
+        window.StreamViewerConfig.roomConnections.delete(streamId);
+    }
+    
+    // Leave WebSocket room
+    if (window.StreamCoordinator.isConnected) {
+        window.StreamCoordinator.socket.emit('leave_stream', { stream_id: streamId });
+    }
+    
+    // Clean up state
+    window.StreamViewerConfig.joinedStreams.delete(streamId);
+    stopAudioVisualization(streamId);
+    
+    // Reset UI to initial state
+    showElement(`loadingState-${streamId}`);
+    hideElement(`livekitContainer-${streamId}`);
+    hideElement(`statusBadges-${streamId}`);
+    hideElement(`liveIndicator-${streamId}`);
+    hideElement(`streamControls-${streamId}`);
+    
+    // Update stream state
+    const state = window.StreamViewerConfig.streamStates.get(streamId);
+    if (state) {
+        state.joined = false;
+        state.connected = false;
+        state.room = null;
+    }
+    
+    showNotification('info', 'Left stream successfully');
+    console.log('✅ Successfully left stream:', streamId);
+};
+
+window.toggleStreamAudio = function(streamId) {
+    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
+    if (!audioState) return;
+    
+    const room = window.StreamViewerConfig.roomConnections.get(streamId);
+    if (!room) return;
+    
+    const newAudioEnabled = !audioState.enabled;
+    audioState.enabled = newAudioEnabled;
+    
+    // Toggle audio for all remote audio tracks
+    room.remoteParticipants.forEach(participant => {
+        participant.audioTrackPublications.forEach(publication => {
+            if (publication.track) {
+                publication.track.setEnabled(newAudioEnabled);
+            }
+        });
+    });
+    
+    // Update UI
+    updateAudioToggleButton(streamId, newAudioEnabled);
+    
+    const message = newAudioEnabled ? 'Audio enabled' : 'Audio muted';
+    showNotification('info', message);
+    
+    console.log(`🔊 Audio ${newAudioEnabled ? 'enabled' : 'muted'} for stream:`, streamId);
+};
+
+window.toggleFullscreen = function(streamId) {
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (!container) return;
+    
+    if (document.fullscreenElement) {
+        document.exitFullscreen().then(() => {
+            updateFullscreenButton(streamId, false);
+            showNotification('info', 'Exited fullscreen');
+        }).catch(err => {
+            console.error('Error exiting fullscreen:', err);
+        });
+    } else {
+        container.requestFullscreen().then(() => {
+            updateFullscreenButton(streamId, true);
+            showNotification('success', 'Entered fullscreen mode');
+        }).catch(err => {
+            console.error('Error entering fullscreen:', err);
+            showNotification('warning', 'Fullscreen not supported');
+        });
+    }
+};
+
+// UI Helper Functions
+function updateAudioToggleButton(streamId, isEnabled) {
+    const btn = document.getElementById(`audioToggleBtn-${streamId}`);
+    const icon = document.getElementById(`audioToggleIcon-${streamId}`);
+    const menuIcon = document.getElementById(`audioMenuIcon-${streamId}`);
+    const menuText = document.getElementById(`audioMenuText-${streamId}`);
+    
+    const iconText = isEnabled ? 'volume_up' : 'volume_off';
+    const btnClass = isEnabled ? 'btn-dark' : 'btn-warning';
+    
+    if (btn) btn.className = `btn ${btnClass} btn-sm`;
+    if (icon) icon.textContent = iconText;
+    if (menuIcon) menuIcon.textContent = iconText;
+    if (menuText) menuText.textContent = isEnabled ? 'Mute Audio' : 'Unmute Audio';
+}
+
+function updateFullscreenButton(streamId, isFullscreen) {
+    const icon = document.getElementById(`fullscreenIcon-${streamId}`);
+    if (icon) {
+        icon.textContent = isFullscreen ? 'fullscreen_exit' : 'fullscreen';
+    }
+}
+
+function updateParticipantCount(streamId, room) {
+    const count = room.participants.size;
+    window.StreamCoordinator.updateViewerCount(streamId, count);
+}
+
+function updateVideoQuality(streamId, publication) {
+    const qualityBadge = document.getElementById(`qualityBadge-${streamId}`);
+    if (!qualityBadge || !publication) return;
+    
+    // Determine quality based on video dimensions
+    const dimensions = publication.dimensions;
+    if (dimensions) {
+        let quality = 'SD';
+        if (dimensions.height >= 1080) quality = 'FHD';
+        else if (dimensions.height >= 720) quality = 'HD';
+        
+        qualityBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 10px;">hd</span>${quality}`;
+    }
+}
+
+function updateConnectionQuality(streamId, quality) {
+    const connectionBadge = document.getElementById(`connectionBadge-${streamId}`);
+    if (!connectionBadge) return;
+    
+    let qualityText = 'Connected';
+    let badgeClass = 'bg-success';
+    
+    if (quality === LiveKitClient.ConnectionQuality.Poor) {
+        qualityText = 'Poor';
+        badgeClass = 'bg-danger';
+    } else if (quality === LiveKitClient.ConnectionQuality.Good) {
+        qualityText = 'Good';
+        badgeClass = 'bg-success';
+    } else if (quality === LiveKitClient.ConnectionQuality.Excellent) {
+        qualityText = 'Excellent';
+        badgeClass = 'bg-success';
+    }
+    
+    connectionBadge.className = `badge badge-connection ${badgeClass}`;
+    connectionBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 10px;">wifi</span>${qualityText}`;
+}
+
+function startStreamDurationUpdate(streamId) {
+    const state = window.StreamViewerConfig.streamStates.get(streamId);
+    if (!state) return;
+    
+    const updateDuration = () => {
+        if (!window.StreamViewerConfig.joinedStreams.has(streamId)) return;
+        
+        const duration = Math.floor((Date.now() - state.startTime.getTime()) / 1000);
+        const hours = Math.floor(duration / 3600);
+        const minutes = Math.floor((duration % 3600) / 60);
+        
+        const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        
+        const element = document.getElementById(`duration-${streamId}`);
+        if (element) {
+            element.textContent = durationText;
+        }
+    };
+    
+    updateDuration();
+    setInterval(updateDuration, 30000); // Update every 30 seconds
+}
+
+// Utility Functions
+function showElement(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) element.style.display = 'block';
+}
+
+function hideElement(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) element.style.display = 'none';
+}
+
+function handleRoomDisconnection(streamId, reason) {
+    const state = window.StreamViewerConfig.streamStates.get(streamId);
+    if (state) {
+        state.connected = false;
+        state.joined = false;
+    }
+    
+    window.StreamViewerConfig.joinedStreams.delete(streamId);
+    window.StreamViewerConfig.roomConnections.delete(streamId);
+    
+    // Show appropriate message based on disconnect reason
+    let message = 'Disconnected from stream';
+    if (reason === 'duplicate_identity') {
+        message = 'Connected from another device';
+    } else if (reason === 'server_shutdown') {
+        message = 'Stream has ended';
+    } else if (reason === 'participant_removed') {
+        message = 'Removed from stream';
+    }
+    
+    showNotification('info', message);
+    console.log('Stream disconnected:', streamId, reason);
+}
+
+// Global Functions
+window.shareStream = function(streamId, title, streamerName) {
+    const url = `${window.location.origin}/livestream`;
+    const shareData = {
+        title: `${title} - ${streamerName}`,
+        text: `Join ${streamerName}'s live trading session on TGFX Trade Lab!`,
+        url: url
+    };
+    
+    if (navigator.share) {
+        navigator.share(shareData).catch(console.error);
+    } else {
+        navigator.clipboard.writeText(url).then(() => {
+            showNotification('success', '📋 Stream link copied to clipboard!');
+        }).catch(() => {
+            showNotification('info', `Share this link: ${url}`);
+        });
+    }
+};
+
+window.retryConnection = function(streamId) {
+    console.log('🔄 Retrying connection for stream:', streamId);
+    
+    // Reset state
+    const state = window.StreamViewerConfig.streamStates.get(streamId);
+    if (state) {
+        state.joined = false;
+        state.connected = false;
+        state.lastError = null;
+    }
+    
+    // Clear error state and retry
+    hideElement(`errorState-${streamId}`);
+    window.joinStream(streamId);
+};
+
+window.refreshStreams = function() {
+    showNotification('info', 'Refreshing streams...');
+    setTimeout(() => window.location.reload(), 1000);
+};
+
+window.enableNotifications = function() {
+    if ('Notification' in window) {
+        Notification.requestPermission().then((permission) => {
+            if (permission === 'granted') {
+                window.StreamViewerConfig.notificationsEnabled = true;
+                showNotification('success', '🔔 Notifications enabled! You\'ll be notified when streams start.');
+            } else {
+                showNotification('warning', 'Notifications permission denied');
+            }
+        });
+    } else {
+        showNotification('warning', 'Notifications not supported in this browser');
+    }
+};
+
+window.debugStreamInfo = function(streamId) {
+    console.log('=== 🔍 STREAM DEBUG INFO ===');
+    console.log('Stream ID:', streamId);
+    console.log('Stream Config:', window.StreamViewerConfig);
+    console.log('Stream State:', window.StreamViewerConfig.streamStates.get(streamId));
+    console.log('Audio State:', window.StreamViewerConfig.audioStates.get(streamId));
+    console.log('Room Connection:', window.StreamViewerConfig.roomConnections.get(streamId));
+    console.log('WebSocket Connected:', window.StreamCoordinator.isConnected);
+    console.log('LiveKit Available:', typeof LiveKitClient !== 'undefined');
+    
+    const room = window.StreamViewerConfig.roomConnections.get(streamId);
+    if (room) {
+        console.log('Room State:', room.state);
+        console.log('Participants:', room.participants.size);
+        console.log('Connection Quality:', room.engine?.connectionManager?.connectionQuality);
+    }
+    
+    showNotification('info', '🔍 Debug information logged to console (Press F12)');
+};
+
+window.testConnectionSystem = async function() {
+    console.log('🔧 Testing connection system...');
+    
+    const results = {
+        livekitClient: typeof LiveKitClient !== 'undefined',
+        webSocket: window.StreamCoordinator.isConnected,
+        activeStreams: window.StreamViewerConfig.activeStreams.length,
+        streamTokens: Object.keys(window.StreamViewerConfig.streamTokens).length,
+        livekitUrl: !!window.StreamViewerConfig.livekitUrl,
+        notificationPermission: 'Notification' in window ? Notification.permission : 'not supported'
+    };
+    
+    console.log('🔧 Connection test results:', results);
+    
+    const allGood = results.livekitClient && results.webSocket && results.livekitUrl;
+    const message = allGood ? 
+        '✅ All systems operational!' : 
+        '⚠️ Some issues detected - Check console';
+    
+    showNotification(allGood ? 'success' : 'warning', message, 5000);
+    return results;
+};
+
+// Notification System
+function showNotification(type, message, duration = 4000) {
+    const notification = document.createElement('div');
+    const alertClass = type === 'error' ? 'alert-danger' : 
+                      type === 'success' ? 'alert-success' : 
+                      type === 'warning' ? 'alert-warning' : 'alert-info';
+    
+    notification.className = `alert ${alertClass} notification-toast`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 320px;
+        max-width: 400px;
+        font-size: 14px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
+        animation: slideInRight 0.3s ease-out;
+    `;
+    
+    const icon = type === 'error' ? 'error' : 
+                 type === 'success' ? 'check_circle' : 
+                 type === 'warning' ? 'warning' : 'info';
+    
+    notification.innerHTML = `
+        <div class="d-flex align-items-center">
+            <span class="material-symbols-outlined me-2">${icon}</span>
+            <div class="flex-grow-1">${message}</div>
+            <button type="button" class="btn-close btn-close-white ms-2" onclick="this.parentElement.parentElement.remove()"></button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.style.animation = 'slideOutRight 0.3s ease-in';
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, duration);
+}
+
+// Update stream statistics
+async function updateStreamStatistics() {
     try {
         const response = await fetch('/api/stream/status');
+        if (!response.ok) return;
+        
         const data = await response.json();
         
         if (data.active && data.streams) {
+            // Update individual stream viewer counts
             data.streams.forEach(streamData => {
-                const viewerElement = document.querySelector('.stream-viewer-count[data-stream-id="' + streamData.id + '"]');
-                if (viewerElement) {
-                    const count = streamData.viewer_count || 0;
-                    viewerElement.textContent = count === 1 ? '1 viewer' : count + ' viewers';
-                }
+                window.StreamCoordinator.updateViewerCount(streamData.id, streamData.viewer_count || 0);
             });
             
+            // Update totals
             const totalViewers = data.streams.reduce((sum, stream) => sum + (stream.viewer_count || 0), 0);
+            const recordingCount = data.streams.filter(stream => stream.is_recording).length;
             
-            const statusBadgeEl = document.getElementById('statusBadge');
-            const totalViewersEl = document.getElementById('totalViewers');
+            // Update analytics display
+            document.getElementById('totalActiveStreams').textContent = data.count || 0;
+            document.getElementById('combinedViewers').textContent = totalViewers;
+            document.getElementById('recordingCount').textContent = recordingCount;
             
-            if (statusBadgeEl) {
-                statusBadgeEl.className = 'badge bg-success';
-                statusBadgeEl.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 12px;">radio_button_checked</span>' + data.count + ' Live';
-            }
-            if (totalViewersEl) {
-                totalViewersEl.textContent = totalViewers + ' total viewers';
+            // Update status badge
+            const statusBadge = document.getElementById('statusBadge');
+            if (statusBadge && data.count > 0) {
+                statusBadge.className = 'badge bg-success';
+                statusBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 10px;">radio_button_checked</span>${data.count} Live`;
             }
         }
     } catch (error) {
-        console.error('Error updating stream status:', error);
+        console.error('Error updating stream statistics:', error);
     }
 }
 
-function showToast(message, type) {
-    const toast = document.createElement('div');
-    const alertType = type === 'error' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
-    
-    toast.className = 'alert alert-' + alertType + ' position-fixed';
-    toast.style.top = '20px';
-    toast.style.right = '20px';
-    toast.style.zIndex = '9999';
-    toast.style.minWidth = '320px';
-    toast.style.fontSize = '14px';
-    toast.innerHTML = '<div>' + message + '</div>';
-    
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        if (toast.parentNode) {
-            toast.remove();
-        }
-    }, 4000);
-}
-
-// Test LiveKit connection
-window.testLiveKitConnection = async function() {
-    console.log('🔊 Testing LiveKit connection...');
-    
-    const testResults = {
-        livekitUrl: livekitUrl,
-        tokensAvailable: Object.keys(tokensData).length,
-        activeStreams: activeStreams.length,
-        livekitClientLoaded: typeof LiveKitClient !== 'undefined'
-    };
-    
-    console.log('🔊 LiveKit test results:', testResults);
-    
-    const message = testResults.livekitClientLoaded && livekitUrl ? 
-        '✅ LiveKit connection ready!' : 
-        '❌ LiveKit setup issues detected - Check console';
-    
-    showToast(message, testResults.livekitClientLoaded && livekitUrl ? 'success' : 'warning');
-    
-    return testResults;
-};
-
-// Listen for fullscreen changes
-document.addEventListener('fullscreenchange', function() {
+// Handle fullscreen events
+document.addEventListener('fullscreenchange', () => {
     const isFullscreen = !!document.fullscreenElement;
-    activeStreams.forEach(stream => {
+    window.StreamViewerConfig.activeStreams.forEach(stream => {
         updateFullscreenButton(stream.id, isFullscreen);
     });
 });
 
-// Enhanced initialization with LiveKit
+// Page visibility handling
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        // Page became visible, update statistics
+        updateStreamStatistics();
+    }
+});
+
+// Initialize Enhanced LiveKit Viewer
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 Enhanced livestream viewer loading with LiveKit...');
+    console.log('📱 Enhanced LiveKit Viewer Loading...');
     
-    // Check LiveKit client availability
+    // Check LiveKit availability
     if (typeof LiveKitClient === 'undefined') {
         console.error('❌ LiveKit client not loaded');
-        showToast('❌ LiveKit client not available', 'error');
+        showNotification('error', 'LiveKit client failed to load. Please refresh the page.');
         return;
     }
     
     console.log('✅ LiveKit client loaded successfully');
+    console.log(`📊 Found ${window.StreamViewerConfig.activeStreams.length} active streams`);
     
-    // Initialize WebSocket manager
-    window.WebSocketManager.init();
+    // Initialize stream coordinator
+    window.StreamCoordinator.init();
     
-    // Update stream stats
-    setInterval(updateAllStreamStatus, 5000);
-    updateAllStreamStatus();
+    // Start periodic updates
+    setInterval(updateStreamStatistics, 10000); // Every 10 seconds
+    updateStreamStatistics();
     
-    console.log('✅ Enhanced livestream viewer loaded successfully with LiveKit');
-    console.log('🎵 Real-time audio and video streaming via LiveKit');
-    console.log('🔌 WebSocket communication for coordination');
+    // Auto-update stream durations
+    setInterval(() => {
+        window.StreamViewerConfig.activeStreams.forEach(stream => {
+            const state = window.StreamViewerConfig.streamStates.get(stream.id);
+            if (state && state.joined) {
+                // Duration updates are handled per-stream
+            }
+        });
+    }, 30000); // Every 30 seconds
+    
+    console.log('✅ Enhanced LiveKit Viewer loaded successfully');
+    console.log('🎵 Professional streaming with real-time audio/video');
+    console.log('🔗 Real-time coordination via WebSocket');
+    
+    // Show ready notification
+    setTimeout(() => {
+        showNotification('success', '🚀 Stream viewer ready! Click "Join Stream" to connect.', 3000);
+    }, 1000);
 });
 
-console.log('💡 Available functions: joinStream(), testLiveKitConnection(), debugStreamConnection()');
-console.log('🔊 LiveKit streaming system ready!');
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    console.log('🧹 Cleaning up connections...');
+    
+    window.StreamViewerConfig.roomConnections.forEach((room, streamId) => {
+        try {
+            room.disconnect();
+        } catch (error) {
+            console.error('Error disconnecting room:', streamId, error);
+        }
+    });
+    
+    if (window.StreamCoordinator.heartbeatInterval) {
+        clearInterval(window.StreamCoordinator.heartbeatInterval);
+    }
+});
+
+console.log('💡 Available functions: joinStream(), leaveStream(), toggleFullscreen(), shareStream()');
+console.log('🔊 Enhanced LiveKit streaming system ready!');
 </script>
 
 <style>
+/* Enhanced Professional Streaming Interface Styles */
+
+/* Stream Cards */
 .stream-card {
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
 }
 
 .stream-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.2);
 }
 
+/* Video Container */
 .stream-video-container {
     min-height: 300px;
-    border-radius: 12px;
+    border-radius: 8px;
     overflow: hidden;
     cursor: pointer;
+    position: relative;
+    background: linear-gradient(135deg, #1a1a1a, #000);
 }
 
+.stream-video-container:hover .stream-controls {
+    opacity: 1;
+}
+
+.stream-state-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 5;
+}
+
+.livekit-video-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* Loading Animations */
+.loading-animation {
+    position: relative;
+    display: inline-block;
+}
+
+.pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    border: 3px solid;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+    opacity: 0.6;
+}
+
+.pulse-icon {
+    font-size: 2.5rem;
+    animation: pulse 2s infinite;
+    opacity: 0.9;
+}
+
+.connecting-animation {
+    position: relative;
+    display: inline-block;
+}
+
+.connecting-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    border: 2px solid #007bff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.connecting-icon {
+    font-size: 2rem;
+    color: #007bff;
+}
+
+/* Status Badges */
+.live-pulse-badge {
+    background: #dc3545;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+.badge-connection {
+    backdrop-filter: blur(4px);
+}
+
+.live-badge {
+    animation: pulse 2s infinite;
+}
+
+.recording-indicator {
+    animation: pulse 1.5s infinite;
+}
+
+/* Audio Visualizer */
+.audio-visualizer {
+    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 20px;
+    padding: 8px 12px;
+}
+
+.audio-indicator {
+    display: flex;
+    align-items: center;
+    color: white;
+    font-size: 14px;
+}
+
+.audio-bars {
+    display: flex;
+    align-items: end;
+    gap: 2px;
+    width: 40px;
+    height: 16px;
+}
+
+.audio-bar {
+    width: 4px;
+    min-height: 2px;
+    height: 20%;
+    background: #6b7280;
+    border-radius: 2px;
+    transition: all 0.1s ease;
+}
+
+/* Stream Controls */
+.stream-controls {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.stream-controls .btn {
+    backdrop-filter: blur(4px);
+}
+
+/* No Streams State */
+.no-streams-card {
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(30, 41, 59, 0.6));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.no-streams-animation {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 2rem;
+}
+
+.main-icon {
+    font-size: 5rem;
+    opacity: 0.6;
+    animation: float 3s ease-in-out infinite;
+}
+
+.floating-icons {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.floating-icon {
+    position: absolute;
+    font-size: 1.5rem;
+    opacity: 0.4;
+    animation: floatIcon 4s ease-in-out infinite;
+}
+
+.floating-icon:nth-child(1) {
+    top: -10px;
+    left: -10px;
+    animation-delay: 0s;
+}
+
+.floating-icon:nth-child(2) {
+    top: -10px;
+    right: -10px;
+    animation-delay: 1.5s;
+}
+
+.floating-icon:nth-child(3) {
+    bottom: -10px;
+    left: 50%;
+    animation-delay: 3s;
+}
+
+/* Statistics */
+.stat-item {
+    transition: transform 0.2s ease;
+}
+
+.stat-item:hover {
+    transform: scale(1.05);
+}
+
+.connection-quality {
+    color: #10B981;
+}
+
+/* Dropdown Menus */
+.dropdown-menu {
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(71, 85, 105, 0.3);
+    border-radius: 8px;
+}
+
+.dropdown-item {
+    color: #e5e7eb;
+    transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+    background: rgba(59, 130, 246, 0.8);
+    color: white;
+}
+
+/* Notifications */
+.notification-toast {
+    animation: slideInRight 0.3s ease-out;
+}
+
+/* Progress Bar */
+.progress {
+    background: rgba(255, 255, 255, 0.1);
+    height: 4px;
+    margin: 0 auto;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #007bff, #0056b3);
+}
+
+/* Animations */
+@keyframes pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+}
+
+@keyframes floatIcon {
+    0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.4; }
+    50% { transform: translateY(-15px) rotate(180deg); opacity: 0.7; }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(300px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(300px);
+    }
+}
+
+/* Fullscreen Styles */
 .stream-video-container:fullscreen {
     background: #000;
     display: flex;
@@ -937,138 +1770,114 @@ console.log('🔊 LiveKit streaming system ready!');
     justify-content: center;
 }
 
-.spinner-border {
-    width: 2rem;
-    height: 2rem;
-}
-
-.dropdown-menu {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-}
-
-.dropdown-item {
-    color: var(--text-color);
-}
-
-.dropdown-item:hover {
-    background: var(--primary-color);
-    color: white;
-}
-
-/* Enhanced audio visualization */
-.audio-bars {
-    display: flex;
-    align-items: end;
-    gap: 2px;
-    width: 40px;
-    height: 20px;
-}
-
-.audio-bar {
-    width: 4px;
-    min-height: 4px;
-    height: 10%;
-    background-color: #6b7280;
-    border-radius: 2px;
-    transition: height 0.1s ease, background-color 0.1s ease;
-}
-
-.audio-display {
-    backdrop-filter: blur(4px);
-    transition: transform 0.1s ease;
-}
-
-/* LiveKit video elements */
-#livekitContainer-1, #livekitContainer-2 {
-    background-color: #1a1a1a;
-    border-radius: 4px;
-}
-
-#livekitContainer-1 video, #livekitContainer-2 video {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-
-/* Status badges */
-.badge {
-    font-size: 11px;
-}
-
-/* Fullscreen button */
-.stream-video-container .position-absolute.btn {
-    opacity: 0.7;
-    transition: opacity 0.3s ease;
-}
-
-.stream-video-container:hover .position-absolute.btn {
-    opacity: 1;
-}
-
-.connection-indicator {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    z-index: 1001;
-}
-
-.connection-indicator.good { background: rgba(16, 185, 129, 0.8); }
-.connection-indicator.poor { background: rgba(239, 68, 68, 0.8); }
-.connection-indicator.fair { background: rgba(245, 158, 11, 0.8); }
-
-/* Mobile optimizations */
-@media (max-width: 768px) {
-    .stream-video-container {
-        min-height: 200px;
-    }
-    
-    .col-lg-6 {
-        margin-bottom: 1rem;
-    }
-    
-    .audio-bars {
-        width: 30px;
-        height: 16px;
-    }
-    
-    .audio-bar {
-        width: 3px;
-    }
-}
-
-/* Fullscreen styles */
 .stream-video-container:fullscreen video {
     width: 100vw;
     height: 100vh;
     object-fit: contain;
 }
 
-/* Loading and status animations */
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
+.stream-video-container:fullscreen .stream-controls {
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
 
-.badge.bg-success {
-    animation: pulse 2s infinite;
+.stream-video-container:fullscreen:hover .stream-controls {
+    opacity: 1;
 }
 
-/* Enhanced audio visualization animations */
-@keyframes audioBarPulse {
-    0% { background-color: #6b7280; }
-    50% { background-color: #10B981; }
-    100% { background-color: #6b7280; }
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .stream-video-container {
+        min-height: 200px;
+    }
+    
+    .stream-card {
+        margin-bottom: 1rem;
+    }
+    
+    .audio-bars {
+        width: 30px;
+        height: 14px;
+    }
+    
+    .audio-bar {
+        width: 3px;
+    }
+    
+    .loading-content h5 {
+        font-size: 1.1rem;
+    }
+    
+    .join-stream-btn {
+        font-size: 0.9rem;
+        padding: 8px 16px;
+    }
+    
+    .stream-status-indicator {
+        flex-direction: column;
+        align-items: flex-end;
+    }
+    
+    .stat-item h4 {
+        font-size: 1.5rem;
+    }
 }
 
-.audio-bar.active {
-    animation: audioBarPulse 0.5s ease-in-out;
+/* Dark Mode Optimizations */
+@media (prefers-color-scheme: dark) {
+    .card {
+        background: rgba(30, 41, 59, 0.8);
+        border-color: rgba(71, 85, 105, 0.3);
+    }
+    
+    .btn-outline-secondary {
+        border-color: rgba(107, 114, 128, 0.5);
+        color: #9ca3af;
+    }
+    
+    .btn-outline-secondary:hover {
+        background: rgba(107, 114, 128, 0.2);
+        border-color: rgba(107, 114, 128, 0.8);
+    }
+    
+    .table-dark {
+        background: rgba(0, 0, 0, 0.4);
+    }
+}
+
+/* High DPI Display Support */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    .material-symbols-outlined {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .pulse-ring,
+    .pulse-icon,
+    .live-pulse-badge,
+    .live-badge,
+    .recording-indicator {
+        animation: none;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .stream-video-container,
+    .dropdown,
+    .stream-controls,
+    .notification-toast {
+        display: none !important;
+    }
 }
 </style>
 {% endblock %}
