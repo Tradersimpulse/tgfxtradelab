@@ -30,10 +30,15 @@ import pytz
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
 
-# LiveKit imports - NEW
+# LiveKit imports - UPDATED for v1.0.12
 from livekit import api
+from livekit.api import LiveKitAPI, CreateRoomRequest, DeleteRoomRequest
+from livekit.api import StartRecordingRequest, StopRecordingRequest
+from livekit.api import RecordingInput, RecordingOutput, S3Upload
 import jwt
 
+# For token generation
+from livekit import AccessToken, VideoGrants
 # FIXED: Better error handling for database connections
 import logging
 import signal
@@ -615,11 +620,12 @@ def init_livekit_api():
         if not all([livekit_api_key, livekit_api_secret, livekit_url]):
             return None
             
-        return api.LiveKitAPI(livekit_url, livekit_api_key, livekit_api_secret)
+        return LiveKitAPI(livekit_url, livekit_api_key, livekit_api_secret)
     except Exception as e:
         print(f"Error initializing LiveKit API: {e}")
         return None
 
+# Replace the existing create_livekit_room function:
 def create_livekit_room(room_name, streamer_name):
     """Create a LiveKit room for streaming"""
     try:
@@ -628,7 +634,7 @@ def create_livekit_room(room_name, streamer_name):
             return None
         
         # Create room options
-        room_opts = api.CreateRoomRequest(
+        room_opts = CreateRoomRequest(
             name=room_name,
             empty_timeout=300,  # 5 minutes
             max_participants=100,
@@ -643,6 +649,7 @@ def create_livekit_room(room_name, streamer_name):
     except Exception as e:
         print(f"Error creating LiveKit room: {e}")
         return None
+
 
 def generate_livekit_token(room_name, participant_identity, participant_name, is_publisher=False):
     """Generate LiveKit access token for participant"""
@@ -685,6 +692,7 @@ def generate_livekit_token(room_name, participant_identity, participant_name, is
         print(f"Error generating LiveKit token: {e}")
         return None
 
+d# Replace the existing delete_livekit_room function:
 def delete_livekit_room(room_name):
     """Delete a LiveKit room"""
     try:
@@ -692,7 +700,7 @@ def delete_livekit_room(room_name):
         if not lk_api:
             return False
         
-        lk_api.room.delete_room(api.DeleteRoomRequest(room=room_name))
+        lk_api.room.delete_room(DeleteRoomRequest(room=room_name))
         return True
     except Exception as e:
         print(f"Error deleting LiveKit room: {e}")
