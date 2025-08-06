@@ -30,47 +30,38 @@ import pytz
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
 
+# MINIMAL LiveKit imports that should work
 try:
-    # Core LiveKit functionality - these should definitely exist
     from livekit.api import LiveKitAPI
-    from livekit import AccessToken, VideoGrants
-    print("✓ Core LiveKit imports successful")
-    
-    # Try to import room management (most likely to exist)
-    try:
-        from livekit.api import CreateRoomRequest, DeleteRoomRequest
-        print("✓ Room management imports successful")
-    except ImportError as e:
-        print(f"⚠ Room management import warning: {e}")
-        # We'll handle this with fallbacks
-        CreateRoomRequest = None
-        DeleteRoomRequest = None
-    
-    # Try to import recording functionality (might not exist or be different)
-    try:
-        from livekit.api import StartRecordingRequest, StopRecordingRequest
-        from livekit.api import RecordingInput, RecordingOutput, S3Upload
-        RECORDING_AVAILABLE = True
-        print("✓ Recording imports successful")
-    except ImportError as e:
-        print(f"⚠ Recording not available in this LiveKit version: {e}")
-        StartRecordingRequest = None
-        StopRecordingRequest = None
-        RecordingInput = None
-        RecordingOutput = None
-        S3Upload = None
-        RECORDING_AVAILABLE = False
-        
+    print("✓ LiveKit API available")
+    LIVEKIT_AVAILABLE = True
 except ImportError as e:
-    print(f"❌ LiveKit import error: {e}")
-    print("⚠ LiveKit functionality will be disabled")
+    print(f"⚠ LiveKit API not available: {e}")
     LiveKitAPI = None
-    AccessToken = None
-    VideoGrants = None
-    RECORDING_AVAILABLE = False
+    LIVEKIT_AVAILABLE = False
+
+# Try alternative import locations for AccessToken
+try:
+    from livekit import AccessToken, VideoGrants
+    print("✓ AccessToken from livekit module")
+    TOKEN_AVAILABLE = True
+except ImportError:
+    try:
+        from livekit.api import AccessToken, VideoGrants
+        print("✓ AccessToken from livekit.api module")
+        TOKEN_AVAILABLE = True
+    except ImportError:
+        try:
+            from livekit.auth import AccessToken, VideoGrants
+            print("✓ AccessToken from livekit.auth module")
+            TOKEN_AVAILABLE = True
+        except ImportError as e:
+            print(f"⚠ AccessToken not available: {e}")
+            AccessToken = None
+            VideoGrants = None
+            TOKEN_AVAILABLE = False
 
 import jwt
-
 # FIXED: Better error handling for database connections
 import logging
 import signal
