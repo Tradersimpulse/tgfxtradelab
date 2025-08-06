@@ -789,7 +789,6 @@ def extract_filter(dictionary, key):
         return None
 
 
-# FIXED: Enhanced WebSocket handlers with better error handling
 if socketio:
     # Store active connections and stream rooms
     active_connections = {}
@@ -797,34 +796,412 @@ if socketio:
 
     @socketio.on('connect')
     def handle_connect():
-        """Handle client connection with error handling"""
+        """Handle client connection with enhanced error handling and debugging"""
         try:
             client_id = request.sid
             user_id = None
             
-            # Get user ID if authenticated
+            print(f"🔌 WebSocket connect attempt - Client ID: {client_id}")
+            
+            # Get user ID if authenticated with more robust checking
             if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
                 user_id = current_user.id
+                is_admin = getattr(current_user, 'is_admin', False)
+                can_stream = getattr(current_user, 'can_stream', False)
+                
                 active_connections[client_id] = {
                     'user_id': user_id,
                     'username': current_user.username,
-                    'is_admin': getattr(current_user, 'is_admin', False),
+                    'is_admin': is_admin,
+                    'can_stream': can_stream,
                     'connected_at': time.time()
                 }
+                
+                print(f"✅ Authenticated user connected: {current_user.username} (Admin: {is_admin}, Can Stream: {can_stream})")
             else:
                 active_connections[client_id] = {
                     'user_id': None,
                     'username': 'Anonymous',
                     'is_admin': False,
+                    'can_stream': False,
                     'connected_at': time.time()
                 }
+                print(f"👤 Anonymous user connected: {client_id}")
             
-            print(f"🔌 Client connected: {client_id} (User: {user_id})")
-            emit('connection_status', {'status': 'connected', 'client_id': client_id})
+            emit('connection_status', {
+                'status': 'connected', 
+                'client_id': client_id,
+                'user_info': active_connections[client_id]
+            })
             
         except Exception as e:
             print(f"❌ Error in connect handler: {e}")
             emit('error', {'message': 'Connection error'})
+
+    @socketio.on('join_stream')
+    def handle_join_stream(data):
+        """Handle user joining a stream with enhanced verification"""
+        try:
+            client_id = request.sid
+            stream_id = data.get('stream_id')
+            
+            print(f"🎬 Join stream request - Client: {client_id}, Stream: {stream_id}")
+            
+            if not stream_id:
+                emit('error', {'message': 'Stream ID required'})
+                return
+
+            # Get user info from active connections
+            user_info = active_connections.get(client_id, {})
+            print(f"📊 User info for {client_id}: {user_info}")
+            
+            # Verify stream exists and is active
+            stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
+            if not stream:
+                emit('error', {'message': 'Stream not found or inactive'})
+                return
+
+            room_id = f"stream_{stream_id}"
+            
+            # Initialize room if it doesn't exist
+            if room_id not in stream_rooms:
+                stream_rooms[room_id] = {
+                    'stream_id': stream_id,
+                    'admin_client': None,
+                    'viewers': [],
+                    'created_at': time.time()
+                }
+
+            # Join the room
+            join_room(room_id)
+            
+            # Enhanced admin check - check multiple conditions
+            is_authenticated = (
+                hasattr(current_user, 'is_authenticated') and 
+                current_user.is_authenticated
+            )
+            
+            is_stream_owner = (
+                is_authenticated and 
+                stream.created_by == current_user.id
+            )
+            
+            is_admin_user = user_info.get('is_admin', False)
+            can_stream_user = user_info.get('can_stream', False)
+            
+            # User is stream admin if they own the stream OR are admin with streaming rights
+            is_stream_admin = is_stream_owner or (is_admin_user and can_stream_user)
+            
+            print(f"🔐 Admin check for {client_id}:")
+            print(f"  - Authenticated: {is_authenticated}")
+            print(f"  - Stream Owner: {is_stream_owner}")
+            print(f"  - Admin User: {is_admin_user}")
+            print(f"  - Can Stream: {can_stream_user}")
+            print(f"  - Final Admin Status: {is_stream_admin}")
+            
+            if is_stream_admin:
+                stream_rooms[room_id]['admin_client'] = client_id
+                emit('admin_joined', {'stream_id': stream_id}, room=room_id)
+                print(f"🎬 Admin joined stream room: {room_id}")
+                
+                # Send admin-specific data
+                emit('admin_status', {
+                    'is_admin': True,
+                    'can_broadcast': True,
+                    'stream_id': stream_id
+                })
+            else:
+                if client_id not in stream_rooms[room_id]['viewers']:
+                    stream_rooms[room_id]['viewers'].append(client_id)
+                
+                emit('viewer_joined', {
+                    'client_id': client_id,
+                    'username': user_info.get('username', 'Anonymous'),
+                    'viewer_count': len(stream_rooms[room_id]['viewers'])
+                }, room=room_id)
+                print(f"👥 Viewer joined stream room: {room_id}")
+                
+                # Send viewer-specific data
+                emit('viewer_status', {
+                    'is_admin': False,
+                    'can_broadcast': False,
+                    'stream_id': stream_id
+                })
+
+            # Update database viewer count
+            try:
+                stream.viewer_count = len(stream_rooms[room_id]['viewers'])
+                db.session.commit()
+            except Exception as e:
+                print(f"Error updating viewer count: {e}")
+                db.session.rollback()
+
+            # Send current stream status
+            emit('stream_status', {
+                'stream_id': stream_id,
+                'is_active': stream.is_active,
+                'title': stream.title,
+                'streamer_name': stream.streamer_name,
+                'viewer_count': len(stream_rooms[room_id]['viewers']),
+                'is_admin': is_stream_admin
+            })
+            
+        except Exception as e:
+            print(f"❌ Error in join_stream handler: {e}")
+            import traceback
+            traceback.print_exc()
+            emit('error', {'message': 'Failed to join stream'})
+
+    @socketio.on('audio_chunk')
+    def handle_audio_chunk(data):
+        """Handle audio chunks from admin with enhanced verification"""
+        try:
+            client_id = request.sid
+            stream_id = data.get('stream_id')
+            audio_data = data.get('audio_data')
+            
+            print(f"🎵 Audio chunk received from client {client_id} for stream {stream_id}")
+            
+            if not stream_id or not audio_data:
+                print(f"❌ Missing data - Stream ID: {bool(stream_id)}, Audio Data: {bool(audio_data)}")
+                emit('error', {'message': 'Stream ID and audio data required'})
+                return
+
+            # Get user info and verify admin status
+            user_info = active_connections.get(client_id, {})
+            print(f"👤 User info for audio chunk: {user_info}")
+            
+            # Enhanced admin verification
+            is_authenticated = (
+                hasattr(current_user, 'is_authenticated') and 
+                current_user.is_authenticated
+            )
+            
+            # Check if user is admin
+            is_admin_user = user_info.get('is_admin', False)
+            can_stream_user = user_info.get('can_stream', False)
+            
+            # Check if user owns the stream
+            stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
+            is_stream_owner = (
+                stream and 
+                is_authenticated and 
+                stream.created_by == current_user.id
+            )
+            
+            # User can broadcast if they're admin with streaming rights OR own the stream
+            can_broadcast = is_stream_owner or (is_admin_user and can_stream_user)
+            
+            print(f"🔐 Audio broadcast permission check:")
+            print(f"  - Authenticated: {is_authenticated}")
+            print(f"  - Admin: {is_admin_user}")
+            print(f"  - Can Stream: {can_stream_user}")
+            print(f"  - Stream Owner: {is_stream_owner}")
+            print(f"  - Can Broadcast: {can_broadcast}")
+            
+            if not can_broadcast:
+                print(f"❌ Audio broadcast denied for client {client_id}")
+                emit('error', {'message': 'Not authorized to broadcast audio'})
+                return
+
+            room_id = f"stream_{stream_id}"
+            
+            # Additional check: verify client is the admin for this room
+            if (room_id in stream_rooms and 
+                stream_rooms[room_id]['admin_client'] == client_id):
+                
+                # Limit audio data size for WebSocket transmission
+                if len(audio_data) > 1000000:  # 1MB limit
+                    print(f"⚠️ Audio chunk too large: {len(audio_data)} bytes")
+                    emit('error', {'message': 'Audio chunk too large'})
+                    return
+                
+                print(f"✅ Broadcasting audio chunk to room {room_id}")
+                # Broadcast audio to all viewers
+                emit('audio_chunk', {
+                    'audio_data': audio_data,
+                    'timestamp': time.time(),
+                    'stream_id': stream_id
+                }, room=room_id, include_self=False)
+                
+            else:
+                print(f"❌ Room verification failed for client {client_id}")
+                print(f"  - Room exists: {room_id in stream_rooms}")
+                if room_id in stream_rooms:
+                    print(f"  - Admin client: {stream_rooms[room_id]['admin_client']}")
+                    print(f"  - Current client: {client_id}")
+                emit('error', {'message': 'Not authorized to broadcast in this room'})
+                
+        except Exception as e:
+            print(f"❌ Error in audio_chunk handler: {e}")
+            import traceback
+            traceback.print_exc()
+            emit('error', {'message': 'Audio chunk processing error'})
+
+    @socketio.on('screen_frame')
+    def handle_screen_frame(data):
+        """Handle screen sharing frames from admin with enhanced verification"""
+        try:
+            client_id = request.sid
+            stream_id = data.get('stream_id')
+            frame_data = data.get('frame_data')
+            
+            if not stream_id or not frame_data:
+                emit('error', {'message': 'Stream ID and frame data required'})
+                return
+
+            # Same enhanced verification as audio
+            user_info = active_connections.get(client_id, {})
+            
+            is_authenticated = (
+                hasattr(current_user, 'is_authenticated') and 
+                current_user.is_authenticated
+            )
+            
+            is_admin_user = user_info.get('is_admin', False)
+            can_stream_user = user_info.get('can_stream', False)
+            
+            stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
+            is_stream_owner = (
+                stream and 
+                is_authenticated and 
+                stream.created_by == current_user.id
+            )
+            
+            can_broadcast = is_stream_owner or (is_admin_user and can_stream_user)
+            
+            if not can_broadcast:
+                emit('error', {'message': 'Not authorized to broadcast screen'})
+                return
+
+            room_id = f"stream_{stream_id}"
+            
+            if (room_id in stream_rooms and 
+                stream_rooms[room_id]['admin_client'] == client_id):
+                
+                # Limit frame data size
+                if len(frame_data) > 2000000:  # 2MB limit
+                    print(f"⚠️ Frame too large: {len(frame_data)} bytes")
+                    return
+                
+                # Broadcast frame to all viewers
+                emit('screen_frame', {
+                    'frame_data': frame_data,
+                    'timestamp': time.time(),
+                    'stream_id': stream_id
+                }, room=room_id, include_self=False)
+            else:
+                emit('error', {'message': 'Not authorized to broadcast frames'})
+                
+        except Exception as e:
+            print(f"❌ Error in screen_frame handler: {e}")
+            emit('error', {'message': 'Screen frame error'})
+
+    @socketio.on('stream_control')
+    def handle_stream_control(data):
+        """Handle stream control commands (audio/screen start/stop)"""
+        try:
+            client_id = request.sid
+            stream_id = data.get('stream_id')
+            control_type = data.get('type')
+            control_data = data.get('data', {})
+            
+            print(f"🎛️ Stream control: {control_type} from client {client_id} for stream {stream_id}")
+            
+            # Verify admin status same as audio/screen handlers
+            user_info = active_connections.get(client_id, {})
+            
+            is_authenticated = (
+                hasattr(current_user, 'is_authenticated') and 
+                current_user.is_authenticated
+            )
+            
+            is_admin_user = user_info.get('is_admin', False)
+            can_stream_user = user_info.get('can_stream', False)
+            
+            stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
+            is_stream_owner = (
+                stream and 
+                is_authenticated and 
+                stream.created_by == current_user.id
+            )
+            
+            can_control = is_stream_owner or (is_admin_user and can_stream_user)
+            
+            if not can_control:
+                emit('error', {'message': 'Not authorized to control stream'})
+                return
+
+            room_id = f"stream_{stream_id}"
+            
+            if room_id in stream_rooms:
+                # Broadcast control update to all viewers
+                emit('stream_update', {
+                    'type': control_type,
+                    'data': control_data,
+                    'timestamp': time.time(),
+                    'stream_id': stream_id
+                }, room=room_id, include_self=False)
+                
+                print(f"✅ Stream control broadcasted: {control_type}")
+            else:
+                emit('error', {'message': 'Stream room not found'})
+                
+        except Exception as e:
+            print(f"❌ Error in stream_control handler: {e}")
+            emit('error', {'message': 'Stream control error'})
+
+    @socketio.on('status_update')
+    def handle_status_update(data):
+        """Handle status updates from admin with enhanced verification"""
+        try:
+            client_id = request.sid
+            stream_id = data.get('stream_id')
+            status = data.get('status', {})
+            
+            # Same verification pattern
+            user_info = active_connections.get(client_id, {})
+            
+            is_authenticated = (
+                hasattr(current_user, 'is_authenticated') and 
+                current_user.is_authenticated
+            )
+            
+            is_admin_user = user_info.get('is_admin', False)
+            can_stream_user = user_info.get('can_stream', False)
+            
+            stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
+            is_stream_owner = (
+                stream and 
+                is_authenticated and 
+                stream.created_by == current_user.id
+            )
+            
+            can_update_status = is_stream_owner or (is_admin_user and can_stream_user)
+            
+            if not can_update_status:
+                emit('error', {'message': 'Not authorized to update status'})
+                return
+
+            room_id = f"stream_{stream_id}"
+            
+            if (room_id in stream_rooms and 
+                stream_rooms[room_id]['admin_client'] == client_id):
+                
+                # Broadcast status to all viewers
+                emit('status_update', {
+                    'status': status,
+                    'timestamp': time.time(),
+                    'stream_id': stream_id
+                }, room=room_id, include_self=False)
+                
+                print(f"📊 Status update for stream {stream_id}: {status}")
+            else:
+                emit('error', {'message': 'Not authorized for this stream'})
+                
+        except Exception as e:
+            print(f"❌ Error in status_update handler: {e}")
+            emit('error', {'message': 'Status update error'})
 
     @socketio.on('disconnect')
     def handle_disconnect():
@@ -834,7 +1211,7 @@ if socketio:
             
             if client_id in active_connections:
                 user_info = active_connections[client_id]
-                print(f"🔌 Client disconnected: {client_id} (User: {user_info.get('user_id')})")
+                print(f"🔌 Client disconnected: {client_id} (User: {user_info.get('username')})")
                 del active_connections[client_id]
             
             # Clean up stream rooms
@@ -849,274 +1226,45 @@ if socketio:
                 if stream_rooms[room_id]['admin_client'] == client_id:
                     stream_rooms[room_id]['admin_client'] = None
                     emit('admin_left', {'stream_id': stream_rooms[room_id]['stream_id']}, room=room_id)
+                    print(f"🎬 Admin left stream room: {room_id}")
                     
         except Exception as e:
             print(f"❌ Error in disconnect handler: {e}")
 
-    @socketio.on('join_stream')
-    def handle_join_stream(data):
-        """Handle user joining a stream"""
+    # Utility function for debugging
+    @socketio.on('debug_info')
+    def handle_debug_info(data):
+        """Debug endpoint to check user status"""
         try:
             client_id = request.sid
-            stream_id = data.get('stream_id')
-            
-            if not stream_id:
-                emit('error', {'message': 'Stream ID required'})
-                return
-            
-            # Verify stream exists and is active
-            stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
-            if not stream:
-                emit('error', {'message': 'Stream not found or inactive'})
-                return
-            
-            room_id = f"stream_{stream_id}"
-            
-            # Initialize room if it doesn't exist
-            if room_id not in stream_rooms:
-                stream_rooms[room_id] = {
-                    'stream_id': stream_id,
-                    'admin_client': None,
-                    'viewers': [],
-                    'created_at': time.time()
-                }
-            
-            # Join the room
-            join_room(room_id)
-            
-            # Add to viewers or set as admin
             user_info = active_connections.get(client_id, {})
             
-            # Check if user is admin and owns this stream
-            is_stream_admin = (
-                user_info.get('is_admin') and 
+            is_authenticated = (
                 hasattr(current_user, 'is_authenticated') and 
-                current_user.is_authenticated and 
-                stream.created_by == current_user.id
+                current_user.is_authenticated
             )
             
-            if is_stream_admin:
-                stream_rooms[room_id]['admin_client'] = client_id
-                emit('admin_joined', {'stream_id': stream_id}, room=room_id)
-                print(f"🎬 Admin joined stream room: {room_id}")
-            else:
-                if client_id not in stream_rooms[room_id]['viewers']:
-                    stream_rooms[room_id]['viewers'].append(client_id)
-                
-                emit('viewer_joined', {
-                    'client_id': client_id,
-                    'username': user_info.get('username', 'Anonymous'),
-                    'viewer_count': len(stream_rooms[room_id]['viewers'])
-                }, room=room_id)
-                print(f"👥 Viewer joined stream room: {room_id}")
+            debug_data = {
+                'client_id': client_id,
+                'user_info': user_info,
+                'current_user_authenticated': is_authenticated,
+                'current_user_id': getattr(current_user, 'id', None),
+                'current_user_admin': getattr(current_user, 'is_admin', None),
+                'current_user_can_stream': getattr(current_user, 'can_stream', None),
+                'active_connections_count': len(active_connections),
+                'stream_rooms': {k: {
+                    'stream_id': v['stream_id'],
+                    'admin_client': v['admin_client'],
+                    'viewer_count': len(v['viewers'])
+                } for k, v in stream_rooms.items()}
+            }
             
-            # Update database viewer count
-            try:
-                stream.viewer_count = len(stream_rooms[room_id]['viewers'])
-                db.session.commit()
-            except Exception as e:
-                print(f"Error updating viewer count: {e}")
-                db.session.rollback()
-            
-            # Send current stream status to new client
-            emit('stream_status', {
-                'stream_id': stream_id,
-                'is_active': stream.is_active,
-                'title': stream.title,
-                'streamer_name': stream.streamer_name,
-                'viewer_count': len(stream_rooms[room_id]['viewers'])
-            })
+            print(f"🔍 Debug info for {client_id}: {debug_data}")
+            emit('debug_response', debug_data)
             
         except Exception as e:
-            print(f"❌ Error in join_stream handler: {e}")
-            emit('error', {'message': 'Failed to join stream'})
-
-    @socketio.on('screen_frame')
-    def handle_screen_frame(data):
-        """Handle screen sharing frames from admin"""
-        try:
-            client_id = request.sid
-            user_info = active_connections.get(client_id, {})
-            
-            if not user_info.get('is_admin'):
-                emit('error', {'message': 'Admin access required'})
-                return
-            
-            stream_id = data.get('stream_id')
-            frame_data = data.get('frame_data')
-            
-            if not stream_id or not frame_data:
-                emit('error', {'message': 'Stream ID and frame data required'})
-                return
-            
-            room_id = f"stream_{stream_id}"
-            
-            if (room_id in stream_rooms and 
-                stream_rooms[room_id]['admin_client'] == client_id):
-                
-                # Broadcast frame to all viewers (limit frame data size)
-                if len(frame_data) < 2000000:  # 2MB limit for WebSocket
-                    emit('screen_frame', {
-                        'frame_data': frame_data,
-                        'timestamp': time.time()
-                    }, room=room_id, include_self=False)
-                else:
-                    print(f"⚠️ Frame too large for WebSocket: {len(frame_data)} bytes")
-            else:
-                emit('error', {'message': 'Not authorized to broadcast frames'})
-                
-        except Exception as e:
-            print(f"❌ Error in screen_frame handler: {e}")
-            emit('error', {'message': 'Screen frame error'})
-
-    @socketio.on('audio_chunk')
-    def handle_audio_chunk(data):
-        """Handle audio chunks from admin"""
-        try:
-            client_id = request.sid
-            user_info = active_connections.get(client_id, {})
-            
-            if not user_info.get('is_admin'):
-                emit('error', {'message': 'Admin access required'})
-                return
-            
-            stream_id = data.get('stream_id')
-            audio_data = data.get('audio_data')
-            
-            if not stream_id or not audio_data:
-                emit('error', {'message': 'Stream ID and audio data required'})
-                return
-            
-            room_id = f"stream_{stream_id}"
-            
-            if (room_id in stream_rooms and 
-                stream_rooms[room_id]['admin_client'] == client_id):
-                
-                # Broadcast audio to all viewers (limit audio data size)
-                if len(audio_data) < 1000000:  # 1MB limit for audio chunks
-                    emit('audio_chunk', {
-                        'audio_data': audio_data,
-                        'timestamp': time.time()
-                    }, room=room_id, include_self=False)
-                else:
-                    print(f"⚠️ Audio chunk too large: {len(audio_data)} bytes")
-            else:
-                emit('error', {'message': 'Not authorized to broadcast audio'})
-                
-        except Exception as e:
-            print(f"❌ Error in audio_chunk handler: {e}")
-            emit('error', {'message': 'Audio chunk error'})
-
-    @socketio.on('status_update')
-    def handle_status_update(data):
-        """Handle status updates from admin"""
-        client_id = request.sid
-        user_info = active_connections.get(client_id, {})
-        
-        if not user_info.get('is_admin'):
-            emit('error', {'message': 'Admin access required'})
-            return
-        
-        stream_id = data.get('stream_id')
-        status = data.get('status', {})
-        
-        if not stream_id:
-            emit('error', {'message': 'Stream ID required'})
-            return
-        
-        room_id = f"stream_{stream_id}"
-        
-        if (room_id in stream_rooms and 
-            stream_rooms[room_id]['admin_client'] == client_id):
-            
-            # Broadcast status to all viewers
-            emit('status_update', {
-                'status': status,
-                'timestamp': time.time()
-            }, room=room_id, include_self=False)
-            
-            print(f"📊 Status update for stream {stream_id}: {status}")
-
-    @socketio.on('get_stream_info')
-    def handle_get_stream_info(data):
-        """Get current stream information"""
-        stream_id = data.get('stream_id')
-        
-        if not stream_id:
-            emit('error', {'message': 'Stream ID required'})
-            return
-        
-        stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
-        if not stream:
-            emit('error', {'message': 'Stream not found'})
-            return
-        
-        room_id = f"stream_{stream_id}"
-        viewer_count = len(stream_rooms.get(room_id, {}).get('viewers', []))
-        
-        emit('stream_info', {
-            'stream_id': stream_id,
-            'title': stream.title,
-            'description': stream.description,
-            'streamer_name': stream.streamer_name,
-            'stream_type': stream.stream_type,
-            'viewer_count': viewer_count,
-            'is_recording': stream.is_recording,
-            'started_at': stream.started_at.isoformat() if stream.started_at else None
-        })
-
-    # Utility functions for WebSocket management
-    def broadcast_to_stream(stream_id, event, data):
-        """Broadcast message to all clients in a stream"""
-        room_id = f"stream_{stream_id}"
-        socketio.emit(event, data, room=room_id)
-
-    def get_stream_viewer_count(stream_id):
-        """Get current viewer count for a stream"""
-        room_id = f"stream_{stream_id}"
-        return len(stream_rooms.get(room_id, {}).get('viewers', []))
-
-    def cleanup_inactive_streams():
-        """Clean up inactive stream rooms"""
-        current_time = time.time()
-        inactive_rooms = []
-        
-        for room_id, room_data in stream_rooms.items():
-            # Check if stream is still active in database
-            stream_id = room_data['stream_id']
-            try:
-                stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
-                
-                if not stream or (current_time - room_data['created_at']) > 86400:  # 24 hours
-                    inactive_rooms.append(room_id)
-            except Exception as e:
-                print(f"Error checking stream {stream_id}: {e}")
-                inactive_rooms.append(room_id)
-        
-        for room_id in inactive_rooms:
-            if room_id in stream_rooms:
-                del stream_rooms[room_id]
-                print(f"🧹 Cleaned up inactive stream room: {room_id}")
-
-    # Background task for cleanup
-    def background_cleanup():
-        """Background task to clean up inactive streams"""
-        import threading
-        import time
-        
-        def cleanup_worker():
-            while True:
-                try:
-                    with app.app_context():
-                        cleanup_inactive_streams()
-                    time.sleep(3600)  # Every hour
-                except Exception as e:
-                    print(f"Cleanup error: {e}")
-                    time.sleep(3600)
-        
-        cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
-        cleanup_thread.start()
-        print("🧹 Started background cleanup task")
+            print(f"❌ Error in debug handler: {e}")
+            emit('error', {'message': f'Debug error: {str(e)}'})
 
 
 # Routes
