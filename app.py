@@ -30,15 +30,47 @@ import pytz
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
 
-# LiveKit imports - UPDATED for v1.0.12
-from livekit import api
-from livekit.api import LiveKitAPI, CreateRoomRequest, DeleteRoomRequest
-from livekit.api import StartRecordingRequest, StopRecordingRequest
-from livekit.api import RecordingInput, RecordingOutput, S3Upload
+try:
+    # Core LiveKit functionality - these should definitely exist
+    from livekit.api import LiveKitAPI
+    from livekit import AccessToken, VideoGrants
+    print("✓ Core LiveKit imports successful")
+    
+    # Try to import room management (most likely to exist)
+    try:
+        from livekit.api import CreateRoomRequest, DeleteRoomRequest
+        print("✓ Room management imports successful")
+    except ImportError as e:
+        print(f"⚠ Room management import warning: {e}")
+        # We'll handle this with fallbacks
+        CreateRoomRequest = None
+        DeleteRoomRequest = None
+    
+    # Try to import recording functionality (might not exist or be different)
+    try:
+        from livekit.api import StartRecordingRequest, StopRecordingRequest
+        from livekit.api import RecordingInput, RecordingOutput, S3Upload
+        RECORDING_AVAILABLE = True
+        print("✓ Recording imports successful")
+    except ImportError as e:
+        print(f"⚠ Recording not available in this LiveKit version: {e}")
+        StartRecordingRequest = None
+        StopRecordingRequest = None
+        RecordingInput = None
+        RecordingOutput = None
+        S3Upload = None
+        RECORDING_AVAILABLE = False
+        
+except ImportError as e:
+    print(f"❌ LiveKit import error: {e}")
+    print("⚠ LiveKit functionality will be disabled")
+    LiveKitAPI = None
+    AccessToken = None
+    VideoGrants = None
+    RECORDING_AVAILABLE = False
+
 import jwt
 
-# For token generation
-from livekit import AccessToken, VideoGrants
 # FIXED: Better error handling for database connections
 import logging
 import signal
