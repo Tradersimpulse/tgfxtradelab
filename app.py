@@ -2685,45 +2685,6 @@ def api_stop_stream():
         'success': True,
         'message': f'{stream.streamer_name}\'s stream ended'
     })
-
-@app.route('/api/stream/status')
-@login_required
-def api_stream_status():
-    active_streams = Stream.query.filter_by(is_active=True).all()
-    
-    if not active_streams:
-        return jsonify({'active': False, 'streams': []})
-    
-    streams_data = []
-    for stream in active_streams:
-        active_viewers = StreamViewer.query.filter_by(
-            stream_id=stream.id,
-            is_active=True
-        ).count()
-        
-        stream.viewer_count = active_viewers
-        
-        streams_data.append({
-            'id': stream.id,
-            'title': stream.title,
-            'description': stream.description,
-            'streamer_name': stream.streamer_name,
-            'stream_type': stream.stream_type,
-            'viewer_count': stream.viewer_count,
-            'started_at': stream.started_at.isoformat() if stream.started_at else None,
-            'is_recording': stream.is_recording,
-            'created_by': stream.created_by,
-            'stream_color': stream.creator.stream_color if stream.creator else '#10B981',
-            'room_name': stream.room_name
-        })
-    
-    db.session.commit()
-    
-    return jsonify({
-        'active': True,
-        'count': len(active_streams),
-        'streams': streams_data
-    })
     
 @app.route('/api/stream/status')
 @login_required
