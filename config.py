@@ -1,6 +1,6 @@
 """
-Configuration settings for TGFX Trade Lab - MySQL + Heroku Optimized
-FIXED: DNS resolution, database connection, and eventlet compatibility issues
+Configuration settings for TGFX Trade Lab - MySQL + Heroku + LiveKit Optimized
+UPDATED: Added LiveKit streaming configuration and enhanced stability
 """
 
 import os
@@ -107,15 +107,53 @@ class Config:
     CACHE_TYPE = 'simple'
     CACHE_DEFAULT_TIMEOUT = 300
 
-    # AWS Chime SDK Configuration
-    AWS_CHIME_REGION = os.environ.get('AWS_CHIME_REGION', 'us-east-1')
+    # ===== LIVEKIT STREAMING CONFIGURATION =====
     
-    # S3 bucket for stream recordings
-    STREAM_RECORDINGS_BUCKET = os.environ.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+    # LiveKit Core Settings - Required for streaming
+    LIVEKIT_URL = os.environ.get('LIVEKIT_URL')  # e.g., 'wss://your-project.livekit.cloud'
+    LIVEKIT_API_KEY = os.environ.get('LIVEKIT_API_KEY')
+    LIVEKIT_API_SECRET = os.environ.get('LIVEKIT_API_SECRET')
+    
+    # Stream Quality Settings - Optional but recommended
+    STREAM_VIDEO_MAX_BITRATE = int(os.environ.get('STREAM_VIDEO_MAX_BITRATE', 3000000))  # 3 Mbps default
+    STREAM_AUDIO_MAX_BITRATE = int(os.environ.get('STREAM_AUDIO_MAX_BITRATE', 128000))   # 128 kbps default
+    
+    # Stream Management Settings
+    MAX_CONCURRENT_STREAMS = int(os.environ.get('MAX_CONCURRENT_STREAMS', 2))  # Maximum concurrent streams
+    STREAM_TOKEN_EXPIRY_HOURS = int(os.environ.get('STREAM_TOKEN_EXPIRY_HOURS', 4))  # Token expiry time
+    
+    # Stream Recording Settings
+    STREAM_RECORDINGS_ENABLED = os.environ.get('STREAM_RECORDINGS_ENABLED', 'false').lower() == 'true'
+    STREAM_RECORDINGS_BUCKET = os.environ.get('STREAM_RECORDINGS_BUCKET', S3_BUCKET)  # Use main bucket if not specified
     STREAM_RECORDINGS_PREFIX = os.environ.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
     
-    # Chime SDK settings
-    CHIME_MEETING_EXPIRY_MINUTES = int(os.environ.get('CHIME_MEETING_EXPIRY_MINUTES', 240))  # 4 hours default
+    # Stream Notification Settings
+    STREAM_NOTIFICATIONS_ENABLED = os.environ.get('STREAM_NOTIFICATIONS_ENABLED', 'true').lower() == 'true'
+    STREAM_AUTO_NOTIFY_USERS = os.environ.get('STREAM_AUTO_NOTIFY_USERS', 'premium').lower()  # 'all', 'premium', 'none'
+    
+    # WebSocket Configuration for Real-time Features
+    SOCKETIO_ASYNC_MODE = 'gevent'  # Use gevent for better performance
+    SOCKETIO_PING_TIMEOUT = 60
+    SOCKETIO_PING_INTERVAL = 25
+    
+    # Quality Presets for Different Network Conditions
+    STREAM_QUALITY_PRESETS = {
+        'low': {
+            'video_bitrate': 1000000,    # 1 Mbps
+            'audio_bitrate': 64000,      # 64 kbps
+            'resolution': '480p'
+        },
+        'medium': {
+            'video_bitrate': 2000000,    # 2 Mbps
+            'audio_bitrate': 96000,      # 96 kbps
+            'resolution': '720p'
+        },
+        'high': {
+            'video_bitrate': 3000000,    # 3 Mbps
+            'audio_bitrate': 128000,     # 128 kbps
+            'resolution': '1080p'
+        }
+    }
     
     @staticmethod
     def init_app(app):
@@ -129,23 +167,41 @@ class Config:
         else:
             print("❌ Database configuration issue!")
         
-        # Validate required AWS Chime settings
-        required_vars = [
-            'AWS_ACCESS_KEY_ID',
-            'AWS_SECRET_ACCESS_KEY',
-            'AWS_CHIME_REGION'
-        ]
+        # Validate LiveKit Configuration
+        required_livekit_vars = ['LIVEKIT_URL', 'LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET']
+        missing_livekit_vars = []
         
-        missing_vars = []
-        for var in required_vars:
+        for var in required_livekit_vars:
             if not app.config.get(var):
-                missing_vars.append(var)
+                missing_livekit_vars.append(var)
         
-        if missing_vars:
-            print(f"⚠ Warning: Missing AWS Chime configuration: {', '.join(missing_vars)}")
-            print("  Live streaming features may not work properly.")
+        if missing_livekit_vars:
+            print(f"⚠ Warning: Missing LiveKit configuration: {', '.join(missing_livekit_vars)}")
+            print("  Live streaming features will not work properly.")
+            print("  Please set these environment variables:")
+            for var in missing_livekit_vars:
+                print(f"    {var}=your_value_here")
         else:
-            print("✓ AWS Chime SDK configuration loaded")
+            print("✓ LiveKit streaming configuration loaded successfully")
+            
+            # Validate LiveKit URL format
+            livekit_url = app.config.get('LIVEKIT_URL')
+            if livekit_url and not (livekit_url.startswith('ws://') or livekit_url.startswith('wss://')):
+                print(f"⚠ Warning: LIVEKIT_URL should start with ws:// or wss://, got: {livekit_url}")
+        
+        # Display stream configuration
+        max_streams = app.config.get('MAX_CONCURRENT_STREAMS', 2)
+        video_bitrate = app.config.get('STREAM_VIDEO_MAX_BITRATE', 3000000) / 1000000  # Convert to Mbps
+        audio_bitrate = app.config.get('STREAM_AUDIO_MAX_BITRATE', 128000) / 1000  # Convert to kbps
+        
+        print(f"🎬 Stream Settings: Max {max_streams} concurrent, Video {video_bitrate}Mbps, Audio {audio_bitrate}kbps")
+        
+        # Validate S3 Configuration for recordings
+        if app.config.get('STREAM_RECORDINGS_ENABLED'):
+            if not app.config.get('STREAM_RECORDINGS_BUCKET'):
+                print("⚠ Warning: Stream recordings enabled but no S3 bucket configured")
+            else:
+                print(f"📹 Stream recordings enabled → S3://{app.config.get('STREAM_RECORDINGS_BUCKET')}")
 
 class DevelopmentConfig(Config):
     """Development configuration"""
@@ -174,7 +230,13 @@ class DevelopmentConfig(Config):
         }
     }
 
-    AWS_CHIME_REGION = 'us-east-1'
+    # Development LiveKit Settings
+    LIVEKIT_URL = os.environ.get('LIVEKIT_URL', 'ws://localhost:7880')  # Local LiveKit server
+    STREAM_VIDEO_MAX_BITRATE = int(os.environ.get('STREAM_VIDEO_MAX_BITRATE', 2000000))  # Lower for dev
+    STREAM_AUDIO_MAX_BITRATE = int(os.environ.get('STREAM_AUDIO_MAX_BITRATE', 96000))    # Lower for dev
+    
+    # Enable recordings in development
+    STREAM_RECORDINGS_ENABLED = True
 
 class ProductionConfig(Config):
     """Production configuration for Heroku"""
@@ -185,8 +247,14 @@ class ProductionConfig(Config):
     SESSION_COOKIE_SECURE = True
     PREFERRED_URL_SCHEME = 'https'
 
-    # Production Chime settings
-    AWS_CHIME_REGION = os.environ.get('AWS_CHIME_REGION', 'us-east-1')
+    # Production LiveKit Settings
+    LIVEKIT_URL = os.environ.get('LIVEKIT_URL')  # Must be provided in production
+    STREAM_VIDEO_MAX_BITRATE = int(os.environ.get('STREAM_VIDEO_MAX_BITRATE', 3000000))  # 3 Mbps
+    STREAM_AUDIO_MAX_BITRATE = int(os.environ.get('STREAM_AUDIO_MAX_BITRATE', 128000))   # 128 kbps
+    
+    # Production stream settings
+    MAX_CONCURRENT_STREAMS = int(os.environ.get('MAX_CONCURRENT_STREAMS', 2))
+    STREAM_RECORDINGS_ENABLED = os.environ.get('STREAM_RECORDINGS_ENABLED', 'true').lower() == 'true'
     
     # FIXED: Optimized MySQL settings for production with better timeouts
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -211,6 +279,10 @@ class ProductionConfig(Config):
     def init_app(cls, app):
         Config.init_app(app)
         
+        # Validate production requirements
+        if not app.config.get('LIVEKIT_URL'):
+            print("❌ CRITICAL: LIVEKIT_URL not set in production!")
+        
         # Log to stderr in production
         import logging
         from logging import StreamHandler
@@ -234,6 +306,13 @@ class TestingConfig(Config):
     
     # Use simple cache for testing
     CACHE_TYPE = 'simple'
+    
+    # Mock LiveKit settings for testing
+    LIVEKIT_URL = 'ws://mock-livekit:7880'
+    LIVEKIT_API_KEY = 'test-api-key'
+    LIVEKIT_API_SECRET = 'test-secret'
+    MAX_CONCURRENT_STREAMS = 1
+    STREAM_RECORDINGS_ENABLED = False
 
 class HerokuConfig(ProductionConfig):
     """Heroku-specific configuration with enhanced stability"""
@@ -258,6 +337,16 @@ class HerokuConfig(ProductionConfig):
         }
     }
     
+    # Heroku-optimized LiveKit settings
+    SOCKETIO_ASYNC_MODE = 'gevent'  # Better for Heroku
+    SOCKETIO_PING_TIMEOUT = 45      # Shorter for Heroku
+    SOCKETIO_PING_INTERVAL = 20
+    
+    # Heroku dyno limits - conservative settings
+    MAX_CONCURRENT_STREAMS = 2
+    STREAM_VIDEO_MAX_BITRATE = int(os.environ.get('STREAM_VIDEO_MAX_BITRATE', 2500000))  # 2.5 Mbps
+    STREAM_AUDIO_MAX_BITRATE = int(os.environ.get('STREAM_AUDIO_MAX_BITRATE', 96000))    # 96 kbps
+    
     @classmethod
     def init_app(cls, app):
         ProductionConfig.init_app(app)
@@ -278,7 +367,13 @@ class HerokuConfig(ProductionConfig):
         handler.setLevel(logging.INFO)
         app.logger.addHandler(handler)
         app.logger.setLevel(logging.INFO)
-        app.logger.info('TGFX Trade Lab startup on Heroku')
+        app.logger.info('TGFX Trade Lab startup on Heroku with LiveKit streaming')
+        
+        # Heroku-specific validations
+        if not app.config.get('LIVEKIT_URL'):
+            print("❌ CRITICAL: Set LIVEKIT_URL environment variable for streaming")
+        if not app.config.get('LIVEKIT_API_KEY') or not app.config.get('LIVEKIT_API_SECRET'):
+            print("❌ CRITICAL: Set LIVEKIT_API_KEY and LIVEKIT_API_SECRET for streaming")
 
 # Configuration dictionary
 config = {
@@ -296,11 +391,82 @@ def get_config():
     # Auto-detect Heroku environment
     if os.environ.get('DYNO'):
         env = 'heroku'
-        print("🚀 Detected Heroku environment")
+        print("🚀 Detected Heroku environment with LiveKit streaming support")
     elif os.environ.get('DATABASE_URL') and 'mysql' in os.environ.get('DATABASE_URL', ''):
         env = 'production'
-        print("🏭 Detected production environment with MySQL")
+        print("🏭 Detected production environment with MySQL and LiveKit")
     else:
-        print("💻 Using development environment")
+        print("💻 Using development environment with LiveKit")
     
-    return config.get(env, config['default'])
+    config_class = config.get(env, config['default'])
+    
+    # Display LiveKit readiness status
+    livekit_url = os.environ.get('LIVEKIT_URL')
+    livekit_key = os.environ.get('LIVEKIT_API_KEY')
+    livekit_secret = os.environ.get('LIVEKIT_API_SECRET')
+    
+    if all([livekit_url, livekit_key, livekit_secret]):
+        print("✅ LiveKit streaming configuration is complete and ready!")
+    else:
+        print("⚠️ LiveKit streaming requires configuration - see deployment guide")
+    
+    return config_class
+
+def validate_livekit_config():
+    """Validate LiveKit configuration and provide helpful error messages"""
+    errors = []
+    warnings = []
+    
+    # Check required variables
+    if not os.environ.get('LIVEKIT_URL'):
+        errors.append("LIVEKIT_URL is required (e.g., 'wss://your-project.livekit.cloud')")
+    
+    if not os.environ.get('LIVEKIT_API_KEY'):
+        errors.append("LIVEKIT_API_KEY is required")
+    
+    if not os.environ.get('LIVEKIT_API_SECRET'):
+        errors.append("LIVEKIT_API_SECRET is required")
+    
+    # Check URL format
+    livekit_url = os.environ.get('LIVEKIT_URL', '')
+    if livekit_url and not (livekit_url.startswith('ws://') or livekit_url.startswith('wss://')):
+        warnings.append(f"LIVEKIT_URL should use WebSocket protocol (ws:// or wss://), got: {livekit_url}")
+    
+    # Check quality settings
+    try:
+        video_bitrate = int(os.environ.get('STREAM_VIDEO_MAX_BITRATE', 3000000))
+        if video_bitrate > 5000000:  # 5 Mbps
+            warnings.append(f"STREAM_VIDEO_MAX_BITRATE is very high ({video_bitrate/1000000:.1f} Mbps) - may cause issues on slower connections")
+        elif video_bitrate < 500000:  # 500 kbps
+            warnings.append(f"STREAM_VIDEO_MAX_BITRATE is very low ({video_bitrate/1000000:.1f} Mbps) - video quality will be poor")
+    except ValueError:
+        errors.append("STREAM_VIDEO_MAX_BITRATE must be a valid integer")
+    
+    try:
+        audio_bitrate = int(os.environ.get('STREAM_AUDIO_MAX_BITRATE', 128000))
+        if audio_bitrate > 320000:  # 320 kbps
+            warnings.append(f"STREAM_AUDIO_MAX_BITRATE is very high ({audio_bitrate/1000} kbps)")
+        elif audio_bitrate < 32000:  # 32 kbps
+            warnings.append(f"STREAM_AUDIO_MAX_BITRATE is very low ({audio_bitrate/1000} kbps) - audio quality will be poor")
+    except ValueError:
+        errors.append("STREAM_AUDIO_MAX_BITRATE must be a valid integer")
+    
+    # Print results
+    if errors:
+        print("\n❌ LiveKit Configuration Errors:")
+        for error in errors:
+            print(f"   • {error}")
+    
+    if warnings:
+        print("\n⚠️ LiveKit Configuration Warnings:")
+        for warning in warnings:
+            print(f"   • {warning}")
+    
+    if not errors and not warnings:
+        print("\n✅ LiveKit configuration validated successfully!")
+    
+    return len(errors) == 0
+
+# Run validation if called directly
+if __name__ == '__main__':
+    validate_livekit_config()
