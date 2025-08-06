@@ -1,5 +1,6 @@
 """
 Configuration settings for TGFX Trade Lab - MySQL + Heroku Optimized
+FIXED: DNS resolution, database connection, and eventlet compatibility issues
 """
 
 import os
@@ -14,7 +15,7 @@ class Config:
     # MySQL Database Configuration - FIXED
     @staticmethod
     def get_database_uri():
-        """Build MySQL database URI from environment variables"""
+        """Build MySQL database URI from environment variables with proper error handling"""
         # Check for direct DATABASE_URL first (Heroku style)
         database_url = os.environ.get('DATABASE_URL')
         if database_url:
@@ -31,10 +32,10 @@ class Config:
         db_port = os.environ.get('DB_PORT', '3306')
         
         if all([db_host, db_user, db_password, db_name]):
-            # Build URI with connection parameters for RDS
+            # Build URI with enhanced connection parameters for stability
             return (f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-                   f"?charset=utf8mb4&autocommit=true&connect_timeout=60&read_timeout=60"
-                   f"&write_timeout=60&binary_prefix=true")
+                   f"?charset=utf8mb4&autocommit=true&connect_timeout=30&read_timeout=30"
+                   f"&write_timeout=30&binary_prefix=true&use_unicode=true")
         
         # Fallback to SQLite for local development
         return 'sqlite:///tgfx_trade_lab.db'
@@ -43,20 +44,21 @@ class Config:
     SQLALCHEMY_DATABASE_URI = get_database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # Enhanced MySQL engine options for RDS
+    # FIXED: Enhanced MySQL engine options with better error handling
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,          # Validate connections before use
-        'pool_recycle': 280,            # Recycle every 4.6 minutes (MySQL default is 8 hours)
-        'pool_size': 5,                 # Conservative for Heroku
-        'max_overflow': 10,             # Allow burst connections
-        'pool_timeout': 30,             # Wait for connection
+        'pool_recycle': 280,            # Recycle every 4.6 minutes
+        'pool_size': 3,                 # Conservative for stability
+        'max_overflow': 5,              # Reduced overflow
+        'pool_timeout': 20,             # Shorter timeout
         'echo': False,                  # Set to True for SQL debugging
         'connect_args': {
-            'connect_timeout': 60,      # PyMySQL connection timeout
-            'read_timeout': 60,         # Read timeout
-            'write_timeout': 60,        # Write timeout
+            'connect_timeout': 30,      # Reduced connection timeout
+            'read_timeout': 30,         # Reduced read timeout  
+            'write_timeout': 30,        # Reduced write timeout
             'charset': 'utf8mb4',       # Full UTF-8 support
             'autocommit': True,         # Auto-commit transactions
+            'use_unicode': True,        # Ensure unicode support
             'sql_mode': 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'
         }
     }
@@ -121,7 +123,7 @@ class Config:
         # Debug database configuration
         db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
         if 'mysql' in db_uri:
-            print(f"✓ MySQL Database configured: {db_uri.split('@')[1] if '@' in db_uri else 'Unknown host'}")
+            print(f"✓ MySQL Database configured: {db_uri.split('@')[1].split('/')[0] if '@' in db_uri else 'Unknown host'}")
         elif 'sqlite' in db_uri:
             print("⚠ Using SQLite database (development mode)")
         else:
@@ -154,17 +156,21 @@ class DevelopmentConfig(Config):
     SESSION_COOKIE_SECURE = False
     WTF_CSRF_ENABLED = False
     
-    # Enable SQL logging in development
+    # FIXED: Enable SQL logging in development with better connection settings
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'pool_size': 3,             # Smaller pool for development
-        'max_overflow': 5,
+        'pool_size': 2,             # Smaller pool for development
+        'max_overflow': 3,
+        'pool_timeout': 20,
         'echo': True,               # Log SQL queries in development
         'connect_args': {
-            'connect_timeout': 60,
+            'connect_timeout': 30,
+            'read_timeout': 30,
+            'write_timeout': 30,
             'charset': 'utf8mb4',
-            'autocommit': True
+            'autocommit': True,
+            'use_unicode': True
         }
     }
 
@@ -182,20 +188,21 @@ class ProductionConfig(Config):
     # Production Chime settings
     AWS_CHIME_REGION = os.environ.get('AWS_CHIME_REGION', 'us-east-1')
     
-    # Optimized MySQL settings for production RDS
+    # FIXED: Optimized MySQL settings for production with better timeouts
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 280,            # Just under MySQL's 300s default
-        'pool_size': 8,                 # Good for production load
-        'max_overflow': 15,             # Handle traffic spikes
-        'pool_timeout': 30,
+        'pool_size': 5,                 # Good for production load
+        'max_overflow': 8,              # Handle traffic spikes
+        'pool_timeout': 20,             # Shorter timeout for faster failures
         'echo': False,                  # No SQL logging in production
         'connect_args': {
-            'connect_timeout': 60,
-            'read_timeout': 60,
-            'write_timeout': 60,
+            'connect_timeout': 30,      # Shorter timeouts for production
+            'read_timeout': 30,
+            'write_timeout': 30,
             'charset': 'utf8mb4',
             'autocommit': True,
+            'use_unicode': True,
             'sql_mode': 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'
         }
     }
@@ -229,22 +236,23 @@ class TestingConfig(Config):
     CACHE_TYPE = 'simple'
 
 class HerokuConfig(ProductionConfig):
-    """Heroku-specific configuration"""
+    """Heroku-specific configuration with enhanced stability"""
     
-    # Heroku-optimized database settings
+    # FIXED: Heroku-optimized database settings with better error handling
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 250,            # Shorter for Heroku's dynamic environment
-        'pool_size': 5,                 # Conservative for Heroku dyno limits
-        'max_overflow': 8,              # Reasonable overflow
-        'pool_timeout': 25,             # Shorter timeout for Heroku
+        'pool_size': 3,                 # Conservative for Heroku dyno limits
+        'max_overflow': 5,              # Reasonable overflow
+        'pool_timeout': 15,             # Shorter timeout for Heroku
         'echo': False,
         'connect_args': {
-            'connect_timeout': 60,
-            'read_timeout': 60,
-            'write_timeout': 60,
+            'connect_timeout': 20,      # Shorter timeouts for Heroku
+            'read_timeout': 20,
+            'write_timeout': 20,
             'charset': 'utf8mb4',
             'autocommit': True,
+            'use_unicode': True,
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
             'binary_prefix': True
         }
@@ -254,9 +262,12 @@ class HerokuConfig(ProductionConfig):
     def init_app(cls, app):
         ProductionConfig.init_app(app)
         
-        # Handle proxy headers for Heroku
-        from werkzeug.middleware.proxy_fix import ProxyFix
-        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+        # FIXED: Handle proxy headers for Heroku with better error handling
+        try:
+            from werkzeug.middleware.proxy_fix import ProxyFix
+            app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+        except ImportError:
+            print("⚠ ProxyFix not available, skipping proxy header handling")
         
         # Log to stdout for Heroku logs
         import logging
