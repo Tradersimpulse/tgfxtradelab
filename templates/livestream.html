@@ -1399,6 +1399,298 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
+// Helper function to update connection status
+function updateConnectionStatus(streamId, status) {
+    const element = document.getElementById(`connectionBadge-${streamId}`);
+    if (element) {
+        element.textContent = status;
+        element.className = status.includes('Connected') ? 'badge badge-connection bg-success' : 
+                          status.includes('Failed') || status.includes('Error') ? 'badge badge-connection bg-danger' : 
+                          'badge badge-connection bg-info';
+    }
+}
+
+// Helper functions to show/hide elements
+function showElement(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.style.display = 'block';
+    }
+}
+
+function hideElement(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.style.display = 'none';
+    }
+}
+
+// FIXED: Update participant count with better error handling
+function updateParticipantCount(streamId, room) {
+    try {
+        if (!room || !room.participants) {
+            console.warn('Room or participants not available for count update');
+            return;
+        }
+        
+        const count = room.participants.size || 0;
+        
+        // Update viewer count state
+        const state = window.StreamViewerConfig.streamStates.get(streamId);
+        if (state) {
+            state.viewerCount = count;
+        }
+        
+        // Update participant status badge
+        const element = document.getElementById(`participantStatus-${streamId}`);
+        if (element) {
+            element.textContent = `${count} participant${count !== 1 ? 's' : ''}`;
+        }
+        
+        // Update viewer count display
+        const viewerElement = document.getElementById(`viewerCount-${streamId}`);
+        if (viewerElement) {
+            viewerElement.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 12px;">visibility</span>${count} viewers`;
+        }
+        
+        // Update WebSocket coordinator
+        if (window.StreamCoordinator) {
+            window.StreamCoordinator.updateViewerCount(streamId, count);
+        }
+        
+        console.log(`📊 Updated participant count for stream ${streamId}: ${count}`);
+        
+    } catch (error) {
+        console.error('Error updating participant count:', error);
+    }
+}
+
+// FIXED: Show connecting state
+function showConnectingState(streamId, streamerName) {
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`errorState-${streamId}`);
+    
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (container) {
+        // Remove any existing connecting state
+        const existing = document.getElementById(`connectingState-${streamId}`);
+        if (existing) {
+            existing.remove();
+        }
+        
+        const connectingOverlay = document.createElement('div');
+        connectingOverlay.id = `connectingState-${streamId}`;
+        connectingOverlay.className = 'stream-state-overlay d-flex align-items-center justify-content-center';
+        connectingOverlay.innerHTML = `
+            <div class="text-center text-white">
+                <div class="connecting-animation mb-3">
+                    <div class="connecting-ring"></div>
+                    <span class="material-symbols-outlined connecting-icon">wifi</span>
+                </div>
+                <h5 class="mb-2">Connecting...</h5>
+                <p class="text-muted">Joining ${streamerName}'s stream</p>
+                <div class="progress" style="width: 200px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 70%"></div>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(connectingOverlay);
+    }
+}
+
+// Show error state
+function showErrorState(streamId, title, message) {
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`connectingState-${streamId}`);
+    showElement(`errorState-${streamId}`);
+    
+    const errorTitle = document.querySelector(`#errorState-${streamId} h5`);
+    const errorMessage = document.getElementById(`errorMessage-${streamId}`);
+    
+    if (errorTitle) errorTitle.textContent = title;
+    if (errorMessage) errorMessage.textContent = message;
+}
+
+// Show reconnecting state
+function showReconnectingState(streamId) {
+    const connectionBadge = document.getElementById(`connectionBadge-${streamId}`);
+    if (connectionBadge) {
+        connectionBadge.className = 'badge badge-connection bg-warning';
+        connectionBadge.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 10px;">sync</span>Reconnecting...';
+    }
+    
+    showNotification('warning', 'Stream connection lost, attempting to reconnect...');
+}
+
+// Update video quality indicator
+function updateVideoQuality(streamId, publication) {
+    const qualityBadge = document.getElementById(`qualityBadge-${streamId}`);
+    if (!qualityBadge || !publication) return;
+    
+    // Determine quality based on video dimensions
+    const dimensions = publication.dimensions;
+    if (dimensions) {
+        let quality = 'SD';
+        if (dimensions.height >= 1080) quality = 'FHD';
+        else if (dimensions.height >= 720) quality = 'HD';
+        
+        qualityBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 10px;">hd</span>${quality}`;
+    }
+}
+
+// Update connection quality
+function updateConnectionQuality(streamId, quality) {
+    const connectionBadge = document.getElementById(`connectionBadge-${streamId}`);
+    if (!connectionBadge) return;
+    
+    const LiveKitClient = window.LivekitClient || window.LiveKitClient;
+    if (!LiveKitClient) return;
+    
+    let qualityText = 'Connected';
+    let badgeClass = 'bg-success';
+    
+    if (quality === LiveKitClient.ConnectionQuality.Poor) {
+        qualityText = 'Poor';
+        badgeClass = 'bg-danger';
+    } else if (quality === LiveKitClient.ConnectionQuality.Good) {
+        qualityText = 'Good';
+        badgeClass = 'bg-success';
+    } else if (quality === LiveKitClient.ConnectionQuality.Excellent) {
+        qualityText = 'Excellent';
+        badgeClass = 'bg-success';
+    }
+    
+    connectionBadge.className = `badge badge-connection ${badgeClass}`;
+    connectionBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 10px;">wifi</span>${qualityText}`;
+}
+
+// Start audio visualization
+function startAudioVisualization(streamId, audioTrack) {
+    const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
+    if (!visualizer) return;
+    
+    showElement(`audioVisualizer-${streamId}`);
+    
+    const bars = visualizer.querySelectorAll('.audio-bar');
+    let animationId;
+    
+    // Create audio context for real audio analysis (if needed)
+    // For now, we'll simulate audio activity
+    function animate() {
+        if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
+            return;
+        }
+        
+        // Simulate audio levels (in real implementation, you'd use Web Audio API)
+        const baseLevel = 30 + Math.random() * 40;
+        
+        bars.forEach((bar, index) => {
+            const variation = Math.random() * 30 - 15;
+            const level = Math.max(10, Math.min(100, baseLevel + variation));
+            
+            bar.style.height = `${level}%`;
+            bar.style.background = level > 70 ? '#10B981' : 
+                                  level > 40 ? '#F59E0B' : '#6B7280';
+        });
+        
+        animationId = requestAnimationFrame(animate);
+    }
+    
+    animate();
+    
+    // Store animation ID for cleanup
+    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
+    if (audioState) {
+        audioState.visualizer = { animationId, stop: () => cancelAnimationFrame(animationId) };
+    }
+}
+
+// Stop audio visualization
+function stopAudioVisualization(streamId) {
+    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
+    if (audioState?.visualizer) {
+        audioState.visualizer.stop();
+        audioState.visualizer = null;
+    }
+    
+    hideElement(`audioVisualizer-${streamId}`);
+}
+
+// Show audio indicator
+function showAudioIndicator(streamId, hasAudio) {
+    const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
+    if (visualizer) {
+        visualizer.style.display = hasAudio ? 'block' : 'none';
+    }
+}
+
+// Start stream duration update
+function startStreamDurationUpdate(streamId) {
+    const state = window.StreamViewerConfig.streamStates.get(streamId);
+    if (!state) return;
+    
+    const updateDuration = () => {
+        if (!window.StreamViewerConfig.joinedStreams.has(streamId)) return;
+        
+        const duration = Math.floor((Date.now() - state.startTime.getTime()) / 1000);
+        const hours = Math.floor(duration / 3600);
+        const minutes = Math.floor((duration % 3600) / 60);
+        
+        const durationText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        
+        const element = document.getElementById(`duration-${streamId}`);
+        if (element) {
+            element.textContent = durationText;
+        }
+    };
+    
+    updateDuration();
+    const intervalId = setInterval(updateDuration, 30000); // Update every 30 seconds
+    
+    // Store interval ID for cleanup
+    const state2 = window.StreamViewerConfig.streamStates.get(streamId);
+    if (state2) {
+        state2.durationInterval = intervalId;
+    }
+}
+
+// Handle room disconnection with proper cleanup
+function handleRoomDisconnection(streamId, reason) {
+    const state = window.StreamViewerConfig.streamStates.get(streamId);
+    if (state) {
+        state.connected = false;
+        state.joined = false;
+        
+        // Clean up intervals
+        if (state.durationInterval) {
+            clearInterval(state.durationInterval);
+            state.durationInterval = null;
+        }
+    }
+    
+    window.StreamViewerConfig.joinedStreams.delete(streamId);
+    window.StreamViewerConfig.roomConnections.delete(streamId);
+    
+    // Stop audio visualization
+    stopAudioVisualization(streamId);
+    
+    // Show appropriate message based on disconnect reason
+    let message = 'Disconnected from stream';
+    if (reason === 'duplicate_identity') {
+        message = 'Connected from another device';
+    } else if (reason === 'server_shutdown') {
+        message = 'Stream has ended';
+    } else if (reason === 'participant_removed') {
+        message = 'Removed from stream';
+    }
+    
+    showNotification('info', message);
+    console.log('Stream disconnected:', streamId, reason);
+    
+    // Show disconnected state
+    showErrorState(streamId, 'Disconnected', message);
+
 // Initialize Enhanced LiveKit Viewer
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📱 Enhanced LiveKit Viewer Loading...');
