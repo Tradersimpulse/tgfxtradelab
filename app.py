@@ -1022,7 +1022,7 @@ if socketio:
                     'audio_data': audio_data,
                     'timestamp': time.time(),
                     'stream_id': stream_id
-                }, room=room_id, include_self=False)
+                }, room=room_id, include_self=False, broadcast=True)
                 
             else:
                 print(f"❌ Room verification failed for client {client_id}")
@@ -1089,7 +1089,7 @@ if socketio:
                     'frame_data': frame_data,
                     'timestamp': time.time(),
                     'stream_id': stream_id
-                }, room=room_id, include_self=False)
+                }, room=room_id, include_self=False, broadcast=True)
             else:
                 emit('error', {'message': 'Not authorized to broadcast frames'})
                 
@@ -1193,7 +1193,7 @@ if socketio:
                     'status': status,
                     'timestamp': time.time(),
                     'stream_id': stream_id
-                }, room=room_id, include_self=False)
+                }, room=room_id, include_self=False, broadcast=True)
                 
                 print(f"📊 Status update for stream {stream_id}: {status}")
             else:
