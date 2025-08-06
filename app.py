@@ -2445,7 +2445,7 @@ def api_start_stream():
     db.session.commit()
     
     # Broadcast notification about new stream via WebSocket
-    'socketio.emit('new_stream_started', {
+    socketio.emit('new_stream_started', {
     'stream_id': stream.id,
     'title': stream.title,
     'streamer_name': stream.streamer_name,
