@@ -745,9 +745,19 @@ window.joinStream = async function(streamId) {
 function setupRoomEventHandlers(room, streamId, streamData) {
     // Connection events
     room.on(LiveKitClient.RoomEvent.Connected, () => {
-        console.log('✅ Connected to LiveKit room for stream:', streamId);
-        showConnectedState(streamId);
-        startStreamDurationUpdate(streamId);
+    console.log('✅ Viewer connected to LiveKit room for stream:', streamId);
+    
+    // FIXED: Hide connecting overlay and show connected state
+    hideElement(`connectingState-${streamId}`);
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`errorState-${streamId}`);
+    showElement(`livekitContainer-${streamId}`);
+    showElement(`statusBadges-${streamId}`);
+    showElement(`liveIndicator-${streamId}`);
+    showElement(`streamControls-${streamId}`);
+    
+    startStreamDurationUpdate(streamId);
+    updateConnectionStatus(streamId, 'Connected');
     });
     
     room.on(LiveKitClient.RoomEvent.Disconnected, (reason) => {
