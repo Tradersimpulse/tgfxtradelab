@@ -30,6 +30,10 @@ import pytz
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
 
+# LiveKit imports - NEW
+from livekit import api
+import jwt
+
 # FIXED: Better error handling for database connections
 import logging
 import signal
@@ -304,20 +308,19 @@ class RecommendationClick(db.Model):
     recommendation_id = db.Column(db.Integer, db.ForeignKey('recommendations.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
 
+# UPDATED Stream Model for LiveKit
 class Stream(db.Model):
     __tablename__ = 'streams'
     
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    meeting_id = db.Column(db.String(100), unique=True, nullable=True)
-    attendee_id = db.Column(db.String(100), nullable=True)
-    external_meeting_id = db.Column(db.String(100), unique=True, nullable=True)
-    media_region = db.Column(db.String(50), nullable=True)
-    media_placement_audio_host_url = db.Column(db.String(500), nullable=True)
-    media_placement_screen_sharing_url = db.Column(db.String(500), nullable=True)
-    media_placement_screen_data_url = db.Column(db.String(500), nullable=True)
-    signaling_url = db.Column(db.String(500), nullable=True)
+    
+    # LiveKit specific fields
+    room_name = db.Column(db.String(100), unique=True, nullable=True)
+    room_sid = db.Column(db.String(100), unique=True, nullable=True)
+    
+    # Stream status
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     is_recording = db.Column(db.Boolean, default=False, nullable=False)
     recording_url = db.Column(db.String(500), nullable=True)
@@ -325,9 +328,13 @@ class Stream(db.Model):
     started_at = db.Column(db.DateTime, nullable=True)
     ended_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Stream metadata
     streamer_name = db.Column(db.String(100), nullable=True)
     stream_type = db.Column(db.String(50), default='general', nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    
+    # Relationships
     viewers = db.relationship('StreamViewer', backref='stream', lazy=True, cascade='all, delete-orphan')
 
     def to_dict(self):
@@ -335,14 +342,8 @@ class Stream(db.Model):
             'id': self.id,
             'title': self.title,
             'description': self.description,
-            'meeting_id': self.meeting_id,
-            'attendee_id': self.attendee_id,
-            'external_meeting_id': self.external_meeting_id,
-            'media_region': self.media_region,
-            'media_placement_audio_host_url': self.media_placement_audio_host_url,
-            'media_placement_screen_sharing_url': self.media_placement_screen_sharing_url,
-            'media_placement_screen_data_url': self.media_placement_screen_data_url,
-            'signaling_url': self.signaling_url,
+            'room_name': self.room_name,
+            'room_sid': self.room_sid,
             'is_active': self.is_active,
             'is_recording': self.is_recording,
             'recording_url': self.recording_url,
@@ -359,8 +360,8 @@ class StreamViewer(db.Model):
     __tablename__ = 'stream_viewers'
     
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    attendee_id = db.Column(db.String(100), nullable=False)
-    external_user_id = db.Column(db.String(100), nullable=False)
+    participant_identity = db.Column(db.String(100), nullable=False)  # LiveKit participant identity
+    participant_sid = db.Column(db.String(100), nullable=True)  # LiveKit participant SID
     joined_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     left_at = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -603,63 +604,142 @@ def get_total_duration(videos):
             total += video.duration
     return total
 
-def init_chime_client():
-    """Initialize AWS Chime SDK Meetings client"""
+# LiveKit Helper Functions - NEW
+def init_livekit_api():
+    """Initialize LiveKit API client"""
     try:
-        chime_client = boto3.client(
-            'chime-sdk-meetings',
-            aws_access_key_id=app.config['AWS_ACCESS_KEY_ID'],
-            aws_secret_access_key=app.config['AWS_SECRET_ACCESS_KEY'],
-            region_name=app.config.get('AWS_CHIME_REGION', 'us-east-1')
-        )
-        return chime_client
-    except (NoCredentialsError, KeyError):
-        return None
-
-def create_chime_meeting(stream_title, external_meeting_id):
-    """Create a new Chime meeting for the stream"""
-    chime_client = init_chime_client()
-    if not chime_client:
-        return None
-    
-    try:
-        response = chime_client.create_meeting(
-            ClientRequestToken=str(uuid.uuid4()),
-            ExternalMeetingId=external_meeting_id,
-            MediaRegion=app.config.get('AWS_CHIME_REGION', 'us-east-1')
-        )
-        return response['Meeting']
-    except ClientError as e:
-        print(f"Error creating Chime meeting: {e}")
-        return None
+        livekit_api_key = app.config.get('LIVEKIT_API_KEY')
+        livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+        livekit_url = app.config.get('LIVEKIT_URL')
         
-def create_chime_attendee(meeting_id, external_user_id, user_name):
-    """Create a Chime attendee for the meeting"""
-    chime_client = init_chime_client()
-    if not chime_client:
-        return None
-    
-    try:
-        response = chime_client.create_attendee(
-            MeetingId=meeting_id,
-            ExternalUserId=external_user_id
-        )
-        return response['Attendee']
-    except ClientError as e:
-        print(f"Error creating Chime attendee: {e}")
+        if not all([livekit_api_key, livekit_api_secret, livekit_url]):
+            return None
+            
+        return api.LiveKitAPI(livekit_url, livekit_api_key, livekit_api_secret)
+    except Exception as e:
+        print(f"Error initializing LiveKit API: {e}")
         return None
 
-def delete_chime_meeting(meeting_id):
-    """Delete a Chime meeting"""
-    chime_client = init_chime_client()
-    if not chime_client:
-        return False
-    
+def create_livekit_room(room_name, streamer_name):
+    """Create a LiveKit room for streaming"""
     try:
-        chime_client.delete_meeting(MeetingId=meeting_id)
+        lk_api = init_livekit_api()
+        if not lk_api:
+            return None
+        
+        # Create room options
+        room_opts = api.CreateRoomRequest(
+            name=room_name,
+            empty_timeout=300,  # 5 minutes
+            max_participants=100,
+            metadata=json.dumps({
+                'streamer': streamer_name,
+                'type': 'livestream'
+            })
+        )
+        
+        room_info = lk_api.room.create_room(room_opts)
+        return room_info
+    except Exception as e:
+        print(f"Error creating LiveKit room: {e}")
+        return None
+
+def generate_livekit_token(room_name, participant_identity, participant_name, is_publisher=False):
+    """Generate LiveKit access token for participant"""
+    try:
+        livekit_api_key = app.config.get('LIVEKIT_API_KEY')
+        livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+        
+        if not all([livekit_api_key, livekit_api_secret]):
+            return None
+        
+        # Create token with appropriate permissions
+        from livekit import AccessToken, VideoGrants
+        
+        token = AccessToken(livekit_api_key, livekit_api_secret)
+        token.with_identity(participant_identity).with_name(participant_name)
+        
+        # Set grants based on role
+        grants = VideoGrants()
+        grants.room_join = True
+        grants.room = room_name
+        
+        if is_publisher:
+            # Publishers (streamers) can publish audio/video and screen share
+            grants.can_publish = True
+            grants.can_publish_data = True
+            grants.can_subscribe = True
+        else:
+            # Viewers can only subscribe
+            grants.can_publish = False
+            grants.can_publish_data = False
+            grants.can_subscribe = True
+        
+        token.with_grants(grants)
+        
+        # Token expires in 4 hours
+        token.with_ttl(timedelta(hours=4))
+        
+        return token.to_jwt()
+    except Exception as e:
+        print(f"Error generating LiveKit token: {e}")
+        return None
+
+def delete_livekit_room(room_name):
+    """Delete a LiveKit room"""
+    try:
+        lk_api = init_livekit_api()
+        if not lk_api:
+            return False
+        
+        lk_api.room.delete_room(api.DeleteRoomRequest(room=room_name))
         return True
-    except ClientError as e:
-        print(f"Error deleting Chime meeting: {e}")
+    except Exception as e:
+        print(f"Error deleting LiveKit room: {e}")
+        return False
+
+def start_livekit_recording(room_name):
+    """Start recording a LiveKit room"""
+    try:
+        lk_api = init_livekit_api()
+        if not lk_api:
+            return None
+        
+        # Configure recording request
+        recording_request = api.StartRecordingRequest(
+            input=api.RecordingInput(
+                type=api.RecordingInput.RecordingInputType.ROOM_COMPOSITE
+            ),
+            output=api.RecordingOutput(
+                type=api.RecordingOutput.RecordingOutputType.FILE,
+                file=api.S3Upload(
+                    access_key=app.config.get('AWS_ACCESS_KEY_ID'),
+                    secret=app.config.get('AWS_SECRET_ACCESS_KEY'),
+                    region=app.config.get('AWS_REGION'),
+                    bucket=app.config.get('STREAM_RECORDINGS_BUCKET'),
+                    filename_prefix=f"{app.config.get('STREAM_RECORDINGS_PREFIX', '')}livekit/"
+                )
+            ),
+            room_name=room_name
+        )
+        
+        recording_info = lk_api.recording.start_recording(recording_request)
+        return recording_info
+    except Exception as e:
+        print(f"Error starting LiveKit recording: {e}")
+        return None
+
+def stop_livekit_recording(recording_id):
+    """Stop a LiveKit recording"""
+    try:
+        lk_api = init_livekit_api()
+        if not lk_api:
+            return False
+        
+        lk_api.recording.stop_recording(api.StopRecordingRequest(recording_id=recording_id))
+        return True
+    except Exception as e:
+        print(f"Error stopping LiveKit recording: {e}")
         return False
 
 def get_recording_s3_key(stream_id, streamer_name, timestamp=None):
@@ -671,7 +751,7 @@ def get_recording_s3_key(stream_id, streamer_name, timestamp=None):
     filename = f"{streamer_name}-stream-{stream_id}-{timestamp.strftime('%Y%m%d-%H%M%S')}.mp4"
     
     prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
-    return f"{prefix}{date_str}/{filename}"
+    return f"{prefix}livekit/{date_str}/{filename}"
 
 def upload_recording_to_s3(local_file_path, stream_id, streamer_name):
     """Upload recording file to S3 with streamer name"""
@@ -904,11 +984,26 @@ if socketio:
                 emit('admin_joined', {'stream_id': stream_id}, room=room_id)
                 print(f"🎬 Admin joined stream room: {room_id}")
                 
-                # Send admin-specific data
+                # Send admin-specific data with LiveKit token
+                participant_identity = f"streamer-{current_user.id}"
+                participant_name = stream.streamer_name or current_user.username
+                
+                # Generate LiveKit token for publisher (streamer)
+                livekit_token = generate_livekit_token(
+                    stream.room_name, 
+                    participant_identity, 
+                    participant_name,
+                    is_publisher=True
+                )
+                
                 emit('admin_status', {
                     'is_admin': True,
                     'can_broadcast': True,
-                    'stream_id': stream_id
+                    'stream_id': stream_id,
+                    'livekit_token': livekit_token,
+                    'livekit_url': app.config.get('LIVEKIT_URL'),
+                    'room_name': stream.room_name,
+                    'participant_identity': participant_identity
                 })
             else:
                 if client_id not in stream_rooms[room_id]['viewers']:
@@ -921,11 +1016,26 @@ if socketio:
                 }, room=room_id)
                 print(f"👥 Viewer joined stream room: {room_id}")
                 
-                # Send viewer-specific data
+                # Send viewer-specific data with LiveKit token
+                participant_identity = f"viewer-{current_user.id if is_authenticated else 'anon'}-{uuid.uuid4().hex[:8]}"
+                participant_name = user_info.get('username', 'Anonymous')
+                
+                # Generate LiveKit token for subscriber (viewer)
+                livekit_token = generate_livekit_token(
+                    stream.room_name, 
+                    participant_identity, 
+                    participant_name,
+                    is_publisher=False
+                )
+                
                 emit('viewer_status', {
                     'is_admin': False,
                     'can_broadcast': False,
-                    'stream_id': stream_id
+                    'stream_id': stream_id,
+                    'livekit_token': livekit_token,
+                    'livekit_url': app.config.get('LIVEKIT_URL'),
+                    'room_name': stream.room_name,
+                    'participant_identity': participant_identity
                 })
 
             # Update database viewer count
@@ -954,193 +1064,48 @@ if socketio:
 
     @socketio.on('audio_chunk')
     def handle_audio_chunk(data):
-        """Enhanced audio chunk handler with better validation"""
+        """Enhanced audio chunk handler - LiveKit handles audio natively"""
         try:
             client_id = request.sid
             stream_id = data.get('stream_id')
-            audio_data = data.get('audio_data')
             
-            if not stream_id or not audio_data:
-                emit('error', {'message': 'Stream ID and audio data required'})
-                return
-    
-            # Enhanced audio data validation
-            if not isinstance(audio_data, str) or not audio_data.startswith('data:audio/'):
-                print(f"⚠️ Invalid audio format from {client_id}: {type(audio_data)}")
-                emit('error', {'message': 'Invalid audio format'})
-                return
-    
-            # Size check (prevent memory issues)
-            if len(audio_data) > 2000000:  # 2MB limit
-                print(f"⚠️ Audio chunk too large: {len(audio_data)} bytes")
-                emit('error', {'message': 'Audio chunk too large'})
-                return
-    
-            # Existing admin verification code...
-            user_info = active_connections.get(client_id, {})
+            # With LiveKit, audio is handled directly by the SDK
+            # This is mainly for compatibility with existing frontend
+            print(f"🎵 Audio chunk received for stream {stream_id} from {client_id}")
             
-            is_authenticated = (
-                hasattr(current_user, 'is_authenticated') and 
-                current_user.is_authenticated
-            )
-            
-            is_admin_user = user_info.get('is_admin', False)
-            can_stream_user = user_info.get('can_stream', False)
-            
-            stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
-            is_stream_owner = (
-                stream and 
-                is_authenticated and 
-                stream.created_by == current_user.id
-            )
-            
-            can_broadcast = is_stream_owner or (is_admin_user and can_stream_user)
-            
-            if not can_broadcast:
-                emit('error', {'message': 'Not authorized to broadcast audio'})
-                return
-    
+            # You might want to emit this for any custom audio visualizations
             room_id = f"stream_{stream_id}"
-            
-            if (room_id in stream_rooms and 
-                stream_rooms[room_id]['admin_client'] == client_id):
-                
-                # Enhanced audio payload with metadata
-                audio_payload = {
-                    'audio_data': audio_data,
-                    'timestamp': time.time(),
+            if room_id in stream_rooms:
+                emit('audio_activity', {
                     'stream_id': stream_id,
-                    'chunk_size': len(audio_data),
-                    'format': 'webm/opus',  # Specify format for better client handling
-                    'quality': 'medium'     # Quality indicator
-                }
+                    'has_audio': True,
+                    'timestamp': time.time()
+                }, room=room_id, include_self=False)
                 
-                print(f"🎵 Broadcasting audio chunk: {len(audio_data)} bytes to room {room_id}")
-                
-                # Broadcast to all viewers in room
-                emit('audio_chunk', audio_payload, room=room_id, include_self=False, broadcast=True)
-                
-            else:
-                emit('error', {'message': 'Not authorized to broadcast in this room'})
-                    
         except Exception as e:
             print(f"❌ Enhanced audio chunk handler error: {e}")
-            import traceback
-            traceback.print_exc()
-            emit('error', {'message': 'Audio processing error'})
-    
-    # Test route to verify your boto3 setup
-    @app.route('/debug/boto3-audio-support')
-    def debug_boto3_audio():
-        """Check if your boto3 version supports audioFallbackUrl"""
-        if not current_user.is_authenticated:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        try:
-            import boto3
-            import botocore
-            
-            boto3_version = boto3.__version__
-            botocore_version = botocore.__version__
-            
-            # Your versions (1.34.0) definitely support audioFallbackUrl
-            supports_audio_fallback = boto3_version >= '1.29.0'
-            
-            # Test Chime client
-            chime_client = init_chime_client()
-            
-            test_result = {
-                'boto3_version': boto3_version,
-                'botocore_version': botocore_version,
-                'supports_audio_fallback': supports_audio_fallback,
-                'chime_client_available': chime_client is not None,
-                'aws_region': app.config.get('AWS_CHIME_REGION', app.config.get('AWS_REGION')),
-                'message': '✅ Your boto3 version supports enhanced audio streaming!' if supports_audio_fallback else '❌ Update boto3 to >= 1.29.0'
-            }
-            
-            # Quick meeting test if credentials available
-            if chime_client:
-                try:
-                    test_meeting = create_chime_meeting('Audio Test', f'test-{int(time.time())}')
-                    if test_meeting:
-                        has_audio_fallback = 'AudioFallbackUrl' in test_meeting.get('MediaPlacement', {})
-                        test_result['audio_fallback_url_available'] = has_audio_fallback
-                        test_result['media_placement_keys'] = list(test_meeting.get('MediaPlacement', {}).keys())
-                        
-                        # Cleanup test meeting
-                        try:
-                            delete_chime_meeting(test_meeting['MeetingId'])
-                        except:
-                            pass
-                except Exception as e:
-                    test_result['meeting_test_error'] = str(e)
-            
-            return jsonify(test_result)
-            
-        except Exception as e:
-            return jsonify({
-                'error': str(e),
-                'message': 'Boto3 test failed'
-            }), 500
 
     @socketio.on('screen_frame')
     def handle_screen_frame(data):
-        """Handle screen sharing frames from admin with enhanced verification"""
+        """Handle screen sharing frames - LiveKit handles this natively"""
         try:
             client_id = request.sid
             stream_id = data.get('stream_id')
-            frame_data = data.get('frame_data')
             
-            if not stream_id or not frame_data:
-                emit('error', {'message': 'Stream ID and frame data required'})
-                return
-
-            # Same enhanced verification as audio
-            user_info = active_connections.get(client_id, {})
+            # With LiveKit, screen sharing is handled directly by the SDK
+            print(f"🖥️ Screen frame received for stream {stream_id} from {client_id}")
             
-            is_authenticated = (
-                hasattr(current_user, 'is_authenticated') and 
-                current_user.is_authenticated
-            )
-            
-            is_admin_user = user_info.get('is_admin', False)
-            can_stream_user = user_info.get('can_stream', False)
-            
-            stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
-            is_stream_owner = (
-                stream and 
-                is_authenticated and 
-                stream.created_by == current_user.id
-            )
-            
-            can_broadcast = is_stream_owner or (is_admin_user and can_stream_user)
-            
-            if not can_broadcast:
-                emit('error', {'message': 'Not authorized to broadcast screen'})
-                return
-
+            # Emit for any custom overlays or notifications
             room_id = f"stream_{stream_id}"
-            
-            if (room_id in stream_rooms and 
-                stream_rooms[room_id]['admin_client'] == client_id):
-                
-                # Limit frame data size
-                if len(frame_data) > 2000000:  # 2MB limit
-                    print(f"⚠️ Frame too large: {len(frame_data)} bytes")
-                    return
-                
-                # Broadcast frame to all viewers
-                emit('screen_frame', {
-                    'frame_data': frame_data,
-                    'timestamp': time.time(),
-                    'stream_id': stream_id
-                }, room=room_id, include_self=False, broadcast=True)
-            else:
-                emit('error', {'message': 'Not authorized to broadcast frames'})
+            if room_id in stream_rooms:
+                emit('screen_share_activity', {
+                    'stream_id': stream_id,
+                    'is_sharing': True,
+                    'timestamp': time.time()
+                }, room=room_id, include_self=False)
                 
         except Exception as e:
             print(f"❌ Error in screen_frame handler: {e}")
-            emit('error', {'message': 'Screen frame error'})
 
     @socketio.on('stream_control')
     def handle_stream_control(data):
@@ -1301,7 +1266,9 @@ if socketio:
                     'stream_id': v['stream_id'],
                     'admin_client': v['admin_client'],
                     'viewer_count': len(v['viewers'])
-                } for k, v in stream_rooms.items()}
+                } for k, v in stream_rooms.items()},
+                'livekit_url': app.config.get('LIVEKIT_URL'),
+                'livekit_configured': bool(app.config.get('LIVEKIT_API_KEY') and app.config.get('LIVEKIT_API_SECRET'))
             }
             
             print(f"🔍 Debug info for {client_id}: {debug_data}")
@@ -1312,7 +1279,7 @@ if socketio:
             emit('error', {'message': f'Debug error: {str(e)}'})
 
 
-# Routes
+# Routes (keeping all existing routes but updating stream-related ones)
 @app.route('/')
 def index():
     if current_user.is_authenticated:
@@ -2287,47 +2254,29 @@ def livestream():
     active_streams = Stream.query.filter_by(is_active=True).all()
     
     streams_by_streamer = {}
-    attendee_data_by_stream = {}
+    tokens_by_stream = {}
     
     for stream in active_streams:
         streamer = stream.streamer_name or 'Unknown'
         streams_by_streamer[streamer] = stream
         
-        existing_viewer = StreamViewer.query.filter_by(
-            stream_id=stream.id,
-            user_id=current_user.id,
-            is_active=True
-        ).first()
+        # Generate viewer token for each active stream
+        participant_identity = f"viewer-{current_user.id}-{uuid.uuid4().hex[:8]}"
+        participant_name = current_user.username
         
-        if existing_viewer:
-            attendee_data_by_stream[stream.id] = {
-                'AttendeeId': existing_viewer.attendee_id,
-                'ExternalUserId': existing_viewer.external_user_id
+        viewer_token = generate_livekit_token(
+            stream.room_name,
+            participant_identity,
+            participant_name,
+            is_publisher=False
+        )
+        
+        if viewer_token:
+            tokens_by_stream[stream.id] = {
+                'token': viewer_token,
+                'participant_identity': participant_identity,
+                'room_name': stream.room_name
             }
-        else:
-            external_user_id = f"user-{current_user.id}-{uuid.uuid4().hex[:8]}"
-            attendee = create_chime_attendee(
-                stream.meeting_id,
-                external_user_id,
-                current_user.username
-            )
-            
-            if attendee:
-                viewer = StreamViewer(
-                    stream_id=stream.id,
-                    user_id=current_user.id,
-                    attendee_id=attendee['AttendeeId'],
-                    external_user_id=external_user_id
-                )
-                db.session.add(viewer)
-                
-                stream.viewer_count = StreamViewer.query.filter_by(
-                    stream_id=stream.id,
-                    is_active=True
-                ).count() + 1
-                
-                db.session.commit()
-                attendee_data_by_stream[stream.id] = attendee
     
     active_streams_dict = [stream.to_dict() for stream in active_streams] if active_streams else []
     
@@ -2335,7 +2284,8 @@ def livestream():
                          active_streams=active_streams,
                          active_streams_dict=active_streams_dict,
                          streams_by_streamer=streams_by_streamer,
-                         attendee_data_by_stream=attendee_data_by_stream)
+                         tokens_by_stream=tokens_by_stream,
+                         livekit_url=app.config.get('LIVEKIT_URL'))
 
 @app.route('/admin/stream')
 @login_required
@@ -2366,6 +2316,7 @@ def admin_stream():
                          can_start_stream=can_start_stream,
                          user_active_stream=user_active_stream,
                          user_active_stream_dict=user_active_stream_dict)
+
 
 @app.route('/api/admin/recommendations', methods=['POST'])
 @login_required
@@ -2599,34 +2550,33 @@ def api_start_stream():
     if streamer_name not in title:
         title = f"{streamer_name}'s {title}"
     
-    external_meeting_id = f"stream-{streamer_name.lower()}-{uuid.uuid4().hex[:12]}"
+    # Create LiveKit room name
+    room_name = f"stream-{streamer_name.lower()}-{uuid.uuid4().hex[:12]}"
     
-    meeting_data = create_chime_meeting(title, external_meeting_id)
-    if not meeting_data:
-        return jsonify({'error': 'Failed to create meeting'}), 500
+    # Create LiveKit room
+    room_info = create_livekit_room(room_name, streamer_name)
+    if not room_info:
+        return jsonify({'error': 'Failed to create LiveKit room'}), 500
     
-    admin_external_id = f"admin-{current_user.id}-{uuid.uuid4().hex[:8]}"
-    admin_attendee = create_chime_attendee(
-        meeting_data['MeetingId'],
-        admin_external_id,
-        f"{streamer_name}-Admin"
+    # Generate publisher token for the streamer
+    participant_identity = f"streamer-{current_user.id}"
+    streamer_token = generate_livekit_token(
+        room_name,
+        participant_identity,
+        streamer_name,
+        is_publisher=True
     )
     
-    if not admin_attendee:
-        delete_chime_meeting(meeting_data['MeetingId'])
-        return jsonify({'error': 'Failed to create admin attendee'}), 500
+    if not streamer_token:
+        delete_livekit_room(room_name)
+        return jsonify({'error': 'Failed to create streamer token'}), 500
     
+    # Create database record
     stream = Stream(
         title=title,
         description=description,
-        meeting_id=meeting_data['MeetingId'],
-        attendee_id=admin_attendee['AttendeeId'],
-        external_meeting_id=external_meeting_id,
-        media_region=meeting_data['MediaRegion'],
-        media_placement_audio_host_url=meeting_data['MediaPlacement']['AudioHostUrl'],
-        media_placement_screen_sharing_url=meeting_data['MediaPlacement']['ScreenSharingUrl'],
-        media_placement_screen_data_url=meeting_data['MediaPlacement']['ScreenDataUrl'],
-        signaling_url=meeting_data['MediaPlacement'].get('SignalingUrl'),
+        room_name=room_name,
+        room_sid=room_info.sid if room_info else None,
         is_active=True,
         started_at=datetime.utcnow(),
         created_by=current_user.id,
@@ -2638,12 +2588,13 @@ def api_start_stream():
     db.session.commit()
     
     # Broadcast notification about new stream via WebSocket
-    socketio.emit('new_stream_started', {
-    'stream_id': stream.id,
-    'title': stream.title,
-    'streamer_name': stream.streamer_name,
-    'message': f'{streamer_name} is now live!'
-    })
+    if socketio:
+        socketio.emit('new_stream_started', {
+            'stream_id': stream.id,
+            'title': stream.title,
+            'streamer_name': stream.streamer_name,
+            'message': f'{streamer_name} is now live!'
+        })
     
     # Also send traditional notification
     broadcast_notification(
@@ -2658,12 +2609,14 @@ def api_start_stream():
             'id': stream.id,
             'title': stream.title,
             'streamer_name': stream.streamer_name,
-            'meeting_id': stream.meeting_id,
-            'meeting_data': meeting_data,
-            'admin_attendee': admin_attendee
+            'room_name': stream.room_name,
+            'room_sid': stream.room_sid,
+            'livekit_token': streamer_token,
+            'livekit_url': app.config.get('LIVEKIT_URL'),
+            'participant_identity': participant_identity
         }
     })
-
+    
 # Update your existing /api/stream/stop route
 @app.route('/api/stream/stop', methods=['POST'])
 @login_required
@@ -2691,14 +2644,15 @@ def api_stop_stream():
     
     # Notify WebSocket clients before stopping
     room_id = f"stream_{stream.id}"
-    if room_id in stream_rooms:
+    if socketio and room_id in stream_rooms:
         socketio.emit('stream_ended', {
             'stream_id': stream.id,
             'message': f'{stream.streamer_name} has ended the stream'
         }, room=room_id)
     
-    if stream.meeting_id:
-        delete_chime_meeting(stream.meeting_id)
+    # Delete LiveKit room
+    if stream.room_name:
+        delete_livekit_room(stream.room_name)
     
     stream.is_active = False
     stream.ended_at = datetime.utcnow()
@@ -2711,12 +2665,51 @@ def api_stop_stream():
     db.session.commit()
     
     # Clean up WebSocket room
-    if room_id in stream_rooms:
+    if socketio and room_id in stream_rooms:
         del stream_rooms[room_id]
     
     return jsonify({
         'success': True,
         'message': f'{stream.streamer_name}\'s stream ended'
+    })
+
+@app.route('/api/stream/status')
+@login_required
+def api_stream_status():
+    active_streams = Stream.query.filter_by(is_active=True).all()
+    
+    if not active_streams:
+        return jsonify({'active': False, 'streams': []})
+    
+    streams_data = []
+    for stream in active_streams:
+        active_viewers = StreamViewer.query.filter_by(
+            stream_id=stream.id,
+            is_active=True
+        ).count()
+        
+        stream.viewer_count = active_viewers
+        
+        streams_data.append({
+            'id': stream.id,
+            'title': stream.title,
+            'description': stream.description,
+            'streamer_name': stream.streamer_name,
+            'stream_type': stream.stream_type,
+            'viewer_count': stream.viewer_count,
+            'started_at': stream.started_at.isoformat() if stream.started_at else None,
+            'is_recording': stream.is_recording,
+            'created_by': stream.created_by,
+            'stream_color': stream.creator.stream_color if stream.creator else '#10B981',
+            'room_name': stream.room_name
+        })
+    
+    db.session.commit()
+    
+    return jsonify({
+        'active': True,
+        'count': len(active_streams),
+        'streams': streams_data
     })
     
 @app.route('/api/stream/status')
@@ -2781,13 +2774,21 @@ def api_start_recording():
     if not stream:
         return jsonify({'error': 'No active stream found or access denied'}), 400
     
-    stream.is_recording = True
-    db.session.commit()
+    # Start LiveKit recording
+    if stream.room_name:
+        recording_info = start_livekit_recording(stream.room_name)
+        if recording_info:
+            stream.is_recording = True
+            # You might want to store recording_info.id for later stopping
+            db.session.commit()
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Recording started for {stream.streamer_name}\'s stream',
+                'recording_id': recording_info.id if recording_info else None
+            })
     
-    return jsonify({
-        'success': True, 
-        'message': f'Recording started for {stream.streamer_name}\'s stream'
-    })
+    return jsonify({'error': 'Failed to start recording'}), 500
 
 @app.route('/api/stream/recording/stop', methods=['POST'])
 @login_required
@@ -2797,6 +2798,7 @@ def api_stop_recording():
     
     data = request.get_json()
     stream_id = data.get('stream_id')
+    recording_id = data.get('recording_id')  # You'd need to track this
     
     if stream_id:
         stream = Stream.query.filter_by(
@@ -2813,19 +2815,90 @@ def api_stop_recording():
     if not stream:
         return jsonify({'error': 'No active stream found or access denied'}), 400
     
-    stream.is_recording = False
+    # Stop LiveKit recording
+    if recording_id:
+        success = stop_livekit_recording(recording_id)
+        if success:
+            stream.is_recording = False
+            
+            # Generate expected recording URL
+            if stream.streamer_name:
+                recording_url = f"s3://{app.config.get('STREAM_RECORDINGS_BUCKET')}/livestream-recordings/livekit/{datetime.utcnow().strftime('%Y/%m/%d')}/{stream.streamer_name}-stream-{stream.id}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.mp4"
+                stream.recording_url = recording_url
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Recording stopped for {stream.streamer_name}\'s stream',
+                'recording_url': stream.recording_url
+            })
     
-    if stream.streamer_name:
-        recording_url = f"s3://tgfx-tradelab/livestream-recordings/{datetime.utcnow().strftime('%Y/%m/%d')}/{stream.streamer_name}-stream-{stream.id}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.mp4"
-        stream.recording_url = recording_url
+    return jsonify({'error': 'Failed to stop recording'}), 500
+
+# Test route to verify LiveKit setup
+@app.route('/debug/livekit-setup')
+@login_required
+def debug_livekit_setup():
+    """Check LiveKit configuration and connection"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
     
-    db.session.commit()
-    
-    return jsonify({
-        'success': True, 
-        'message': f'Recording stopped for {stream.streamer_name}\'s stream',
-        'recording_url': stream.recording_url
-    })
+    try:
+        livekit_api_key = app.config.get('LIVEKIT_API_KEY')
+        livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+        livekit_url = app.config.get('LIVEKIT_URL')
+        
+        test_result = {
+            'livekit_url': livekit_url,
+            'api_key_configured': bool(livekit_api_key),
+            'api_secret_configured': bool(livekit_api_secret),
+            'configuration_complete': bool(livekit_api_key and livekit_api_secret and livekit_url)
+        }
+        
+        # Test API connection
+        if test_result['configuration_complete']:
+            try:
+                lk_api = init_livekit_api()
+                if lk_api:
+                    # Try to list rooms (this will test the connection)
+                    rooms = lk_api.room.list_rooms(api.ListRoomsRequest())
+                    test_result['api_connection_successful'] = True
+                    test_result['existing_rooms_count'] = len(rooms)
+                    test_result['message'] = '✅ LiveKit is properly configured and connected!'
+                else:
+                    test_result['api_connection_successful'] = False
+                    test_result['message'] = '❌ Failed to initialize LiveKit API client'
+            except Exception as e:
+                test_result['api_connection_successful'] = False
+                test_result['connection_error'] = str(e)
+                test_result['message'] = f'❌ LiveKit API connection failed: {str(e)}'
+        else:
+            test_result['message'] = '⚠️ LiveKit configuration incomplete. Check environment variables.'
+        
+        # Test token generation
+        if test_result.get('api_connection_successful'):
+            try:
+                test_token = generate_livekit_token(
+                    'test-room',
+                    'test-user',
+                    'Test User',
+                    is_publisher=False
+                )
+                test_result['token_generation_successful'] = bool(test_token)
+                if test_token:
+                    test_result['sample_token'] = test_token[:50] + '...'
+            except Exception as e:
+                test_result['token_generation_successful'] = False
+                test_result['token_error'] = str(e)
+        
+        return jsonify(test_result)
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'message': 'LiveKit test failed'
+        }), 500
 
 # FIXED: Enhanced application startup with better error handling
 def initialize_app():
@@ -2935,21 +3008,14 @@ if __name__ == '__main__':
         print("❌ Application initialization failed, exiting...")
         sys.exit(1)
     
-    # Start background cleanup if SocketIO is available
-    if socketio:
-        try:
-            background_cleanup()
-        except Exception as e:
-            print(f"⚠ Background cleanup setup warning: {e}")
-    
     # Get port from environment (for Heroku deployment)
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('FLASK_ENV') == 'development'
     
-    print("🚀 Starting Flask app with enhanced stability...")
+    print("🚀 Starting Flask app with LiveKit streaming...")
     if socketio:
         print(f"🔌 WebSocket endpoints available at /socket.io/")
-        print(f"🎬 Enhanced livestream with real audio and screen sharing ready!")
+        print(f"🎬 LiveKit livestream with real-time audio and video ready!")
     else:
         print("⚠ Running without WebSocket support")
     print(f"🌐 Running on port {port}")
