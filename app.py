@@ -954,34 +954,39 @@ if socketio:
 
     @socketio.on('audio_chunk')
     def handle_audio_chunk(data):
-        """Handle audio chunks from admin with enhanced verification"""
+        """Enhanced audio chunk handler with better validation"""
         try:
             client_id = request.sid
             stream_id = data.get('stream_id')
             audio_data = data.get('audio_data')
             
-            print(f"🎵 Audio chunk received from client {client_id} for stream {stream_id}")
-            
             if not stream_id or not audio_data:
-                print(f"❌ Missing data - Stream ID: {bool(stream_id)}, Audio Data: {bool(audio_data)}")
                 emit('error', {'message': 'Stream ID and audio data required'})
                 return
-
-            # Get user info and verify admin status
+    
+            # Enhanced audio data validation
+            if not isinstance(audio_data, str) or not audio_data.startswith('data:audio/'):
+                print(f"⚠️ Invalid audio format from {client_id}: {type(audio_data)}")
+                emit('error', {'message': 'Invalid audio format'})
+                return
+    
+            # Size check (prevent memory issues)
+            if len(audio_data) > 2000000:  # 2MB limit
+                print(f"⚠️ Audio chunk too large: {len(audio_data)} bytes")
+                emit('error', {'message': 'Audio chunk too large'})
+                return
+    
+            # Existing admin verification code...
             user_info = active_connections.get(client_id, {})
-            print(f"👤 User info for audio chunk: {user_info}")
             
-            # Enhanced admin verification
             is_authenticated = (
                 hasattr(current_user, 'is_authenticated') and 
                 current_user.is_authenticated
             )
             
-            # Check if user is admin
             is_admin_user = user_info.get('is_admin', False)
             can_stream_user = user_info.get('can_stream', False)
             
-            # Check if user owns the stream
             stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
             is_stream_owner = (
                 stream and 
@@ -989,54 +994,94 @@ if socketio:
                 stream.created_by == current_user.id
             )
             
-            # User can broadcast if they're admin with streaming rights OR own the stream
             can_broadcast = is_stream_owner or (is_admin_user and can_stream_user)
             
-            print(f"🔐 Audio broadcast permission check:")
-            print(f"  - Authenticated: {is_authenticated}")
-            print(f"  - Admin: {is_admin_user}")
-            print(f"  - Can Stream: {can_stream_user}")
-            print(f"  - Stream Owner: {is_stream_owner}")
-            print(f"  - Can Broadcast: {can_broadcast}")
-            
             if not can_broadcast:
-                print(f"❌ Audio broadcast denied for client {client_id}")
                 emit('error', {'message': 'Not authorized to broadcast audio'})
                 return
-
+    
             room_id = f"stream_{stream_id}"
             
-            # Additional check: verify client is the admin for this room
             if (room_id in stream_rooms and 
                 stream_rooms[room_id]['admin_client'] == client_id):
                 
-                # Limit audio data size for WebSocket transmission
-                if len(audio_data) > 1000000:  # 1MB limit
-                    print(f"⚠️ Audio chunk too large: {len(audio_data)} bytes")
-                    emit('error', {'message': 'Audio chunk too large'})
-                    return
-                
-                print(f"✅ Broadcasting audio chunk to room {room_id}")
-                # Broadcast audio to all viewers
-                emit('audio_chunk', {
+                # Enhanced audio payload with metadata
+                audio_payload = {
                     'audio_data': audio_data,
                     'timestamp': time.time(),
-                    'stream_id': stream_id
-                }, room=room_id, include_self=False, broadcast=True)
+                    'stream_id': stream_id,
+                    'chunk_size': len(audio_data),
+                    'format': 'webm/opus',  # Specify format for better client handling
+                    'quality': 'medium'     # Quality indicator
+                }
+                
+                print(f"🎵 Broadcasting audio chunk: {len(audio_data)} bytes to room {room_id}")
+                
+                # Broadcast to all viewers in room
+                emit('audio_chunk', audio_payload, room=room_id, include_self=False, broadcast=True)
                 
             else:
-                print(f"❌ Room verification failed for client {client_id}")
-                print(f"  - Room exists: {room_id in stream_rooms}")
-                if room_id in stream_rooms:
-                    print(f"  - Admin client: {stream_rooms[room_id]['admin_client']}")
-                    print(f"  - Current client: {client_id}")
                 emit('error', {'message': 'Not authorized to broadcast in this room'})
-                
+                    
         except Exception as e:
-            print(f"❌ Error in audio_chunk handler: {e}")
+            print(f"❌ Enhanced audio chunk handler error: {e}")
             import traceback
             traceback.print_exc()
-            emit('error', {'message': 'Audio chunk processing error'})
+            emit('error', {'message': 'Audio processing error'})
+    
+    # Test route to verify your boto3 setup
+    @app.route('/debug/boto3-audio-support')
+    def debug_boto3_audio():
+        """Check if your boto3 version supports audioFallbackUrl"""
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        try:
+            import boto3
+            import botocore
+            
+            boto3_version = boto3.__version__
+            botocore_version = botocore.__version__
+            
+            # Your versions (1.34.0) definitely support audioFallbackUrl
+            supports_audio_fallback = boto3_version >= '1.29.0'
+            
+            # Test Chime client
+            chime_client = init_chime_client()
+            
+            test_result = {
+                'boto3_version': boto3_version,
+                'botocore_version': botocore_version,
+                'supports_audio_fallback': supports_audio_fallback,
+                'chime_client_available': chime_client is not None,
+                'aws_region': app.config.get('AWS_CHIME_REGION', app.config.get('AWS_REGION')),
+                'message': '✅ Your boto3 version supports enhanced audio streaming!' if supports_audio_fallback else '❌ Update boto3 to >= 1.29.0'
+            }
+            
+            # Quick meeting test if credentials available
+            if chime_client:
+                try:
+                    test_meeting = create_chime_meeting('Audio Test', f'test-{int(time.time())}')
+                    if test_meeting:
+                        has_audio_fallback = 'AudioFallbackUrl' in test_meeting.get('MediaPlacement', {})
+                        test_result['audio_fallback_url_available'] = has_audio_fallback
+                        test_result['media_placement_keys'] = list(test_meeting.get('MediaPlacement', {}).keys())
+                        
+                        # Cleanup test meeting
+                        try:
+                            delete_chime_meeting(test_meeting['MeetingId'])
+                        except:
+                            pass
+                except Exception as e:
+                    test_result['meeting_test_error'] = str(e)
+            
+            return jsonify(test_result)
+            
+        except Exception as e:
+            return jsonify({
+                'error': str(e),
+                'message': 'Boto3 test failed'
+            }), 500
 
     @socketio.on('screen_frame')
     def handle_screen_frame(data):
