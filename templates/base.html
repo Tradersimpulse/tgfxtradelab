@@ -19,70 +19,41 @@
     <!-- Material Icons -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
     
-    <!-- LiveKit JavaScript SDK - Professional Streaming with Fallback -->
+    <!-- LiveKit JavaScript SDK - Simplified and Fixed -->
+    <script src="https://unpkg.com/livekit-client@2.5.7/dist/livekit-client.umd.min.js"></script>
     <script>
-        // LiveKit CDN loader with fallback
-        (function() {
-            let livekitLoaded = false;
-            let loadAttempts = 0;
-            const maxAttempts = 3;
-            
-            function loadLiveKitSDK(url, callback) {
-                const script = document.createElement('script');
-                script.src = url;
-                script.async = true;
+    // Simple LiveKit initialization
+    (function() {
+        console.log('📦 Loading LiveKit SDK...');
+        
+        // Wait for script to load, then ensure global availability
+        function initializeLiveKit() {
+            if (typeof LivekitClient !== 'undefined') {
+                // Make available with both naming conventions
+                window.LiveKitClient = LivekitClient;
+                console.log('✅ LiveKit SDK loaded successfully');
                 
-                script.onload = function() {
-                    // Check if LivekitClient is available (note: lowercase 'k')
-                    if (typeof LivekitClient !== 'undefined') {
-                        console.log('✅ LiveKit SDK loaded successfully from:', url);
-                        livekitLoaded = true;
-                        // Make it available as both LivekitClient and LiveKitClient for compatibility
-                        window.LiveKitClient = window.LivekitClient;
-                        callback(true);
-                    } else {
-                        console.warn('⚠️ LiveKit SDK loaded but LivekitClient not found');
-                        callback(false);
-                    }
-                };
-                
-                script.onerror = function() {
-                    console.error('❌ Failed to load LiveKit SDK from:', url);
-                    callback(false);
-                };
-                
-                document.head.appendChild(script);
+                // Dispatch ready event for other scripts
+                document.dispatchEvent(new CustomEvent('livekitReady'));
+            } else if (typeof LiveKitClient !== 'undefined') {
+                // Already available as LiveKitClient
+                console.log('✅ LiveKit SDK loaded successfully (alternate naming)');
+                document.dispatchEvent(new CustomEvent('livekitReady'));
+            } else {
+                console.error('❌ LiveKit SDK failed to load');
+                window.livekitLoadError = true;
             }
-            
-            function tryLoadLiveKit() {
-                loadAttempts++;
-                const cdnUrls = [
-                    'https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js',
-                    'https://unpkg.com/livekit-client/dist/livekit-client.umd.min.js',
-                    'https://cdnjs.cloudflare.com/ajax/libs/livekit-client/2.15.4/livekit-client.umd.min.js'
-                ];
-                
-                const currentUrl = cdnUrls[loadAttempts - 1];
-                
-                if (loadAttempts <= maxAttempts && currentUrl) {
-                    console.log(`🔄 Attempting to load LiveKit SDK (attempt ${loadAttempts}):`, currentUrl);
-                    loadLiveKitSDK(currentUrl, function(success) {
-                        if (!success && loadAttempts < maxAttempts) {
-                            setTimeout(tryLoadLiveKit, 1000); // Wait 1 second before retry
-                        } else if (!success) {
-                            console.error('❌ All LiveKit SDK loading attempts failed');
-                            window.livekitLoadError = true;
-                        }
-                    });
-                } else {
-                    console.error('❌ No more CDN URLs to try for LiveKit SDK');
-                    window.livekitLoadError = true;
-                }
-            }
-            
-            // Start loading LiveKit
-            tryLoadLiveKit();
-        })();
+        }
+        
+        // Check if already loaded, otherwise wait
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(initializeLiveKit, 100);
+            });
+        } else {
+            setTimeout(initializeLiveKit, 100);
+        }
+    })();
     </script>
     
     <!-- Socket.IO for Real-time Communication -->
