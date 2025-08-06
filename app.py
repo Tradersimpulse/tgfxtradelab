@@ -29,6 +29,7 @@ import uuid
 import pytz
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
+import requests
 
 # MINIMAL LiveKit imports that should work
 try:
