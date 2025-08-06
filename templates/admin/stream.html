@@ -5,6 +5,8 @@
 {% block head %}
 <!-- Socket.IO for real-time communication -->
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<!-- LiveKit JavaScript SDK -->
+<script src="https://unpkg.com/livekit-client@1.15.13/dist/livekit-client.umd.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -16,7 +18,7 @@
                     <span class="material-symbols-outlined me-2" style="font-size: 2rem;">live_tv</span>
                     Dual Stream Control
                 </h1>
-                <p class="text-muted mb-0">Manage Ray and Jordan's concurrent live streams</p>
+                <p class="text-muted mb-0">Manage Ray and Jordan's concurrent live streams with LiveKit</p>
             </div>
             <div class="d-flex gap-2">
                 <a href="{{ url_for('livestream') }}" class="btn btn-outline-primary" target="_blank">
@@ -77,7 +79,7 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
                     <h5 class="mb-1">{{ current_user.display_name or current_user.username }}'s Stream</h5>
-                    <small class="text-muted">Your streaming controls</small>
+                    <small class="text-muted">Your LiveKit streaming controls</small>
                 </div>
                 {% if user_active_stream %}
                 <span class="badge bg-success">
@@ -98,41 +100,55 @@
                         <strong>{{ user_active_stream.title }}</strong>
                         <small class="d-block text-muted">
                             Started {{ user_active_stream.started_at.strftime('%I:%M %p') if user_active_stream.started_at }} • 
-                            {{ user_active_stream.viewer_count }} viewers
+                            {{ user_active_stream.viewer_count }} viewers •
+                            Room: {{ user_active_stream.room_name }}
                         </small>
                     </div>
                 </div>
 
-                <!-- Stream Status Display -->
+                <!-- LiveKit Stream Status Display -->
                 <div class="mb-3 p-3 border rounded" style="background: #1a1a1a;">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="text-white mb-0">Current Status</h6>
+                        <h6 class="text-white mb-0">LiveKit Status</h6>
                         <div class="d-flex gap-2">
-                            <span class="badge bg-info" id="screenShareStatus">Screen: Off</span>
-                            <span class="badge bg-info" id="audioStatus">Audio: Off</span>
+                            <span class="badge bg-info" id="connectionStatus">Disconnected</span>
+                            <span class="badge bg-info" id="participantStatus">0 participants</span>
                         </div>
                     </div>
                     
-                    <!-- Live Audio Indicator -->
+                    <!-- Media Status -->
                     <div class="d-flex align-items-center mb-2">
-                        <span class="material-symbols-outlined me-2" id="micIcon" style="color: #6b7280;">mic_off</span>
-                        <div class="audio-bars" id="audioBars">
-                            <div class="audio-bar"></div>
-                            <div class="audio-bar"></div>
-                            <div class="audio-bar"></div>
-                            <div class="audio-bar"></div>
-                            <div class="audio-bar"></div>
+                        <span class="material-symbols-outlined me-2" id="mediaStatusIcon" style="color: #6b7280;">videocam_off</span>
+                        <div class="media-indicators" id="mediaIndicators">
+                            <span class="badge me-1" id="cameraStatus">Camera: Off</span>
+                            <span class="badge me-1" id="microphoneStatus">Mic: Off</span>
+                            <span class="badge" id="screenShareStatus">Screen: Off</span>
                         </div>
-                        <small class="text-muted ms-2" id="audioLevelText">Microphone Off</small>
                     </div>
                     
-                    <small class="text-white-50">Viewers will see your screen share and hear your audio when enabled</small>
+                    <small class="text-white-50">Viewers will see your camera, screen share, and hear your audio when enabled</small>
+                </div>
+
+                <!-- LiveKit Preview Area -->
+                <div class="mb-3 p-2 border rounded" style="background: #000; min-height: 200px; position: relative;">
+                    <div id="localPreview" class="w-100 h-100 d-flex align-items-center justify-content-center">
+                        <div class="text-center text-white">
+                            <span class="material-symbols-outlined mb-2" style="font-size: 2rem;">videocam_off</span>
+                            <p class="mb-0">Local Preview</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Stream Actions -->
                 <div class="row">
                     <div class="col-4">
-                        <button class="btn btn-primary btn-sm w-100" id="toggleMicBtn" onclick="toggleMicrophone()">
+                        <button class="btn btn-primary btn-sm w-100" id="toggleCameraBtn" onclick="toggleCamera()">
+                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">videocam</span>
+                            Start Camera
+                        </button>
+                    </div>
+                    <div class="col-4">
+                        <button class="btn btn-success btn-sm w-100" id="toggleMicBtn" onclick="toggleMicrophone()">
                             <span class="material-symbols-outlined me-1" style="font-size: 16px;">mic</span>
                             Start Audio
                         </button>
@@ -143,19 +159,19 @@
                             Share Screen
                         </button>
                     </div>
-                    <div class="col-4">
-                        <button class="btn btn-danger btn-sm w-100" onclick="stopUserStream()">
-                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">stop</span>
-                            End Stream
-                        </button>
-                    </div>
                 </div>
                 
                 <div class="row mt-2">
-                    <div class="col-12">
+                    <div class="col-6">
                         <button class="btn btn-outline-secondary btn-sm w-100" id="toggleRecordingBtn" onclick="toggleRecording()">
                             <span class="material-symbols-outlined me-1" id="recordingIcon" style="font-size: 16px;">fiber_manual_record</span>
                             <span id="recordingText">Start Recording</span>
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-danger btn-sm w-100" onclick="stopUserStream()">
+                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">stop</span>
+                            End Stream
                         </button>
                     </div>
                 </div>
@@ -189,7 +205,7 @@
                     <div class="d-grid">
                         <button type="submit" class="btn btn-success">
                             <span class="material-symbols-outlined me-2">play_arrow</span>
-                            Start Your Stream
+                            Start LiveKit Stream
                         </button>
                     </div>
                 </form>
@@ -235,7 +251,8 @@
                         <small class="text-muted">
                             {{ stream.viewer_count }} viewers • 
                             Started {{ stream.started_at.strftime('%I:%M %p') if stream.started_at }}
-                            {% if stream.is_recording %}• Recording{% endif %}
+                            {% if stream.is_recording %}• Recording{% endif %} •
+                            Room: {{ stream.room_name }}
                         </small>
                     </div>
                     <div class="d-flex gap-1">
@@ -282,6 +299,7 @@
                                 <th>Viewers</th>
                                 <th>Started</th>
                                 <th>Status</th>
+                                <th>Room</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -315,6 +333,9 @@
                                     <span class="badge bg-info ms-1">Recorded</span>
                                     {% endif %}
                                 </td>
+                                <td>
+                                    <small class="text-muted">{{ stream.room_name or 'N/A' }}</small>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -334,21 +355,26 @@
 
 {% block scripts %}
 <script>
-// COMPLETE STREAM CONTROL SCRIPT - Enhanced version with better WebSocket management
+// COMPLETE LIVEKIT STREAM CONTROL SCRIPT
+// Replacing AWS Chime with LiveKit for better performance and reliability
 
 // Global state
 window.streamState = {
-    isAudioActive: false,
+    room: null,
+    isConnected: false,
+    isCameraOn: false,
+    isMicrophoneOn: false,
     isScreenSharing: false,
     isRecording: false,
-    audioContext: null,
-    mediaStream: null,
-    screenStream: null,
-    audioChunks: [],
-    mediaRecorder: null
+    localTracks: {
+        camera: null,
+        microphone: null,
+        screen: null
+    },
+    streamData: null
 };
 
-// Enhanced WebSocket Manager with better debugging and error handling
+// Enhanced WebSocket Manager with LiveKit integration
 window.WebSocketManager = {
     socket: null,
     isConnected: false,
@@ -359,7 +385,7 @@ window.WebSocketManager = {
     canBroadcast: false,
     
     init: function() {
-        console.log('🔌 Initializing enhanced WebSocket connection...');
+        console.log('🔌 Initializing LiveKit WebSocket connection...');
         
         try {
             this.socket = io({
@@ -372,13 +398,12 @@ window.WebSocketManager = {
             
         } catch (error) {
             console.error('❌ Failed to initialize WebSocket:', error);
-            this.fallbackToLocalStorage();
         }
     },
     
     setupEventHandlers: function() {
         this.socket.on('connect', () => {
-            console.log('✅ WebSocket connected');
+            console.log('✅ WebSocket connected for LiveKit coordination');
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.showConnectionStatus('connected');
@@ -404,7 +429,6 @@ window.WebSocketManager = {
             this.handleConnectionError();
         });
         
-        // Enhanced connection status handler
         this.socket.on('connection_status', (data) => {
             console.log('📊 Connection status:', data);
             if (data.user_info) {
@@ -413,107 +437,132 @@ window.WebSocketManager = {
             }
         });
         
-        // Admin/viewer status handlers
         this.socket.on('admin_status', (data) => {
             console.log('🎬 Admin status received:', data);
             this.canBroadcast = data.can_broadcast;
             this.isAdmin = data.is_admin;
+            
+            // Store LiveKit connection info if available
+            if (data.livekit_token && data.livekit_url) {
+                window.streamState.streamData = {
+                    token: data.livekit_token,
+                    url: data.livekit_url,
+                    room_name: data.room_name,
+                    participant_identity: data.participant_identity
+                };
+                
+                // Connect to LiveKit room
+                this.connectToLiveKitRoom();
+            }
+            
             showToast('✅ Connected as stream admin', 'success');
         });
         
-        this.socket.on('viewer_status', (data) => {
-            console.log('👥 Viewer status received:', data);
-            this.canBroadcast = false;
-            this.isAdmin = false;
-        });
-        
-        // Debug response handler
         this.socket.on('debug_response', (data) => {
             console.log('🔍 Debug response:', data);
             this.isAdmin = data.user_info.is_admin || false;
             this.canBroadcast = this.isAdmin && data.user_info.can_stream;
             
             if (this.canBroadcast) {
-                console.log('✅ Broadcasting permissions verified');
+                console.log('✅ LiveKit broadcasting permissions verified');
             } else {
-                console.log('❌ No broadcasting permissions');
-                console.log('  - Admin:', data.user_info.is_admin);
-                console.log('  - Can Stream:', data.user_info.can_stream);
-                console.log('  - Authenticated:', data.current_user_authenticated);
+                console.log('❌ No LiveKit broadcasting permissions');
             }
-        });
-        
-        this.socket.on('stream_update', (data) => {
-            console.log('📡 Stream update received:', data);
-            this.handleStreamUpdate(data);
-        });
-        
-        this.socket.on('screen_frame', (data) => {
-            this.handleScreenFrame(data);
-        });
-        
-        this.socket.on('audio_chunk', (data) => {
-            this.handleAudioChunk(data);
-        });
-        
-        this.socket.on('status_update', (data) => {
-            this.handleStatusUpdate(data);
-        });
-        
-        this.socket.on('viewer_joined', (data) => {
-            console.log('👥 Another viewer joined:', data);
-            this.updateViewerCounts();
-        });
-        
-        this.socket.on('viewer_left', (data) => {
-            console.log('👋 Viewer left:', data);
-            this.updateViewerCounts();
-        });
-        
-        this.socket.on('admin_joined', (data) => {
-            console.log('🎬 Admin joined stream:', data);
-            showToast('🎬 Stream admin is online!', 'success');
-        });
-        
-        this.socket.on('admin_left', (data) => {
-            console.log('👋 Admin left stream:', data);
-            showToast('👋 Stream admin went offline', 'info');
         });
         
         this.socket.on('error', (data) => {
             console.error('❌ WebSocket error:', data.message);
-            
-            // Enhanced error handling
-            if (data.message.includes('Not authorized')) {
-                console.log('🔐 Authorization error - requesting debug info...');
-                this.socket.emit('debug_info', {});
-                
-                // Show more helpful error message
-                if (data.message.includes('broadcast audio')) {
-                    showToast('❌ Audio broadcast failed - checking permissions...', 'error');
-                    this.debugBroadcastPermissions();
-                } else if (data.message.includes('broadcast screen')) {
-                    showToast('❌ Screen broadcast failed - checking permissions...', 'error');
-                    this.debugBroadcastPermissions();
-                } else {
-                    showToast('❌ ' + data.message, 'error');
-                }
-            } else {
-                showToast('❌ ' + data.message, 'error');
-            }
+            showToast('❌ ' + data.message, 'error');
         });
     },
     
-    debugBroadcastPermissions: function() {
-        console.log('🔍 Debugging broadcast permissions:');
-        console.log('  - Connected:', this.isConnected);
-        console.log('  - Is Admin:', this.isAdmin);
-        console.log('  - Can Broadcast:', this.canBroadcast);
-        console.log('  - Current Stream ID:', this.currentStreamId);
+    async connectToLiveKitRoom() {
+        if (!window.streamState.streamData || window.streamState.isConnected) {
+            console.log('⚠️ Already connected or missing stream data');
+            return;
+        }
         
-        // Request fresh debug info
-        if (this.isConnected) {
-            this.socket.emit('debug_info', {});
+        try {
+            console.log('🔗 Connecting to LiveKit room...');
+            
+            const room = new LiveKitClient.Room({
+                adaptiveStream: true,
+                dynacast: true,
+                publishDefaults: {
+                    simulcast: true,
+                    videoEncoding: {
+                        maxBitrate: 1500000, // 1.5 Mbps
+                        maxFramerate: 30
+                    }
+                }
+            });
+            
+            this.setupLiveKitEventListeners(room);
+            
+            await room.connect(
+                window.streamState.streamData.url,
+                window.streamState.streamData.token
+            );
+            
+            window.streamState.room = room;
+            window.streamState.isConnected = true;
+            
+            this.updateConnectionStatus('Connected');
+            console.log('✅ Connected to LiveKit room:', window.streamState.streamData.room_name);
+            
+        } catch (error) {
+            console.error('❌ Failed to connect to LiveKit room:', error);
+            showToast('❌ Failed to connect to streaming room', 'error');
+            this.updateConnectionStatus('Error');
+        }
+    },
+    
+    setupLiveKitEventListeners(room) {
+        room.on(LiveKitClient.RoomEvent.Connected, () => {
+            console.log('✅ LiveKit room connected');
+            this.updateConnectionStatus('Connected');
+            this.updateParticipantStatus(room);
+        });
+        
+        room.on(LiveKitClient.RoomEvent.Disconnected, () => {
+            console.log('👋 LiveKit room disconnected');
+            this.updateConnectionStatus('Disconnected');
+            window.streamState.isConnected = false;
+        });
+        
+        room.on(LiveKitClient.RoomEvent.ParticipantConnected, (participant) => {
+            console.log('👥 Participant connected:', participant.identity);
+            this.updateParticipantStatus(room);
+        });
+        
+        room.on(LiveKitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+            console.log('👋 Participant disconnected:', participant.identity);
+            this.updateParticipantStatus(room);
+        });
+        
+        room.on(LiveKitClient.RoomEvent.TrackPublished, (publication, participant) => {
+            console.log('📡 Track published:', publication.kind, 'by', participant.identity);
+        });
+        
+        room.on(LiveKitClient.RoomEvent.TrackUnpublished, (publication, participant) => {
+            console.log('📡 Track unpublished:', publication.kind, 'by', participant.identity);
+        });
+    },
+    
+    updateConnectionStatus(status) {
+        const connectionStatus = document.getElementById('connectionStatus');
+        if (connectionStatus) {
+            connectionStatus.textContent = status;
+            connectionStatus.className = status === 'Connected' ? 'badge bg-success' : 
+                                        status === 'Error' ? 'badge bg-danger' : 'badge bg-info';
+        }
+    },
+    
+    updateParticipantStatus(room) {
+        const participantStatus = document.getElementById('participantStatus');
+        if (participantStatus && room) {
+            const count = room.participants.size;
+            participantStatus.textContent = `${count} participant${count !== 1 ? 's' : ''}`;
         }
     },
     
@@ -525,88 +574,6 @@ window.WebSocketManager = {
         }
     },
     
-    sendStreamControl: function(streamId, controlType, data) {
-        if (!this.isConnected) {
-            console.log('⚠️ Not connected - using localStorage fallback');
-            this.localStorageFallback('control', { type: controlType, data: data });
-            return;
-        }
-        
-        console.log(`🎛️ Sending stream control: ${controlType} for stream ${streamId}`);
-        this.socket.emit('stream_control', {
-            stream_id: streamId,
-            type: controlType,
-            data: data
-        });
-    },
-    
-    sendScreenFrame: function(streamId, frameData) {
-        if (!this.isConnected) {
-            this.localStorageFallback('screen_frame', { imageData: frameData });
-            return;
-        }
-        
-        if (!this.canBroadcast) {
-            console.log('❌ Cannot broadcast - no permissions');
-            this.debugBroadcastPermissions();
-            return;
-        }
-        
-        // Limit frame size before sending
-        if (frameData.length > 2000000) {
-            console.warn('⚠️ Frame too large, skipping:', frameData.length);
-            return;
-        }
-        
-        this.socket.emit('screen_frame', {
-            stream_id: streamId,
-            frame_data: frameData
-        });
-    },
-    
-    sendAudioChunk: function(streamId, audioData) {
-        if (!this.isConnected) {
-            this.localStorageFallback('audio_chunk', { audioData: audioData });
-            return;
-        }
-        
-        if (!this.canBroadcast) {
-            console.log('❌ Cannot broadcast audio - no permissions');
-            this.debugBroadcastPermissions();
-            showToast('❌ Audio broadcast permission denied', 'error');
-            return;
-        }
-        
-        // Limit audio chunk size
-        if (audioData.length > 1000000) {
-            console.warn('⚠️ Audio chunk too large, skipping:', audioData.length);
-            return;
-        }
-        
-        console.log('🎵 Sending audio chunk:', audioData.substring(0, 50) + '...');
-        this.socket.emit('audio_chunk', {
-            stream_id: streamId,
-            audio_data: audioData
-        });
-    },
-    
-    sendStatusUpdate: function(streamId, status) {
-        if (!this.isConnected) {
-            this.localStorageFallback('status_update', status);
-            return;
-        }
-        
-        if (!this.canBroadcast) {
-            console.log('❌ Cannot update status - no permissions');
-            return;
-        }
-        
-        this.socket.emit('status_update', {
-            stream_id: streamId,
-            status: status
-        });
-    },
-    
     handleConnectionError: function() {
         this.reconnectAttempts++;
         
@@ -616,73 +583,8 @@ window.WebSocketManager = {
                 this.socket.connect();
             }, 2000 * this.reconnectAttempts);
         } else {
-            console.log('❌ Max reconnection attempts reached, using localStorage fallback');
-            this.fallbackToLocalStorage();
+            console.log('❌ Max reconnection attempts reached');
         }
-    },
-    
-    fallbackToLocalStorage: function() {
-        console.log('📡 Using localStorage fallback communication');
-        this.initLocalStorageFallback();
-    },
-    
-    initLocalStorageFallback: function() {
-        setInterval(() => {
-            this.updateStatus();
-        }, 100);
-    },
-    
-    updateStatus: function() {
-        const status = {
-            audio: window.streamState.isAudioActive,
-            screen: window.streamState.isScreenSharing,
-            timestamp: Date.now()
-        };
-        
-        localStorage.setItem('admin_stream_status', JSON.stringify(status));
-    },
-    
-    localStorageFallback: function(type, data) {
-        const key = `admin_${type}`;
-        const payload = {
-            ...data,
-            timestamp: Date.now()
-        };
-        
-        try {
-            localStorage.setItem(key, JSON.stringify(payload));
-        } catch (e) {
-            console.warn('⚠️ localStorage fallback failed:', e);
-        }
-    },
-    
-    handleStreamUpdate: function(data) {
-        // Handle stream control updates from other admins
-        console.log('📡 Stream update received:', data);
-        // Implementation for handling stream updates
-    },
-    
-    handleScreenFrame: function(data) {
-        // Handle incoming screen frames (for viewer mode)
-        console.log('🖥️ Screen frame received');
-    },
-    
-    handleAudioChunk: function(data) {
-        // Handle incoming audio chunks (for viewer mode)
-        console.log('🎵 Audio chunk received');
-    },
-    
-    handleStatusUpdate: function(data) {
-        // Handle status updates
-        console.log('📊 Status update received:', data);
-    },
-    
-    updateViewerCounts: function() {
-        // Update viewer count displays
-        document.querySelectorAll('.stream-viewer-count').forEach(el => {
-            const currentCount = parseInt(el.textContent) || 0;
-            el.textContent = currentCount === 1 ? '1 viewer' : currentCount + ' viewers';
-        });
     },
     
     showConnectionStatus: function(status) {
@@ -695,7 +597,7 @@ window.WebSocketManager = {
         }
         
         if (status === 'connected') {
-            indicator.textContent = '🟢 Connected' + (this.canBroadcast ? ' (Can Broadcast)' : ' (View Only)');
+            indicator.textContent = '🟢 Connected (LiveKit)';
             indicator.style.background = 'rgba(16, 185, 129, 0.8)';
             setTimeout(() => indicator.style.display = 'none', 5000);
         } else {
@@ -706,455 +608,249 @@ window.WebSocketManager = {
     }
 };
 
-// Enhanced audio functions with better permission checking
-window.toggleMicrophone = async function() {
-    if (window.streamState.isAudioActive) {
-        stopAudio();
-    } else {
-        await startAudio();
+// Enhanced LiveKit media functions
+window.toggleCamera = async function() {
+    if (!window.streamState.room || !window.streamState.isConnected) {
+        showToast('❌ Not connected to stream room', 'error');
+        return;
+    }
+    
+    const room = window.streamState.room;
+    
+    try {
+        if (window.streamState.isCameraOn) {
+            // Turn off camera
+            if (window.streamState.localTracks.camera) {
+                await room.localParticipant.unpublishTrack(window.streamState.localTracks.camera);
+                window.streamState.localTracks.camera.stop();
+                window.streamState.localTracks.camera = null;
+            }
+            
+            window.streamState.isCameraOn = false;
+            updateCameraUI(false);
+            
+            // Clear preview
+            const preview = document.getElementById('localPreview');
+            if (preview) {
+                preview.innerHTML = '<div class="text-center text-white"><span class="material-symbols-outlined mb-2" style="font-size: 2rem;">videocam_off</span><p class="mb-0">Camera Off</p></div>';
+            }
+            
+            showToast('📹 Camera turned off', 'info');
+            
+        } else {
+            // Turn on camera
+            console.log('📹 Starting camera...');
+            
+            const track = await LiveKitClient.createLocalVideoTrack({
+                resolution: LiveKitClient.VideoPresets.h720.resolution,
+                facingMode: 'user'
+            });
+            
+            if (track) {
+                window.streamState.localTracks.camera = track;
+                
+                // Publish track to room
+                await room.localParticipant.publishTrack(track);
+                
+                window.streamState.isCameraOn = true;
+                updateCameraUI(true);
+                
+                // Show preview
+                const preview = document.getElementById('localPreview');
+                if (preview) {
+                    const videoElement = track.attach();
+                    videoElement.style.width = '100%';
+                    videoElement.style.height = '100%';
+                    videoElement.style.objectFit = 'cover';
+                    preview.innerHTML = '';
+                    preview.appendChild(videoElement);
+                }
+                
+                showToast('📹 Camera started successfully', 'success');
+            }
+        }
+    } catch (error) {
+        console.error('❌ Camera toggle error:', error);
+        showToast('❌ Camera error: ' + error.message, 'error');
     }
 };
 
-async function startAudio() {
+window.toggleMicrophone = async function() {
+    if (!window.streamState.room || !window.streamState.isConnected) {
+        showToast('❌ Not connected to stream room', 'error');
+        return;
+    }
+    
+    const room = window.streamState.room;
+    
     try {
-        console.log('🎤 Starting enhanced audio capture...');
-        
-        // Check broadcast permissions first
-        if (!window.WebSocketManager.canBroadcast) {
-            console.log('❌ No broadcast permissions - requesting debug info');
-            window.WebSocketManager.debugBroadcastPermissions();
-            showToast('❌ No audio broadcast permissions', 'error');
-            return;
-        }
-        
-        window.streamState.mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
+        if (window.streamState.isMicrophoneOn) {
+            // Turn off microphone
+            if (window.streamState.localTracks.microphone) {
+                await room.localParticipant.unpublishTrack(window.streamState.localTracks.microphone);
+                window.streamState.localTracks.microphone.stop();
+                window.streamState.localTracks.microphone = null;
+            }
+            
+            window.streamState.isMicrophoneOn = false;
+            updateMicrophoneUI(false);
+            showToast('🔇 Microphone muted', 'info');
+            
+        } else {
+            // Turn on microphone
+            console.log('🎤 Starting microphone...');
+            
+            const track = await LiveKitClient.createLocalAudioTrack({
                 echoCancellation: true,
                 noiseSuppression: true,
-                autoGainControl: true,
-                sampleRate: 44100,
-                channelCount: 1
-            }
-        });
-        
-        window.streamState.audioContext = new (window.AudioContext || window.webkitAudioContext)({
-            sampleRate: 44100
-        });
-        
-        if (window.streamState.audioContext.state === 'suspended') {
-            await window.streamState.audioContext.resume();
-        }
-        
-        const source = window.streamState.audioContext.createMediaStreamSource(window.streamState.mediaStream);
-        const analyser = window.streamState.audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        
-        source.connect(analyser);
-        
-        // Start real audio recording for streaming
-        startAudioRecording();
-        
-        // Start visualization
-        startAudioVisualization(analyser);
-        
-        window.streamState.isAudioActive = true;
-        updateAudioUI(true);
-        
-        // Notify WebSocket with permission check
-        const streamId = getCurrentStreamId();
-        if (streamId && window.WebSocketManager.canBroadcast) {
-            window.WebSocketManager.sendStreamControl(streamId, 'audio_start', {});
-            window.WebSocketManager.sendStatusUpdate(streamId, {
-                audio: true,
-                screen: window.streamState.isScreenSharing
+                autoGainControl: true
             });
             
-            showToast('🎤 Audio started - broadcasting live!', 'success');
-        } else {
-            showToast('⚠️ Audio started but cannot broadcast', 'warning');
+            if (track) {
+                window.streamState.localTracks.microphone = track;
+                
+                // Publish track to room
+                await room.localParticipant.publishTrack(track);
+                
+                window.streamState.isMicrophoneOn = true;
+                updateMicrophoneUI(true);
+                showToast('🎤 Microphone started successfully', 'success');
+            }
         }
-        
     } catch (error) {
-        console.error('❌ Failed to start audio:', error);
+        console.error('❌ Microphone toggle error:', error);
+        
         if (error.name === 'NotAllowedError') {
             showToast('⚠️ Microphone access denied. Please allow microphone permissions.', 'warning');
         } else {
-            showToast('❌ Failed to start microphone: ' + error.message, 'error');
+            showToast('❌ Microphone error: ' + error.message, 'error');
         }
-    }
-}
-
-function startAudioRecording() {
-    try {
-        const streamId = getCurrentStreamId();
-        
-        window.streamState.mediaRecorder = new MediaRecorder(window.streamState.mediaStream, {
-            mimeType: 'audio/webm;codecs=opus',
-            audioBitsPerSecond: 64000
-        });
-        
-        window.streamState.audioChunks = [];
-        
-        window.streamState.mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    // Send audio chunk for real playback
-                    if (streamId) {
-                        window.WebSocketManager.sendAudioChunk(streamId, reader.result);
-                    }
-                };
-                reader.readAsDataURL(event.data);
-            }
-        };
-        
-        window.streamState.mediaRecorder.onerror = (event) => {
-            console.error('MediaRecorder error:', event.error);
-        };
-        
-        // Start recording in small chunks for real-time streaming
-        window.streamState.mediaRecorder.start(50); // 50ms chunks
-        
-        console.log('🎵 Real-time audio recording started');
-        
-    } catch (error) {
-        console.error('❌ Failed to start audio recording:', error);
-    }
-}
-
-function stopAudio() {
-    console.log('🔇 Stopping audio...');
-    
-    if (window.streamState.mediaRecorder && window.streamState.mediaRecorder.state !== 'inactive') {
-        window.streamState.mediaRecorder.stop();
-        window.streamState.mediaRecorder = null;
-    }
-    
-    if (window.streamState.mediaStream) {
-        window.streamState.mediaStream.getTracks().forEach(track => track.stop());
-        window.streamState.mediaStream = null;
-    }
-    
-    if (window.streamState.audioContext && window.streamState.audioContext.state !== 'closed') {
-        window.streamState.audioContext.close();
-        window.streamState.audioContext = null;
-    }
-    
-    window.streamState.isAudioActive = false;
-    window.streamState.audioChunks = [];
-    updateAudioUI(false);
-    
-    // Notify WebSocket
-    const streamId = getCurrentStreamId();
-    if (streamId) {
-        window.WebSocketManager.sendStreamControl(streamId, 'audio_stop', {});
-        window.WebSocketManager.sendStatusUpdate(streamId, {
-            audio: false,
-            screen: window.streamState.isScreenSharing
-        });
-    }
-    
-    localStorage.removeItem('admin_audio_data');
-    localStorage.removeItem('admin_audio_chunk');
-    
-    showToast('🔇 Microphone stopped', 'info');
-}
-
-function startAudioVisualization(analyser) {
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    
-    function updateBars() {
-        if (!window.streamState.isAudioActive) return;
-        
-        analyser.getByteFrequencyData(dataArray);
-        
-        const bars = document.querySelectorAll('.audio-bar');
-        const audioLevel = Array.from(dataArray).reduce((a, b) => a + b) / bufferLength;
-        
-        bars.forEach((bar, index) => {
-            const value = dataArray[index * 8] || 0;
-            const height = Math.max(10, (value / 255) * 100);
-            
-            bar.style.height = height + '%';
-            
-            if (value > 100) {
-                bar.style.backgroundColor = '#10B981';
-            } else if (value > 50) {
-                bar.style.backgroundColor = '#fbbf24';
-            } else {
-                bar.style.backgroundColor = '#6b7280';
-            }
-        });
-        
-        const audioLevelText = document.getElementById('audioLevelText');
-        if (audioLevelText) {
-            if (audioLevel > 10) {
-                audioLevelText.textContent = 'Speaking...';
-                audioLevelText.style.color = '#10B981';
-            } else {
-                audioLevelText.textContent = 'Microphone Active';
-                audioLevelText.style.color = '#6b7280';
-            }
-        }
-        
-        requestAnimationFrame(updateBars);
-    }
-    
-    updateBars();
-}
-
-function updateAudioUI(isActive) {
-    const micBtn = document.getElementById('toggleMicBtn');
-    const micIcon = document.getElementById('micIcon');
-    const audioStatus = document.getElementById('audioStatus');
-    const audioLevelText = document.getElementById('audioLevelText');
-    
-    if (isActive) {
-        micBtn.className = 'btn btn-success btn-sm w-100';
-        micBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">mic_off</span>Stop Audio';
-        micIcon.style.color = '#10B981';
-        micIcon.textContent = 'mic';
-        audioStatus.textContent = 'Audio: Live';
-        audioStatus.className = 'badge bg-success';
-        audioLevelText.textContent = 'Microphone Active';
-    } else {
-        micBtn.className = 'btn btn-primary btn-sm w-100';
-        micBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">mic</span>Start Audio';
-        micIcon.style.color = '#6b7280';
-        micIcon.textContent = 'mic_off';
-        audioStatus.textContent = 'Audio: Off';
-        audioStatus.className = 'badge bg-info';
-        audioLevelText.textContent = 'Microphone Off';
-        
-        const bars = document.querySelectorAll('.audio-bar');
-        bars.forEach(bar => {
-            bar.style.height = '10%';
-            bar.style.backgroundColor = '#6b7280';
-        });
-    }
-}
-
-// Enhanced screen sharing functions
-window.toggleScreenShare = async function() {
-    if (window.streamState.isScreenSharing) {
-        stopScreenShare();
-    } else {
-        await startScreenShare();
     }
 };
 
-async function startScreenShare() {
+window.toggleScreenShare = async function() {
+    if (!window.streamState.room || !window.streamState.isConnected) {
+        showToast('❌ Not connected to stream room', 'error');
+        return;
+    }
+    
+    const room = window.streamState.room;
+    
     try {
-        console.log('🖥️ Starting enhanced screen share...');
-        
-        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
-            try {
-                window.streamState.screenStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: {
-                        width: { ideal: 1280, max: 1920 },
-                        height: { ideal: 720, max: 1080 },
-                        frameRate: { ideal: 30, max: 60 }
-                    },
-                    audio: false
-                });
-                
-                console.log('✅ Real screen capture successful');
-                
-            } catch (error) {
-                if (error.name === 'NotAllowedError') {
-                    showToast('⚠️ Screen sharing was denied. Please allow screen access.', 'warning');
-                    return;
-                }
-                
-                console.log('ℹ️ Real screen capture failed, using demo');
-                window.streamState.screenStream = createDemoStream();
-            }
-        } else {
-            console.log('🎭 Using demo screen share');
-            window.streamState.screenStream = createDemoStream();
-        }
-        
-        startEnhancedScreenBroadcast();
-        
-        window.streamState.isScreenSharing = true;
-        updateScreenShareUI(true);
-        
-        // Notify WebSocket
-        const streamId = getCurrentStreamId();
-        if (streamId) {
-            window.WebSocketManager.sendStreamControl(streamId, 'screen_start', {});
-            window.WebSocketManager.sendStatusUpdate(streamId, {
-                audio: window.streamState.isAudioActive,
-                screen: true
-            });
-        }
-        
-        if (window.streamState.screenStream.getVideoTracks) {
-            window.streamState.screenStream.getVideoTracks().forEach(track => {
-                track.onended = () => {
-                    console.log('🛑 Screen share ended by user');
-                    stopScreenShare();
-                };
-            });
-        }
-        
-        showToast('🖥️ Screen sharing started - Enhanced quality streaming!', 'success');
-        
-    } catch (error) {
-        console.error('❌ Screen share failed:', error);
-        showToast('❌ Screen sharing failed: ' + error.message, 'error');
-    }
-}
-
-function startEnhancedScreenBroadcast() {
-    const streamId = getCurrentStreamId();
-    const video = document.createElement('video');
-    video.autoplay = true;
-    video.muted = true;
-    video.srcObject = window.streamState.screenStream;
-    
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    video.addEventListener('loadedmetadata', () => {
-        canvas.width = Math.min(1280, video.videoWidth);
-        canvas.height = Math.min(720, video.videoHeight);
-        
-        let frameCount = 0;
-        
-        function captureFrame() {
-            if (!window.streamState.isScreenSharing) return;
-            
-            if (video.readyState >= 2) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = canvas.toDataURL('image/jpeg', 0.8);
-                
-                if (streamId) {
-                    window.WebSocketManager.sendScreenFrame(streamId, imageData);
-                }
-                
-                frameCount++;
-            }
-            
-            if (window.streamState.isScreenSharing) {
-                requestAnimationFrame(captureFrame); // 60 FPS capture
-            }
-        }
-        
-        video.play().then(() => {
-            captureFrame();
-        });
-    });
-}
-
-function stopScreenShare() {
-    console.log('🛑 Stopping screen share...');
-    
-    if (window.streamState.screenStream) {
-        if (window.streamState.screenStream.getTracks) {
-            window.streamState.screenStream.getTracks().forEach(track => track.stop());
-        }
-        window.streamState.screenStream = null;
-    }
-    
-    window.streamState.isScreenSharing = false;
-    updateScreenShareUI(false);
-    
-    // Notify WebSocket
-    const streamId = getCurrentStreamId();
-    if (streamId) {
-        window.WebSocketManager.sendStreamControl(streamId, 'screen_stop', {});
-        window.WebSocketManager.sendStatusUpdate(streamId, {
-            audio: window.streamState.isAudioActive,
-            screen: false
-        });
-    }
-    
-    localStorage.removeItem('admin_screen_frame');
-    
-    showToast('🛑 Screen sharing stopped', 'info');
-}
-
-function createDemoStream() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1280;
-    canvas.height = 720;
-    const ctx = canvas.getContext('2d');
-    
-    let frame = 0;
-    function animate() {
-        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        gradient.addColorStop(0, '#1a1a1a');
-        gradient.addColorStop(1, '#2a2a2a');
-        
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = '#10B981';
-        ctx.font = 'bold 48px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('🔴 LIVE Demo Stream', 640, 150);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '24px Arial';
-        ctx.fillText('Enhanced streaming with real audio support', 640, 200);
-        
-        // Animated chart
-        ctx.strokeStyle = '#10B981';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        
-        for (let i = 100; i < 1180; i += 8) {
-            const baseY = 400;
-            const amplitude = 80;
-            const frequency = 0.02;
-            const speed = frame * 0.05;
-            
-            const y = baseY + Math.sin((i * frequency) + speed) * amplitude + 
-                     Math.sin((i * frequency * 2.5) + speed * 1.5) * (amplitude * 0.3);
-            
-            if (i === 100) ctx.moveTo(i, y);
-            else ctx.lineTo(i, y);
-        }
-        ctx.stroke();
-        
-        // Live indicator
-        const pulseSize = 12 + Math.sin(frame * 0.2) * 3;
-        ctx.fillStyle = '#ff0000';
-        ctx.beginPath();
-        ctx.arc(100, 100, pulseSize, 0, 2 * Math.PI);
-        ctx.fill();
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 20px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText('● LIVE', 120, 110);
-        
-        frame++;
         if (window.streamState.isScreenSharing) {
-            requestAnimationFrame(animate);
+            // Stop screen sharing
+            if (window.streamState.localTracks.screen) {
+                await room.localParticipant.unpublishTrack(window.streamState.localTracks.screen);
+                window.streamState.localTracks.screen.stop();
+                window.streamState.localTracks.screen = null;
+            }
+            
+            window.streamState.isScreenSharing = false;
+            updateScreenShareUI(false);
+            showToast('🛑 Screen sharing stopped', 'info');
+            
+        } else {
+            // Start screen sharing
+            console.log('🖥️ Starting screen share...');
+            
+            const track = await LiveKitClient.createLocalScreenShareTrack({
+                resolution: LiveKitClient.ScreenSharePresets.h1080fps30.resolution
+            });
+            
+            if (track) {
+                window.streamState.localTracks.screen = track;
+                
+                // Publish track to room
+                await room.localParticipant.publishTrack(track);
+                
+                window.streamState.isScreenSharing = true;
+                updateScreenShareUI(true);
+                
+                // Handle screen share end event
+                track.mediaStreamTrack.onended = () => {
+                    console.log('🛑 Screen share ended by user');
+                    window.streamState.isScreenSharing = false;
+                    updateScreenShareUI(false);
+                };
+                
+                showToast('🖥️ Screen sharing started successfully', 'success');
+            }
+        }
+    } catch (error) {
+        console.error('❌ Screen share toggle error:', error);
+        
+        if (error.name === 'NotAllowedError') {
+            showToast('⚠️ Screen sharing was denied. Please allow screen access.', 'warning');
+        } else {
+            showToast('❌ Screen sharing error: ' + error.message, 'error');
         }
     }
-    animate();
+};
+
+// UI update functions
+function updateCameraUI(isActive) {
+    const cameraBtn = document.getElementById('toggleCameraBtn');
+    const cameraStatus = document.getElementById('cameraStatus');
+    const mediaStatusIcon = document.getElementById('mediaStatusIcon');
     
-    return canvas.captureStream(30);
+    if (cameraBtn) {
+        if (isActive) {
+            cameraBtn.className = 'btn btn-success btn-sm w-100';
+            cameraBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">videocam_off</span>Stop Camera';
+        } else {
+            cameraBtn.className = 'btn btn-primary btn-sm w-100';
+            cameraBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">videocam</span>Start Camera';
+        }
+    }
+    
+    if (cameraStatus) {
+        cameraStatus.textContent = isActive ? 'Camera: On' : 'Camera: Off';
+        cameraStatus.className = isActive ? 'badge bg-success me-1' : 'badge bg-secondary me-1';
+    }
+    
+    if (mediaStatusIcon) {
+        mediaStatusIcon.textContent = isActive ? 'videocam' : 'videocam_off';
+        mediaStatusIcon.style.color = isActive ? '#10B981' : '#6b7280';
+    }
+}
+
+function updateMicrophoneUI(isActive) {
+    const micBtn = document.getElementById('toggleMicBtn');
+    const microphoneStatus = document.getElementById('microphoneStatus');
+    
+    if (micBtn) {
+        if (isActive) {
+            micBtn.className = 'btn btn-success btn-sm w-100';
+            micBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">mic_off</span>Stop Audio';
+        } else {
+            micBtn.className = 'btn btn-success btn-sm w-100';
+            micBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">mic</span>Start Audio';
+        }
+    }
+    
+    if (microphoneStatus) {
+        microphoneStatus.textContent = isActive ? 'Mic: On' : 'Mic: Off';
+        microphoneStatus.className = isActive ? 'badge bg-success me-1' : 'badge bg-secondary me-1';
+    }
 }
 
 function updateScreenShareUI(isActive) {
     const screenBtn = document.getElementById('toggleScreenBtn');
-    const screenStatus = document.getElementById('screenShareStatus');
+    const screenShareStatus = document.getElementById('screenShareStatus');
     
-    if (isActive) {
-        screenBtn.className = 'btn btn-success btn-sm w-100';
-        screenBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">stop_screen_share</span>Stop Share';
-        screenStatus.textContent = 'Screen: Live';
-        screenStatus.className = 'badge bg-success';
-    } else {
-        screenBtn.className = 'btn btn-warning btn-sm w-100';
-        screenBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">screen_share</span>Share Screen';
-        screenStatus.textContent = 'Screen: Off';
-        screenStatus.className = 'badge bg-info';
+    if (screenBtn) {
+        if (isActive) {
+            screenBtn.className = 'btn btn-success btn-sm w-100';
+            screenBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">stop_screen_share</span>Stop Share';
+        } else {
+            screenBtn.className = 'btn btn-warning btn-sm w-100';
+            screenBtn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 16px;">screen_share</span>Share Screen';
+        }
+    }
+    
+    if (screenShareStatus) {
+        screenShareStatus.textContent = isActive ? 'Screen: On' : 'Screen: Off';
+        screenShareStatus.className = isActive ? 'badge bg-success' : 'badge bg-secondary';
     }
 }
 
@@ -1189,7 +885,7 @@ window.toggleRecording = async function() {
                 recordingIcon.textContent = 'stop';
                 recordingText.textContent = 'Stop Recording';
                 recordingBtn.className = 'btn btn-danger btn-sm w-100';
-                showToast('🔴 Recording started', 'success');
+                showToast('🔴 LiveKit recording started', 'success');
             } else {
                 recordingIcon.textContent = 'fiber_manual_record';
                 recordingText.textContent = 'Start Recording';
@@ -1209,7 +905,7 @@ window.toggleRecording = async function() {
 window.handleStartUserStream = async function(e) {
     e.preventDefault();
     
-    console.log('🚀 Starting user stream...');
+    console.log('🚀 Starting LiveKit stream...');
     
     const submitBtn = document.querySelector('#startUserStreamForm button[type="submit"]');
     const originalText = submitBtn.innerHTML;
@@ -1240,9 +936,19 @@ window.handleStartUserStream = async function(e) {
         console.log('📡 Server response:', data);
         
         if (data.success) {
-            showToast('✅ Your stream started successfully!', 'success');
+            showToast('✅ Your LiveKit stream started successfully!', 'success');
+            
             // Set current stream ID for WebSocket
             window.WebSocketManager.currentStreamId = data.stream.id;
+            
+            // Store LiveKit connection data
+            window.streamState.streamData = {
+                token: data.stream.livekit_token,
+                url: data.stream.livekit_url,
+                room_name: data.stream.room_name,
+                participant_identity: data.stream.participant_identity
+            };
+            
             setTimeout(() => location.reload(), 1000);
         } else {
             throw new Error(data.error || 'Failed to start stream');
@@ -1261,12 +967,28 @@ window.stopUserStream = async function() {
         return;
     }
     
-    if (window.streamState.isScreenSharing) {
-        stopScreenShare();
-    }
-    
-    if (window.streamState.isAudioActive) {
-        stopAudio();
+    // Stop all media tracks
+    if (window.streamState.room) {
+        const room = window.streamState.room;
+        
+        // Unpublish all tracks
+        if (window.streamState.localTracks.camera) {
+            await room.localParticipant.unpublishTrack(window.streamState.localTracks.camera);
+            window.streamState.localTracks.camera.stop();
+        }
+        
+        if (window.streamState.localTracks.microphone) {
+            await room.localParticipant.unpublishTrack(window.streamState.localTracks.microphone);
+            window.streamState.localTracks.microphone.stop();
+        }
+        
+        if (window.streamState.localTracks.screen) {
+            await room.localParticipant.unpublishTrack(window.streamState.localTracks.screen);
+            window.streamState.localTracks.screen.stop();
+        }
+        
+        // Disconnect from room
+        room.disconnect();
     }
     
     try {
@@ -1287,6 +1009,23 @@ window.stopUserStream = async function() {
         if (data.success) {
             showToast('✅ Your stream ended successfully', 'success');
             window.WebSocketManager.currentStreamId = null;
+            
+            // Reset state
+            window.streamState = {
+                room: null,
+                isConnected: false,
+                isCameraOn: false,
+                isMicrophoneOn: false,
+                isScreenSharing: false,
+                isRecording: false,
+                localTracks: {
+                    camera: null,
+                    microphone: null,
+                    screen: null
+                },
+                streamData: null
+            };
+            
             setTimeout(() => location.reload(), 1000);
         } else {
             throw new Error(data.error || 'Failed to stop stream');
@@ -1335,11 +1074,6 @@ async function updateStreamStats() {
     }
 }
 
-function getCurrentStreamId() {
-    const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
-    return userActiveStream ? userActiveStream.id : null;
-}
-
 function showToast(message, type) {
     const toast = document.createElement('div');
     const alertType = type === 'error' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
@@ -1363,7 +1097,7 @@ function showToast(message, type) {
 
 // Enhanced debug function
 window.debugStreamConnection = function(streamId) {
-    console.log('=== 🔍 ENHANCED DEBUG STREAM CONNECTION ===');
+    console.log('=== 🔍 LIVEKIT STREAM DEBUG INFO ===');
     console.log('Stream ID:', streamId);
     console.log('WebSocket Connected:', window.WebSocketManager.isConnected);
     console.log('Is Admin:', window.WebSocketManager.isAdmin);
@@ -1371,23 +1105,79 @@ window.debugStreamConnection = function(streamId) {
     console.log('Current Stream ID:', window.WebSocketManager.currentStreamId);
     console.log('Stream State:', window.streamState);
     
-    // Request fresh debug info from server
-    if (window.WebSocketManager.isConnected) {
-        window.WebSocketManager.socket.emit('debug_info', {});
+    if (window.streamState.room) {
+        console.log('LiveKit Room State:', window.streamState.room.state);
+        console.log('Room Participants:', window.streamState.room.participants.size);
+        console.log('Local Participant:', window.streamState.room.localParticipant);
+        console.log('Local Tracks:', Object.keys(window.streamState.localTracks));
     }
     
-    showToast('🔍 Enhanced debug info logged to console (F12)', 'info');
+    console.log('LiveKit Client Available:', typeof LiveKitClient !== 'undefined');
+    
+    showToast('🔍 LiveKit debug info logged to console (F12)', 'info');
+};
+
+// Test LiveKit system
+window.testLiveKitSystem = async function() {
+    console.log('🔊 Testing LiveKit system...');
+    
+    const testResults = {
+        livekitClientLoaded: typeof LiveKitClient !== 'undefined',
+        webSocketConnected: window.WebSocketManager.isConnected,
+        roomConnected: window.streamState.isConnected,
+        hasStreamData: !!window.streamState.streamData,
+        mediaPermissions: {
+            camera: false,
+            microphone: false,
+            screen: false
+        }
+    };
+    
+    // Test media permissions
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        testResults.mediaPermissions.camera = true;
+        stream.getTracks().forEach(track => track.stop());
+    } catch (e) {
+        console.log('Camera permission:', e.message);
+    }
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        testResults.mediaPermissions.microphone = true;
+        stream.getTracks().forEach(track => track.stop());
+    } catch (e) {
+        console.log('Microphone permission:', e.message);
+    }
+    
+    console.log('🔊 LiveKit system test results:', testResults);
+    
+    const allGood = testResults.livekitClientLoaded && testResults.webSocketConnected;
+    const message = allGood ? 
+        '✅ LiveKit system working properly!' : 
+        '❌ LiveKit system issues detected - Check console';
+    
+    showToast(message, allGood ? 'success' : 'warning');
+    
+    return testResults;
 };
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 Enhanced admin control page loaded');
+    console.log('📱 LiveKit admin control page loaded');
+    
+    // Check LiveKit availability
+    if (typeof LiveKitClient === 'undefined') {
+        console.error('❌ LiveKit client not loaded');
+        showToast('❌ LiveKit client not available', 'error');
+        return;
+    }
     
     // Initialize WebSocket communication
     window.WebSocketManager.init();
     
     // Set current stream ID if available
-    const streamId = getCurrentStreamId();
+    const streamId = {{ user_active_stream_dict.id if user_active_stream_dict else 'null' }};
     if (streamId) {
         window.WebSocketManager.currentStreamId = streamId;
     }
@@ -1395,7 +1185,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up form handlers
     const startStreamForm = document.getElementById('startUserStreamForm');
     if (startStreamForm) {
-        console.log('✅ Setting up stream form handler');
+        console.log('✅ Setting up LiveKit stream form handler');
         startStreamForm.addEventListener('submit', window.handleStartUserStream);
     } else {
         console.log('ℹ️ No stream form found (user may already have active stream)');
@@ -1405,36 +1195,52 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateStreamStats, 5000);
     updateStreamStats();
     
-    console.log('✅ Enhanced admin stream control loaded with WebSocket support');
+    console.log('✅ LiveKit admin stream control loaded successfully');
 });
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', function() {
-    if (window.streamState.isScreenSharing) {
-        stopScreenShare();
-    }
-    if (window.streamState.isAudioActive) {
-        stopAudio();
+    if (window.streamState.room) {
+        window.streamState.room.disconnect();
     }
 });
 </script>
 
 <style>
-.audio-bars {
+.media-indicators {
     display: flex;
-    align-items: end;
-    gap: 3px;
-    width: 60px;
-    height: 30px;
+    gap: 4px;
+    flex-wrap: wrap;
 }
 
-.audio-bar {
-    width: 8px;
-    min-height: 5px;
-    height: 10%;
-    background-color: #6b7280;
-    border-radius: 2px;
-    transition: height 0.1s ease, background-color 0.1s ease;
+.media-indicators .badge {
+    font-size: 10px;
+    padding: 2px 6px;
+}
+
+.connection-indicator {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1001;
+}
+
+.connection-indicator.good { background: rgba(16, 185, 129, 0.8); }
+.connection-indicator.poor { background: rgba(239, 68, 68, 0.8); }
+
+#localPreview {
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#localPreview video {
+    border-radius: 8px;
 }
 
 .btn-outline-secondary:hover {
@@ -1459,33 +1265,17 @@ window.addEventListener('beforeunload', function() {
     transform: translateY(-1px);
 }
 
-.connection-indicator {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    z-index: 1001;
-}
-
-.connection-indicator.good { background: rgba(16, 185, 129, 0.8); }
-.connection-indicator.poor { background: rgba(239, 68, 68, 0.8); }
-
 @media (max-width: 768px) {
     .col-lg-6 {
         margin-bottom: 1rem;
     }
     
-    .audio-bars {
-        width: 50px;
-        height: 25px;
+    .media-indicators {
+        justify-content: center;
     }
     
-    .audio-bar {
-        width: 6px;
+    .media-indicators .badge {
+        font-size: 9px;
     }
 }
 </style>
