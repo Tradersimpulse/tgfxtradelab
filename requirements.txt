@@ -21,10 +21,10 @@ botocore==1.31.85
 # Payments
 stripe==6.6.0
 
-# LiveKit Streaming - Professional Video/Audio Streaming
-livekit==0.10.1
-livekit-api==0.6.1
-livekit-protocol==1.16.0
+# LiveKit Streaming - FIXED VERSIONS
+livekit==1.0.12
+livekit-api==0.5.8
+livekit-protocol==1.5.9
 
 # Real-time Communication
 Flask-SocketIO==5.3.6
@@ -74,8 +74,3 @@ eventlet==0.33.3
 
 # Database Migration (optional)
 Flask-Migrate==4.0.5
-
-# Development Dependencies (install with: pip install -r requirements.txt[dev])
-# pytest==7.4.2
-# pytest-flask==1.2.0
-# flask-testing==0.8.1
