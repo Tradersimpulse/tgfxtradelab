@@ -19,40 +19,113 @@
     <!-- Material Icons -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
     
-    <!-- FIXED: LiveKit JavaScript SDK - Simplified and Working Version -->
-    <script src="https://unpkg.com/livekit-client@2.5.7/dist/livekit-client.umd.min.js"></script>
+    <!-- FIXED: Improved LiveKit JavaScript SDK Loading with Better Error Handling -->
     <script>
-    // FIXED: Simple LiveKit initialization
+    // ENHANCED: Professional LiveKit SDK Loading System
     (function() {
-        console.log('📦 Loading LiveKit SDK...');
+        console.log('📦 Initializing LiveKit SDK Professional Loading System...');
         
-        // Wait for script to load, then ensure global availability
-        function initializeLiveKit() {
-            if (typeof LivekitClient !== 'undefined') {
-                // Make available with both naming conventions
-                window.LiveKitClient = LivekitClient;
+        let livekitLoaded = false;
+        let loadingAttempts = 0;
+        const maxAttempts = 3;
+        
+        function loadLiveKitSDK() {
+            loadingAttempts++;
+            console.log(`📡 LiveKit loading attempt ${loadingAttempts}/${maxAttempts}...`);
+            
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/livekit-client@2.5.7/dist/livekit-client.umd.min.js';
+            script.async = true;
+            
+            script.onload = function() {
+                livekitLoaded = true;
                 console.log('✅ LiveKit SDK loaded successfully');
+                initializeLiveKitGlobals();
+            };
+            
+            script.onerror = function() {
+                console.error(`❌ LiveKit SDK loading attempt ${loadingAttempts} failed`);
                 
-                // Dispatch ready event for other scripts
-                document.dispatchEvent(new CustomEvent('livekitReady'));
-            } else if (typeof LiveKitClient !== 'undefined') {
-                // Already available as LiveKitClient
-                console.log('✅ LiveKit SDK loaded successfully (alternate naming)');
-                document.dispatchEvent(new CustomEvent('livekitReady'));
-            } else {
-                console.error('❌ LiveKit SDK failed to load');
+                if (loadingAttempts < maxAttempts) {
+                    console.log('🔄 Retrying LiveKit load in 2 seconds...');
+                    setTimeout(loadLiveKitSDK, 2000);
+                } else {
+                    console.error('❌ LiveKit SDK failed to load after all attempts');
+                    window.livekitLoadError = true;
+                    handleLiveKitLoadError();
+                }
+            };
+            
+            document.head.appendChild(script);
+        }
+        
+        function initializeLiveKitGlobals() {
+            try {
+                // Make sure LiveKit is available globally with multiple naming conventions
+                if (typeof LivekitClient !== 'undefined') {
+                    window.LiveKitClient = LivekitClient;
+                    console.log('✅ LiveKit globally available as LiveKitClient');
+                } else if (typeof LiveKitClient !== 'undefined') {
+                    console.log('✅ LiveKit already available as LiveKitClient');
+                } else {
+                    throw new Error('LiveKit client not found after loading');
+                }
+                
+                // Test basic functionality
+                if (window.LiveKitClient && window.LiveKitClient.Room) {
+                    console.log('🔧 LiveKit Room class available');
+                    console.log('📡 LiveKit version:', window.LiveKitClient.version || 'unknown');
+                    
+                    // Dispatch ready event
+                    dispatchLiveKitReady();
+                } else {
+                    throw new Error('LiveKit Room class not available');
+                }
+                
+            } catch (error) {
+                console.error('❌ Error initializing LiveKit globals:', error);
                 window.livekitLoadError = true;
+                handleLiveKitLoadError();
             }
         }
         
-        // Check if already loaded, otherwise wait
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                setTimeout(initializeLiveKit, 100);
-            });
-        } else {
-            setTimeout(initializeLiveKit, 100);
+        function dispatchLiveKitReady() {
+            console.log('🎯 Dispatching livekitReady event...');
+            document.dispatchEvent(new CustomEvent('livekitReady', {
+                detail: {
+                    version: window.LiveKitClient.version || 'unknown',
+                    timestamp: Date.now()
+                }
+            }));
         }
+        
+        function handleLiveKitLoadError() {
+            console.error('🚨 LiveKit SDK loading failed completely');
+            document.dispatchEvent(new CustomEvent('livekitLoadError', {
+                detail: {
+                    attempts: loadingAttempts,
+                    maxAttempts: maxAttempts,
+                    timestamp: Date.now()
+                }
+            }));
+        }
+        
+        // Start loading process
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadLiveKitSDK);
+        } else {
+            loadLiveKitSDK();
+        }
+        
+        // Fallback check after 10 seconds
+        setTimeout(() => {
+            if (!livekitLoaded && !window.livekitLoadError) {
+                console.warn('⚠️ LiveKit loading timeout - forcing error state');
+                window.livekitLoadError = true;
+                handleLiveKitLoadError();
+            }
+        }, 10000);
+        
     })();
     </script>
     
@@ -662,432 +735,6 @@
             animation: pulse 1.5s infinite;
         }
 
-        /* Stream State Overlays */
-.stream-state-overlay {
-    background: rgba(0, 0, 0, 0.9);
-    backdrop-filter: blur(8px);
-    border-radius: 8px;
-    animation: fadeIn 0.3s ease-out;
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 10;
-}
-
-/* Loading and Connecting Animations */
-.loading-animation, .connecting-animation {
-    position: relative;
-    display: inline-block;
-}
-
-.pulse-ring, .connecting-ring {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 60px;
-    height: 60px;
-    border: 3px solid;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-    opacity: 0.6;
-}
-
-.connecting-ring {
-    width: 40px;
-    height: 40px;
-    border: 2px solid #007bff;
-    border-top-color: transparent;
-    animation: spin 1s linear infinite;
-}
-
-.pulse-icon {
-    font-size: 2.5rem;
-    animation: pulse 2s infinite;
-    opacity: 0.9;
-}
-
-.connecting-icon {
-    font-size: 2rem;
-    color: #007bff;
-}
-
-/* Media Control Cards */
-.media-control-card {
-    text-align: center;
-    padding: 12px 8px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 2px solid transparent;
-    transition: all 0.3s ease;
-    position: relative;
-}
-
-.media-control-card.active {
-    background: rgba(16, 185, 129, 0.1);
-    border-color: rgba(16, 185, 129, 0.4);
-    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
-}
-
-.media-control-card .material-symbols-outlined {
-    font-size: 20px;
-    color: #6b7280;
-    margin-bottom: 4px;
-    transition: color 0.3s ease;
-}
-
-.media-control-card.active .material-symbols-outlined {
-    color: #10B981;
-}
-
-.media-control-card small {
-    font-size: 10px;
-    color: #9ca3af;
-    display: block;
-    font-weight: 600;
-}
-
-.media-control-card.active small {
-    color: #10B981;
-}
-
-/* Quality Indicators */
-.quality-indicator {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: transparent;
-    font-size: 8px;
-    line-height: 8px;
-    transition: all 0.3s ease;
-}
-
-.quality-indicator.active {
-    background: #10B981;
-    box-shadow: 0 0 6px #10B981;
-    animation: pulse 2s infinite;
-}
-
-/* Stream Video Containers */
-.livekit-video-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.stream-video-container {
-    min-height: 300px;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: pointer;
-    position: relative;
-    background: linear-gradient(135deg, #1a1a1a, #000);
-    transition: all 0.3s ease;
-}
-
-.stream-video-container:hover {
-    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
-}
-
-/* Stream Controls */
-.stream-controls {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    backdrop-filter: blur(4px);
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 8px;
-    padding: 4px;
-}
-
-.stream-controls .btn {
-    backdrop-filter: blur(4px);
-    border: none;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.stream-video-container:hover .stream-controls {
-    opacity: 1;
-}
-
-/* Status Badges */
-.stream-status-badge {
-    position: relative;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 10px;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.stream-status-badge.live {
-    background: var(--stream-live-color);
-    color: white;
-    animation: pulse 2s infinite;
-}
-
-.stream-status-badge.recording {
-    background: var(--stream-recording-color);
-    color: white;
-    animation: pulse 1.5s infinite;
-}
-
-.stream-status-badge.connecting {
-    background: var(--stream-connecting-color);
-    color: white;
-}
-
-.badge-connection {
-    backdrop-filter: blur(4px);
-}
-
-.live-badge {
-    animation: pulse 2s infinite;
-}
-
-/* Progress Indicators */
-.progress {
-    background: rgba(255, 255, 255, 0.1);
-    height: 4px;
-    margin: 0 auto;
-    border-radius: 2px;
-    overflow: hidden;
-}
-
-.progress-bar {
-    background: linear-gradient(90deg, #007bff, #0056b3);
-    transition: width 0.3s ease;
-}
-
-/* Error States */
-#retryBtn-{{ stream.id if stream else 'stream' }}:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
-}
-
-.btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
-/* System Status Indicators */
-.system-status {
-    padding: 8px;
-    border-radius: 6px;
-    transition: all 0.3s ease;
-    text-align: center;
-}
-
-.system-status.active {
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.system-status.inactive {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.status-icon {
-    font-size: 1.2em;
-    display: block;
-    margin-bottom: 4px;
-}
-
-/* Notification Toasts */
-.notification-toast {
-    animation: slideInRight 0.3s ease-out;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* Animations */
-@keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes pulse {
-    0% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.7; transform: scale(1.05); }
-    100% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes spin {
-    0% { transform: translate(-50%, -50%) rotate(0deg); }
-    100% { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-@keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(300px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-@keyframes slideOutRight {
-    from {
-        opacity: 1;
-        transform: translateX(0);
-    }
-    to {
-        opacity: 0;
-        transform: translateX(300px);
-    }
-}
-
-/* Connection Quality Indicators */
-.connection-quality-excellent { 
-    color: #10B981; 
-    text-shadow: 0 0 4px #10B981;
-}
-
-.connection-quality-good { 
-    color: #F59E0B; 
-    text-shadow: 0 0 4px #F59E0B;
-}
-
-.connection-quality-poor { 
-    color: #EF4444; 
-    text-shadow: 0 0 4px #EF4444;
-}
-
-.connection-quality-unknown { 
-    color: #6B7280; 
-}
-
-/* Fullscreen Styles */
-.stream-video-container:fullscreen {
-    background: #000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.stream-video-container:fullscreen video {
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain;
-}
-
-.stream-video-container:fullscreen .stream-controls {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-}
-
-.stream-video-container:fullscreen:hover .stream-controls {
-    opacity: 1;
-}
-
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
-    .stream-video-container {
-        min-height: 200px;
-    }
-    
-    .media-control-card {
-        padding: 8px 4px;
-    }
-    
-    .media-control-card .material-symbols-outlined {
-        font-size: 16px;
-    }
-    
-    .media-control-card small {
-        font-size: 9px;
-    }
-    
-    .stream-controls {
-        padding: 2px;
-    }
-    
-    .stream-controls .btn {
-        font-size: 12px;
-        padding: 4px 8px;
-    }
-    
-    .system-status {
-        padding: 6px;
-    }
-    
-    .status-icon {
-        font-size: 1em;
-    }
-}
-
-/* Dark Mode Optimizations */
-@media (prefers-color-scheme: dark) {
-    .card {
-        background: rgba(30, 41, 59, 0.8);
-        border-color: rgba(71, 85, 105, 0.3);
-    }
-    
-    .stream-state-overlay {
-        background: rgba(15, 23, 42, 0.95);
-    }
-    
-    .media-control-card {
-        background: rgba(15, 23, 42, 0.6);
-    }
-    
-    .stream-controls {
-        background: rgba(15, 23, 42, 0.8);
-    }
-}
-
-/* High DPI Display Support */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-    .material-symbols-outlined {
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-    }
-}
-
-/* Reduced Motion Support */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-    
-    .pulse-ring,
-    .pulse-icon,
-    .stream-status-badge.live,
-    .stream-status-badge.recording,
-    .quality-indicator.active {
-        animation: none;
-    }
-}
-
-/* Print Styles */
-@media print {
-    .stream-video-container,
-    .stream-controls,
-    .notification-toast,
-    .system-status {
-        display: none !important;
-    }
-}
-
         .stream-status-badge.connecting {
             background: var(--stream-connecting-color);
             color: white;
@@ -1174,7 +821,7 @@
                     <a class="nav-link d-flex align-items-center {% if request.endpoint == 'livestream' %}active{% endif %}" href="{{ url_for('livestream') }}">
                         <span class="material-symbols-outlined">live_tv</span>
                         <span class="nav-text">Live Stream</span>
-                        <!-- FIXED: Live indicator (shown when streams are active) -->
+                        <!-- Enhanced: Live indicator with better positioning -->
                         <span class="live-indicator" id="navLiveIndicator" style="display: none;"></span>
                     </a>
                 </div>
@@ -1314,7 +961,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        // FIXED: Global LiveKit utilities and state management
+        // ENHANCED: TGFX LiveKit Professional Integration System
         window.TGFXLiveKit = {
             // Configuration from backend
             config: {
@@ -1324,7 +971,8 @@
                 username: {{ current_user.username|tojson if current_user.is_authenticated else 'null' }},
                 displayName: {{ current_user.display_name|tojson if current_user.is_authenticated and current_user.display_name else 'null' }},
                 streamColor: {{ current_user.stream_color|tojson if current_user.is_authenticated and current_user.stream_color else '"#10B981"' }},
-                livekitAvailable: false
+                livekitAvailable: false,
+                livekitVersion: null
             },
 
             // Global state
@@ -1333,17 +981,31 @@
                 joinedStreams: new Set(),
                 connections: new Map(),
                 socket: null,
-                isConnected: false
+                isConnected: false,
+                initializationAttempts: 0,
+                maxInitializationAttempts: 3
             },
 
             // Utility functions
             utils: {
-                // Check if LiveKit is available
+                // Enhanced LiveKit availability check
                 isLiveKitAvailable() {
-                    return typeof window.LiveKitClient !== 'undefined' && !window.livekitLoadError;
+                    const available = (
+                        typeof window.LiveKitClient !== 'undefined' && 
+                        !window.livekitLoadError &&
+                        window.LiveKitClient.Room
+                    );
+                    
+                    if (available && !window.TGFXLiveKit.config.livekitAvailable) {
+                        window.TGFXLiveKit.config.livekitAvailable = true;
+                        window.TGFXLiveKit.config.livekitVersion = window.LiveKitClient.version || 'unknown';
+                        console.log('✅ LiveKit client validated and ready');
+                    }
+                    
+                    return available;
                 },
 
-                // Show global notification
+                // Enhanced notification system
                 showNotification(type, message, duration = 5000) {
                     const notification = document.createElement('div');
                     const alertClass = type === 'error' ? 'alert-danger' : 
@@ -1351,12 +1013,25 @@
                                       type === 'warning' ? 'alert-warning' : 'alert-info';
                     
                     notification.className = `alert ${alertClass} position-fixed`;
-                    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px; font-size: 14px; border-radius: 12px; backdrop-filter: blur(10px);';
+                    notification.style.cssText = `
+                        top: 20px; 
+                        right: 20px; 
+                        z-index: 9999; 
+                        max-width: 400px; 
+                        font-size: 14px; 
+                        border-radius: 12px; 
+                        backdrop-filter: blur(10px);
+                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+                        animation: slideInRight 0.3s ease-out;
+                    `;
+                    
+                    const icon = type === 'error' ? 'error' : 
+                                 type === 'success' ? 'check_circle' : 
+                                 type === 'warning' ? 'warning' : 'info';
+                    
                     notification.innerHTML = `
                         <div class="d-flex align-items-center">
-                            <span class="material-symbols-outlined me-2">
-                                ${type === 'error' ? 'error' : type === 'success' ? 'check_circle' : type === 'warning' ? 'warning' : 'info'}
-                            </span>
+                            <span class="material-symbols-outlined me-2">${icon}</span>
                             <div class="flex-grow-1">${message}</div>
                             <button type="button" class="btn-close btn-close-white ms-2" onclick="this.parentElement.parentElement.remove()"></button>
                         </div>
@@ -1372,7 +1047,7 @@
                     }, duration);
                 },
 
-                // Update live indicators in navigation
+                // Enhanced live indicator updates
                 updateNavLiveIndicator(isLive, isRecording = false) {
                     const indicator = document.getElementById('navLiveIndicator');
                     const streamBadge = document.getElementById('adminStreamBadge');
@@ -1399,66 +1074,79 @@
                     }
                 },
 
-                // Initialize WebSocket connection for real-time updates
+                // Enhanced WebSocket initialization
                 initializeRealtimeUpdates() {
                     if (typeof io === 'undefined') {
-                        console.warn('Socket.IO not available for real-time updates');
-                        return;
+                        console.warn('⚠️ Socket.IO not available for real-time updates');
+                        return false;
                     }
 
-                    const socket = io({
-                        transports: ['websocket', 'polling'],
-                        timeout: 8000
-                    });
+                    try {
+                        const socket = io({
+                            transports: ['websocket', 'polling'],
+                            timeout: 8000,
+                            reconnection: true,
+                            reconnectionAttempts: 5,
+                            reconnectionDelay: 1000
+                        });
 
-                    socket.on('connect', () => {
-                        console.log('✅ Connected to real-time stream updates');
-                        window.TGFXLiveKit.state.socket = socket;
-                        window.TGFXLiveKit.state.isConnected = true;
-                    });
+                        socket.on('connect', () => {
+                            console.log('✅ Connected to real-time stream updates');
+                            window.TGFXLiveKit.state.socket = socket;
+                            window.TGFXLiveKit.state.isConnected = true;
+                        });
 
-                    socket.on('disconnect', () => {
-                        console.log('❌ Disconnected from real-time updates');
-                        window.TGFXLiveKit.state.isConnected = false;
-                    });
+                        socket.on('disconnect', (reason) => {
+                            console.log('❌ Disconnected from real-time updates:', reason);
+                            window.TGFXLiveKit.state.isConnected = false;
+                        });
 
-                    socket.on('new_stream_started', (data) => {
-                        console.log('🎬 New stream started:', data);
-                        
-                        // Update navigation indicators
-                        window.TGFXLiveKit.utils.updateNavLiveIndicator(true, false);
-                        
-                        // Show notification
-                        window.TGFXLiveKit.utils.showNotification(
-                            'success',
-                            `🎬 ${data.streamer_name} is now live!`,
-                            'live'
-                        );
-                        
-                        // Auto-refresh livestream page if user is on it
-                        if (window.location.pathname.includes('/livestream')) {
-                            setTimeout(() => window.location.reload(), 2000);
-                        }
-                    });
+                        socket.on('new_stream_started', (data) => {
+                            console.log('🎬 New stream started:', data);
+                            
+                            // Update navigation indicators
+                            window.TGFXLiveKit.utils.updateNavLiveIndicator(true, false);
+                            
+                            // Show notification
+                            window.TGFXLiveKit.utils.showNotification(
+                                'success',
+                                `🎬 ${data.streamer_name} is now live!`,
+                                6000
+                            );
+                            
+                            // Auto-refresh livestream page if user is on it
+                            if (window.location.pathname.includes('/livestream')) {
+                                setTimeout(() => window.location.reload(), 2000);
+                            }
+                        });
 
-                    socket.on('stream_ended', (data) => {
-                        console.log('📺 Stream ended:', data);
-                        
-                        // Update navigation indicators
-                        window.TGFXLiveKit.utils.updateNavLiveIndicator(false, false);
-                        
-                        // Show notification
-                        window.TGFXLiveKit.utils.showNotification('info', data.message, 4000);
-                    });
+                        socket.on('stream_ended', (data) => {
+                            console.log('📺 Stream ended:', data);
+                            
+                            // Update navigation indicators
+                            window.TGFXLiveKit.utils.updateNavLiveIndicator(false, false);
+                            
+                            // Show notification
+                            window.TGFXLiveKit.utils.showNotification('info', data.message, 4000);
+                        });
 
-                    return socket;
+                        socket.on('connect_error', (error) => {
+                            console.warn('⚠️ WebSocket connection error:', error);
+                        });
+
+                        return socket;
+                        
+                    } catch (error) {
+                        console.error('❌ Error initializing WebSocket:', error);
+                        return false;
+                    }
                 },
 
-                // Check for active streams and update UI
+                // Enhanced stream status checking
                 async checkStreamStatus() {
                     try {
                         const response = await fetch('/api/stream/status');
-                        if (!response.ok) return;
+                        if (!response.ok) return false;
                         
                         const data = await response.json();
                         
@@ -1466,58 +1154,91 @@
                             const hasRecording = data.streams.some(stream => stream.is_recording);
                             window.TGFXLiveKit.utils.updateNavLiveIndicator(true, hasRecording);
                             window.TGFXLiveKit.state.activeStreams = data.streams;
+                            return true;
                         } else {
                             window.TGFXLiveKit.utils.updateNavLiveIndicator(false, false);
                             window.TGFXLiveKit.state.activeStreams = [];
+                            return false;
                         }
                     } catch (error) {
                         console.error('Error checking stream status:', error);
+                        return false;
                     }
+                },
+
+                // Initialize the complete system
+                async initialize() {
+                    window.TGFXLiveKit.state.initializationAttempts++;
+                    
+                    console.log(`🚀 Initializing TGFX LiveKit System (Attempt ${window.TGFXLiveKit.state.initializationAttempts})...`);
+                    
+                    // Check LiveKit availability
+                    if (!window.TGFXLiveKit.utils.isLiveKitAvailable()) {
+                        if (window.TGFXLiveKit.state.initializationAttempts < window.TGFXLiveKit.state.maxInitializationAttempts) {
+                            console.log('⏳ LiveKit not ready, retrying in 1 second...');
+                            setTimeout(() => window.TGFXLiveKit.utils.initialize(), 1000);
+                            return false;
+                        } else {
+                            console.error('❌ LiveKit initialization failed after maximum attempts');
+                            window.TGFXLiveKit.utils.showNotification('error', 'Streaming system failed to initialize');
+                            return false;
+                        }
+                    }
+                    
+                    // Initialize WebSocket for real-time updates
+                    {% if current_user.is_authenticated %}
+                    const socket = window.TGFXLiveKit.utils.initializeRealtimeUpdates();
+                    if (socket) {
+                        console.log('✅ Real-time updates initialized');
+                    }
+                    
+                    // Check initial stream status
+                    await window.TGFXLiveKit.utils.checkStreamStatus();
+                    
+                    // Set up periodic status checks
+                    setInterval(() => {
+                        window.TGFXLiveKit.utils.checkStreamStatus();
+                    }, 30000); // Every 30 seconds
+                    {% endif %}
+                    
+                    console.log('🎯 TGFX LiveKit System fully initialized!');
+                    console.log(`📊 LiveKit Version: ${window.TGFXLiveKit.config.livekitVersion}`);
+                    
+                    return true;
                 }
             }
         };
 
-        // Initialize global LiveKit utilities
+        // Enhanced initialization with better error handling
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🎬 Initializing TGFX LiveKit Integration...');
+            console.log('🎬 TGFX LiveKit Professional System Starting...');
             
-            // Wait for LiveKit ready event
-            document.addEventListener('livekitReady', function() {
-                console.log('✅ LiveKit client ready');
-                window.TGFXLiveKit.config.livekitAvailable = true;
-                
-                const LiveKitClient = window.LiveKitClient;
-                if (LiveKitClient?.version) {
-                    console.log('📦 LiveKit Version:', LiveKitClient.version);
-                }
-            });
-
-            // Check LiveKit availability immediately
+            // Initialize immediately if LiveKit is available
             if (window.TGFXLiveKit.utils.isLiveKitAvailable()) {
-                console.log('✅ LiveKit client already available');
-                window.TGFXLiveKit.config.livekitAvailable = true;
-            } else if (window.livekitLoadError) {
-                console.error('❌ LiveKit failed to load');
-                window.TGFXLiveKit.utils.showNotification('error', 'LiveKit streaming client failed to load. Please refresh the page.', 8000);
+                window.TGFXLiveKit.utils.initialize();
             } else {
-                console.log('⏳ Waiting for LiveKit to load...');
-                // Will be handled by the livekitReady event
+                // Listen for LiveKit ready events
+                document.addEventListener('livekitReady', function(event) {
+                    console.log('📡 LiveKit ready event received:', event.detail);
+                    window.TGFXLiveKit.utils.initialize();
+                });
+                
+                document.addEventListener('livekitLoadError', function(event) {
+                    console.error('🚨 LiveKit load error event:', event.detail);
+                    window.TGFXLiveKit.utils.showNotification(
+                        'error', 
+                        'Streaming system failed to load. Please refresh the page.',
+                        8000
+                    );
+                });
+                
+                // Fallback initialization attempt
+                setTimeout(() => {
+                    if (!window.TGFXLiveKit.config.livekitAvailable) {
+                        window.TGFXLiveKit.utils.initialize();
+                    }
+                }, 2000);
             }
-
-            // Initialize real-time updates
-            {% if current_user.is_authenticated %}
-            window.TGFXLiveKit.utils.initializeRealtimeUpdates();
-            
-            // Check initial stream status
-            window.TGFXLiveKit.utils.checkStreamStatus();
-            
-            // Periodically check stream status
-            setInterval(() => {
-                window.TGFXLiveKit.utils.checkStreamStatus();
-            }, 30000); // Every 30 seconds
-            {% endif %}
-            
-            console.log('🚀 TGFX LiveKit Integration initialized!');
         });
 
         // Sidebar functionality
@@ -1556,7 +1277,21 @@
             window.TGFXLiveKit.utils.showNotification(type, message);
         }
 
-        console.log('🔊 Professional streaming system loaded!');
+        // Add slide animations to CSS
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from { opacity: 0; transform: translateX(300px); }
+                to { opacity: 1; transform: translateX(0); }
+            }
+            @keyframes slideOutRight {
+                from { opacity: 1; transform: translateX(0); }
+                to { opacity: 0; transform: translateX(300px); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        console.log('🔊 TGFX Professional Streaming System Loaded!');
     </script>
     
     {% block scripts %}{% endblock %}
