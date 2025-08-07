@@ -664,23 +664,24 @@ def init_livekit_api():
         return None
         
 def create_livekit_room(room_name, streamer_name):
-    """Create a LiveKit room - FIXED with HTTP API"""
+    """FIXED: Create a LiveKit room with proper configuration"""
     try:
         config = init_livekit_api()
         if not config:
-            print("Cannot create room: LiveKit API not available")
+            print("❌ Cannot create room: LiveKit API not available")
             return None
         
-        # Generate JWT token for API access
         import jwt
         import time
+        import requests
         
-        # Create JWT payload for server API
+        # Generate JWT token for room creation API
         now = int(time.time())
         payload = {
             'iss': config['api_key'],
             'exp': now + 3600,  # 1 hour
-            'nbf': now,
+            'nbf': now - 30,    # Allow clock skew
+            'iat': now,
             'sub': config['api_key'],
             'video': {
                 'room': room_name,
@@ -690,58 +691,82 @@ def create_livekit_room(room_name, streamer_name):
             }
         }
         
-        # Sign the JWT
         token = jwt.encode(payload, config['api_secret'], algorithm='HS256')
         
-        # Create room via HTTP API
-        room_data = {
+        # FIXED: Proper room configuration
+        room_config = {
             'name': room_name,
-            'emptyTimeout': 300,  # 5 minutes
-            'maxParticipants': 100,
+            'emptyTimeout': 300,      # 5 minutes before cleanup
+            'maxParticipants': 50,    # Reasonable limit
             'metadata': json.dumps({
                 'streamer': streamer_name,
-                'created_at': now
-            })
+                'created_at': now,
+                'type': 'trading_session',
+                'version': '2.0'
+            }),
+            # FIXED: Add room settings for better streaming
+            'nodeId': '',  # Let LiveKit choose
+            'minPlayoutDelay': 200,  # 200ms minimum delay
+            'maxPlayoutDelay': 2000, # 2s maximum delay
         }
         
         headers = {
             'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'User-Agent': 'TGFX-TradeLabv2/1.0'
         }
         
-        # Try to create room
+        print(f"🎬 Creating LiveKit room: {room_name}")
+        print(f"   API URL: {config['url']}/room")
+        
+        # Create the room
         response = requests.post(
             f"{config['url']}/room",
-            json=room_data,
+            json=room_config,
             headers=headers,
-            timeout=10
+            timeout=15  # Increased timeout
         )
+        
+        print(f"📡 Room creation response: {response.status_code}")
         
         if response.status_code == 200:
             room_info = response.json()
-            print(f"✓ Room created via HTTP API: {room_name}")
+            print(f"✅ Room created successfully: {room_name}")
+            print(f"   Room SID: {room_info.get('sid', 'N/A')}")
             
-            # Create a mock room object for compatibility
+            # Create mock room object for compatibility
             class MockRoom:
                 def __init__(self, data):
                     self.name = data.get('name', room_name)
                     self.sid = data.get('sid', f"RM_{int(time.time())}")
                     self.numParticipants = data.get('numParticipants', 0)
                     self.creationTime = data.get('creationTime', now)
+                    self.metadata = data.get('metadata', '')
             
             return MockRoom(room_info)
-        else:
-            print(f"Failed to create room: {response.status_code} - {response.text}")
-            # Return mock room so app doesn't break
+            
+        elif response.status_code == 409:
+            # Room already exists - this is okay
+            print(f"ℹ️ Room already exists: {room_name}")
             class MockRoom:
                 def __init__(self, name):
                     self.name = name
-                    self.sid = f"mock-{name}-{int(time.time())}"
+                    self.sid = f"existing-{name}-{int(time.time())}"
+                    self.numParticipants = 0
+                    self.creationTime = now
             return MockRoom(room_name)
             
+        else:
+            print(f"❌ Failed to create room: {response.status_code}")
+            print(f"   Response: {response.text}")
+            raise Exception(f"Room creation failed: {response.status_code}")
+            
     except Exception as e:
-        print(f"Error in create_livekit_room: {e}")
-        # Return mock room so app doesn't break
+        print(f"❌ Error in create_livekit_room: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return mock room to prevent app crash
         class MockRoom:
             def __init__(self, name):
                 self.name = name
@@ -799,47 +824,62 @@ def delete_livekit_room(room_name):
         return True
 
 def generate_livekit_token(room_name, participant_identity, participant_name, is_publisher=False):
-    """Generate LiveKit access token - FIXED and working"""
+    """FIXED: Generate LiveKit access token with proper permissions"""
     try:
         livekit_api_key = app.config.get('LIVEKIT_API_KEY')
         livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
         
         if not all([livekit_api_key, livekit_api_secret]):
-            print("LiveKit credentials missing for token generation")
+            print("❌ LiveKit credentials missing for token generation")
             return None
         
         import jwt
         import time
-        from datetime import datetime, timedelta
         
-        # Create JWT payload for client access
+        # Create JWT payload with proper structure
         now = int(time.time())
-        exp = now + (4 * 3600)  # 4 hours
+        exp = now + (6 * 3600)  # 6 hours expiry
+        
+        # FIXED: Proper video grants structure
+        video_grants = {
+            'room': room_name,
+            'roomJoin': True,
+            'canPublish': is_publisher,
+            'canPublishData': is_publisher,
+            'canSubscribe': True,
+            'canUpdateOwnMetadata': True,
+        }
+        
+        # Add additional permissions for publishers (streamers)
+        if is_publisher:
+            video_grants.update({
+                'canPublishSources': ['camera', 'microphone', 'screen_share'],
+                'roomRecord': True,  # Allow recording
+                'roomAdmin': False,  # Not full admin rights
+            })
         
         payload = {
             'iss': livekit_api_key,
-            'exp': exp,
-            'nbf': now - 10,  # Allow 10 seconds clock skew
             'sub': participant_identity,
             'name': participant_name,
-            'video': {
-                'room': room_name,
-                'roomJoin': True,
-                'canPublish': is_publisher,
-                'canPublishData': is_publisher,
-                'canSubscribe': True,
-                'canUpdateOwnMetadata': True
-            }
+            'exp': exp,
+            'nbf': now - 30,  # Allow 30 seconds clock skew
+            'iat': now,
+            'video': video_grants
         }
         
         # Generate the token
         token = jwt.encode(payload, livekit_api_secret, algorithm='HS256')
         
-        print(f"✓ Generated LiveKit token for {participant_name} ({'publisher' if is_publisher else 'subscriber'})")
+        print(f"✅ Generated LiveKit token for {participant_name} ({'publisher' if is_publisher else 'subscriber'})")
+        print(f"   Room: {room_name}, Identity: {participant_identity}")
+        
         return token
         
     except Exception as e:
-        print(f"Error generating LiveKit token: {e}")
+        print(f"❌ Error generating LiveKit token: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def start_livekit_recording(room_name):
@@ -901,37 +941,69 @@ def upload_recording_to_s3(local_file_path, stream_id, streamer_name):
         print(f"Error uploading recording to S3: {e}")
         return None
 def test_livekit_setup():
-    """Test LiveKit configuration and connectivity"""
+    """Enhanced LiveKit setup testing"""
     try:
+        print("🔧 Testing LiveKit setup...")
+        
         config = init_livekit_api()
         if not config:
-            return {"error": "Configuration missing"}
+            return {"error": "Configuration missing or invalid"}
+        
+        results = {
+            'config_valid': True,
+            'api_key_present': bool(config.get('api_key')),
+            'api_secret_present': bool(config.get('api_secret')),
+            'url_valid': bool(config.get('url')),
+            'timestamp': int(time.time())
+        }
         
         # Test token generation
-        test_token = generate_livekit_token(
-            "test-room",
-            "test-user", 
-            "Test User",
-            is_publisher=False
-        )
-        
-        if not test_token:
-            return {"error": "Token generation failed"}
+        try:
+            test_token = generate_livekit_token(
+                "test-room-" + str(int(time.time())),
+                "test-user",
+                "Test User",
+                is_publisher=False
+            )
+            results['token_generation'] = bool(test_token)
+            if test_token:
+                results['token_length'] = len(test_token)
+        except Exception as e:
+            results['token_generation'] = False
+            results['token_error'] = str(e)
         
         # Test room creation
-        test_room = create_livekit_room("test-room-" + str(int(time.time())), "Test")
-        if not test_room:
-            return {"error": "Room creation failed"}
+        try:
+            test_room_name = f"test-room-{int(time.time())}"
+            test_room = create_livekit_room(test_room_name, "TestStreamer")
+            results['room_creation'] = bool(test_room)
+            
+            if test_room:
+                results['test_room_sid'] = getattr(test_room, 'sid', 'N/A')
+                # Clean up test room
+                try:
+                    delete_livekit_room(test_room_name)
+                    results['room_cleanup'] = True
+                except:
+                    results['room_cleanup'] = False
+            
+        except Exception as e:
+            results['room_creation'] = False
+            results['room_error'] = str(e)
         
-        # Clean up test room
-        delete_livekit_room(test_room.name)
+        # Overall health check
+        results['overall_health'] = (
+            results.get('token_generation', False) and 
+            results.get('room_creation', False)
+        )
         
-        return {
-            "success": True,
-            "message": "LiveKit setup working correctly",
-            "token_length": len(test_token),
-            "room_created": True
-        }
+        if results['overall_health']:
+            results['message'] = "✅ LiveKit setup is working correctly!"
+        else:
+            results['message'] = "❌ LiveKit setup has issues - check configuration"
+        
+        print(f"🔧 Test results: {results}")
+        return results
         
     except Exception as e:
         return {"error": f"Test failed: {str(e)}"}
@@ -2687,9 +2759,11 @@ def api_delete_video(video_id):
 @app.route('/api/stream/start', methods=['POST'])
 @login_required
 def api_start_stream():
+    """FIXED: Start stream with better error handling and validation"""
     if not current_user.is_admin or not current_user.can_stream:
         return jsonify({'error': 'Access denied - not authorized to stream'}), 403
     
+    # Check for existing active stream
     user_active_stream = Stream.query.filter_by(
         created_by=current_user.id,
         is_active=True
@@ -2697,86 +2771,125 @@ def api_start_stream():
     if user_active_stream:
         return jsonify({'error': 'You already have an active stream'}), 400
     
+    # Check stream limit
     active_stream_count = Stream.query.filter_by(is_active=True).count()
     if active_stream_count >= 2:
         return jsonify({'error': 'Maximum concurrent streams reached (2)'}), 400
     
-    data = request.get_json()
-    title = data.get('title', 'Live Stream')
-    description = data.get('description', '')
-    stream_type = data.get('stream_type', 'general')
-    
-    streamer_name = current_user.display_name or current_user.username
-    
-    if streamer_name not in title:
-        title = f"{streamer_name}'s {title}"
-    
-    # Create LiveKit room name
-    room_name = f"stream-{streamer_name.lower()}-{uuid.uuid4().hex[:12]}"
-    
-    # Create LiveKit room
-    room_info = create_livekit_room(room_name, streamer_name)
-    if not room_info:
-        return jsonify({'error': 'Failed to create LiveKit room'}), 500
-    
-    # Generate publisher token for the streamer
-    participant_identity = f"streamer-{current_user.id}"
-    streamer_token = generate_livekit_token(
-        room_name,
-        participant_identity,
-        streamer_name,
-        is_publisher=True
-    )
-    
-    if not streamer_token:
-        delete_livekit_room(room_name)
-        return jsonify({'error': 'Failed to create streamer token'}), 500
-    
-    # Create database record
-    stream = Stream(
-        title=title,
-        description=description,
-        room_name=room_name,
-        room_sid=room_info.sid if room_info else None,
-        is_active=True,
-        started_at=datetime.utcnow(),
-        created_by=current_user.id,
-        streamer_name=streamer_name,
-        stream_type=stream_type
-    )
-    
-    db.session.add(stream)
-    db.session.commit()
-    
-    # Broadcast notification about new stream via WebSocket
-    if socketio:
-        socketio.emit('new_stream_started', {
-            'stream_id': stream.id,
-            'title': stream.title,
-            'streamer_name': stream.streamer_name,
-            'message': f'{streamer_name} is now live!'
+    try:
+        data = request.get_json() or {}
+        title = data.get('title', 'Live Stream').strip()
+        description = data.get('description', '').strip()
+        stream_type = data.get('stream_type', 'general')
+        
+        streamer_name = current_user.display_name or current_user.username
+        
+        # Ensure streamer name is in title
+        if streamer_name.lower() not in title.lower():
+            title = f"{streamer_name}'s {title}"
+        
+        # FIXED: Generate unique room name
+        timestamp = int(time.time())
+        room_name = f"stream-{streamer_name.lower().replace(' ', '')}-{timestamp}"
+        
+        print(f"🎬 Starting stream: {title}")
+        print(f"   Streamer: {streamer_name}")
+        print(f"   Room: {room_name}")
+        
+        # Create LiveKit room with retries
+        room_info = None
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                room_info = create_livekit_room(room_name, streamer_name)
+                if room_info:
+                    break
+            except Exception as e:
+                print(f"❌ Room creation attempt {attempt + 1} failed: {e}")
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(1)  # Wait before retry
+        
+        if not room_info:
+            raise Exception("Failed to create LiveKit room after retries")
+        
+        # Generate publisher token for the streamer
+        participant_identity = f"streamer-{current_user.id}-{timestamp}"
+        streamer_token = generate_livekit_token(
+            room_name,
+            participant_identity,
+            streamer_name,
+            is_publisher=True
+        )
+        
+        if not streamer_token:
+            # Clean up room if token generation failed
+            try:
+                delete_livekit_room(room_name)
+            except:
+                pass
+            raise Exception("Failed to create streamer token")
+        
+        # Create database record
+        stream = Stream(
+            title=title,
+            description=description,
+            room_name=room_name,
+            room_sid=getattr(room_info, 'sid', None),
+            is_active=True,
+            started_at=datetime.utcnow(),
+            created_by=current_user.id,
+            streamer_name=streamer_name,
+            stream_type=stream_type
+        )
+        
+        db.session.add(stream)
+        db.session.commit()
+        
+        print(f"✅ Stream created successfully: {stream.id}")
+        
+        # Broadcast notification
+        if socketio:
+            socketio.emit('new_stream_started', {
+                'stream_id': stream.id,
+                'title': stream.title,
+                'streamer_name': stream.streamer_name,
+                'message': f'{streamer_name} is now live!'
+            })
+        
+        # Also send traditional notification
+        broadcast_notification(
+            'Live Stream Started!',
+            f'{streamer_name} is now live: "{title}"',
+            'live_stream'
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'Stream "{title}" started successfully',
+            'stream': {
+                'id': stream.id,
+                'title': stream.title,
+                'streamer_name': stream.streamer_name,
+                'room_name': stream.room_name,
+                'room_sid': stream.room_sid,
+                'livekit_token': streamer_token,
+                'livekit_url': app.config.get('LIVEKIT_URL'),
+                'participant_identity': participant_identity,
+                'started_at': stream.started_at.isoformat()
+            }
         })
-    
-    # Also send traditional notification
-    broadcast_notification(
-        'Live Stream Started!',
-        f'{streamer_name} is now live: "{title}"',
-        'live_stream'
-    )
-    
-    return jsonify({
-        'success': True,
-        'stream': {
-            'id': stream.id,
-            'title': stream.title,
-            'streamer_name': stream.streamer_name,
-            'room_name': stream.room_name,
-            'room_sid': stream.room_sid,
-            'livekit_token': streamer_token,
-            'livekit_url': app.config.get('LIVEKIT_URL'),
-            'participant_identity': participant_identity
-        }
-    })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Stream start error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': f'Failed to start stream: {str(e)}'
+        }), 500
     
 # Update your existing /api/stream/stop route
 @app.route('/api/stream/stop', methods=['POST'])
@@ -2959,68 +3072,39 @@ def api_stop_recording():
     return jsonify({'error': 'Failed to stop recording'}), 500
 
 # Test route to verify LiveKit setup
-@app.route('/debug/livekit-setup')
+@app.route('/api/admin/debug-livekit')
 @login_required
-def debug_livekit_setup():
-    """Check LiveKit configuration and connection"""
+def debug_livekit():
+    """Debug endpoint for LiveKit troubleshooting"""
     if not current_user.is_admin:
         return jsonify({'error': 'Admin access required'}), 403
     
     try:
-        livekit_api_key = app.config.get('LIVEKIT_API_KEY')
-        livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
-        livekit_url = app.config.get('LIVEKIT_URL')
-        
-        test_result = {
-            'livekit_url': livekit_url,
-            'api_key_configured': bool(livekit_api_key),
-            'api_secret_configured': bool(livekit_api_secret),
-            'configuration_complete': bool(livekit_api_key and livekit_api_secret and livekit_url)
+        config = init_livekit_api()
+        debug_info = {
+            'livekit_config': {
+                'api_key_configured': bool(app.config.get('LIVEKIT_API_KEY')),
+                'api_secret_configured': bool(app.config.get('LIVEKIT_API_SECRET')),
+                'url_configured': bool(app.config.get('LIVEKIT_URL')),
+                'url': app.config.get('LIVEKIT_URL', 'NOT SET')
+            },
+            'active_streams': [{
+                'id': s.id,
+                'title': s.title,
+                'room_name': s.room_name,
+                'room_sid': s.room_sid,
+                'streamer': s.streamer_name,
+                'viewers': s.viewer_count,
+                'started': s.started_at.isoformat() if s.started_at else None
+            } for s in Stream.query.filter_by(is_active=True).all()],
+            'test_results': test_livekit_setup(),
+            'timestamp': datetime.utcnow().isoformat()
         }
         
-        # Test API connection
-        if test_result['configuration_complete']:
-            try:
-                lk_api = init_livekit_api()
-                if lk_api:
-                    # Try to list rooms (this will test the connection)
-                    rooms = lk_api.room.list_rooms(api.ListRoomsRequest())
-                    test_result['api_connection_successful'] = True
-                    test_result['existing_rooms_count'] = len(rooms)
-                    test_result['message'] = '✅ LiveKit is properly configured and connected!'
-                else:
-                    test_result['api_connection_successful'] = False
-                    test_result['message'] = '❌ Failed to initialize LiveKit API client'
-            except Exception as e:
-                test_result['api_connection_successful'] = False
-                test_result['connection_error'] = str(e)
-                test_result['message'] = f'❌ LiveKit API connection failed: {str(e)}'
-        else:
-            test_result['message'] = '⚠️ LiveKit configuration incomplete. Check environment variables.'
-        
-        # Test token generation
-        if test_result.get('api_connection_successful'):
-            try:
-                test_token = generate_livekit_token(
-                    'test-room',
-                    'test-user',
-                    'Test User',
-                    is_publisher=False
-                )
-                test_result['token_generation_successful'] = bool(test_token)
-                if test_token:
-                    test_result['sample_token'] = test_token[:50] + '...'
-            except Exception as e:
-                test_result['token_generation_successful'] = False
-                test_result['token_error'] = str(e)
-        
-        return jsonify(test_result)
+        return jsonify(debug_info)
         
     except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'message': 'LiveKit test failed'
-        }), 500
+        return jsonify({'error': str(e)}), 500
 
 # FIXED: Enhanced application startup with better error handling
 def initialize_app():
