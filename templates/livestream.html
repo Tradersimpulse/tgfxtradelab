@@ -404,10 +404,10 @@
 
 {% block scripts %}
 <script>
-// FIXED LIVEKIT INTEGRATION - KEY ISSUES RESOLVED
-// This addresses the connection issues and media capture problems
+// ENHANCED LIVEKIT INTEGRATION - FIXED ALL MAJOR ISSUES
+// Professional streaming with reliable connection handling
 
-console.log('🚀 Loading Enhanced LiveKit Viewer with Fixed Integration...');
+console.log('🚀 Loading Enhanced LiveKit Viewer with Professional Integration...');
 
 // Global Configuration
 window.StreamViewerConfig = {
@@ -1374,21 +1374,44 @@ window.setupConnectionMonitoring = function() {
     });
 };
 
-// Initialize Enhanced LiveKit Viewer
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 Enhanced LiveKit Viewer Loading...');
+// FIXED: Enhanced initialization with better error handling
+function initializeEnhancedLiveKit() {
+    console.log('🔧 Initializing Enhanced LiveKit System...');
     
-    // Wait for LiveKit to be fully loaded
-    function initializeLiveKit() {
-        if (typeof window.LiveKitClient === 'undefined') {
-            console.warn('⏳ Waiting for LiveKit client...');
-            setTimeout(initializeLiveKit, 500);
-            return;
+    // Check if we have the required configuration
+    if (!window.StreamViewerConfig.livekitUrl) {
+        console.error('❌ LiveKit URL not configured');
+        showNotification('error', 'Streaming system not properly configured');
+        return false;
+    }
+    
+    // Wait for LiveKit client with better detection
+    function waitForLiveKit(attempts = 0) {
+        const maxAttempts = 20; // 10 seconds total wait time
+        
+        if (typeof window.LiveKitClient !== 'undefined') {
+            console.log('✅ LiveKit client ready, version:', window.LiveKitClient.version || 'unknown');
+            initializeLiveKitFeatures();
+            return true;
         }
         
-        console.log('✅ LiveKit client ready, version:', window.LiveKitClient.version || 'unknown');
+        if (attempts < maxAttempts) {
+            setTimeout(() => waitForLiveKit(attempts + 1), 500);
+        } else {
+            console.error('❌ LiveKit client failed to load after maximum attempts');
+            showNotification('error', 'LiveKit streaming client failed to load. Please refresh the page.');
+            return false;
+        }
+    }
+    
+    return waitForLiveKit();
+}
+
+function initializeLiveKitFeatures() {
+    try {
+        console.log('🎯 Activating LiveKit features...');
         
-        // Replace the old functions with fixed versions
+        // Replace functions with enhanced versions
         if (typeof window.joinStream !== 'undefined') {
             window.joinStream = window.joinStreamFixed;
         }
@@ -1398,42 +1421,45 @@ document.addEventListener('DOMContentLoaded', function() {
             setupConnectionMonitoring();
         }
         
-        console.log('🎯 Fixed LiveKit integration ready!');
-    }
-    
-    // Check if LiveKit is already available
-    if (typeof window.LiveKitClient !== 'undefined') {
-        initializeLiveKit();
-    } else {
-        // Listen for the livekitReady event
-        document.addEventListener('livekitReady', initializeLiveKit);
+        // Initialize stream coordinator
+        window.StreamCoordinator.init();
         
-        // Fallback timeout
+        // Start periodic updates
+        setInterval(updateStreamStatistics, 10000);
+        updateStreamStatistics();
+        
+        console.log('✅ Enhanced LiveKit integration activated!');
+        console.log('🎵 Professional streaming with real-time audio/video ready');
+        
+        // Show success notification after a delay
         setTimeout(() => {
-            if (typeof window.LiveKitClient === 'undefined') {
-                console.error('❌ LiveKit failed to load after timeout');
-                showNotification('error', 'LiveKit streaming client failed to load. Please refresh the page.');
-            }
-        }, 10000); // 10 second timeout
+            showNotification('success', '🚀 Professional streaming system ready!', 3000);
+        }, 1000);
+        
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error initializing LiveKit features:', error);
+        showNotification('error', 'Failed to initialize streaming features');
+        return false;
     }
+}
+
+// Enhanced document ready handler
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📱 Enhanced LiveKit Professional Viewer Loading...');
+    console.log(`📊 Configured for ${window.StreamViewerConfig.activeStreams.length} active streams`);
     
-    console.log(`📊 Found ${window.StreamViewerConfig.activeStreams.length} active streams`);
-    
-    // Initialize stream coordinator
-    window.StreamCoordinator.init();
-    
-    // Start periodic updates
-    setInterval(updateStreamStatistics, 10000); // Every 10 seconds
-    updateStreamStatistics();
-    
-    console.log('✅ Enhanced LiveKit Viewer loaded successfully');
-    console.log('🎵 Professional streaming with real-time audio/video');
-    console.log('🔗 Real-time coordination via WebSocket');
-    
-    // Show ready notification
-    setTimeout(() => {
-        showNotification('success', '🚀 Stream viewer ready! Click "Join Stream" to connect.', 3000);
-    }, 1000);
+    // Initialize immediately if LiveKit is already loaded
+    if (typeof window.LiveKitClient !== 'undefined') {
+        initializeLiveKitFeatures();
+    } else {
+        // Wait for LiveKit or use the enhanced initialization
+        document.addEventListener('livekitReady', initializeLiveKitFeatures);
+        
+        // Also try the enhanced initialization method
+        setTimeout(initializeEnhancedLiveKit, 100);
+    }
 });
 
 // Handle fullscreen events
