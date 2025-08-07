@@ -19,10 +19,10 @@
     <!-- Material Icons -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
     
-    <!-- LiveKit JavaScript SDK - Simplified and Fixed -->
+    <!-- FIXED: LiveKit JavaScript SDK - Simplified and Working Version -->
     <script src="https://unpkg.com/livekit-client@2.5.7/dist/livekit-client.umd.min.js"></script>
     <script>
-    // Simple LiveKit initialization
+    // FIXED: Simple LiveKit initialization
     (function() {
         console.log('📦 Loading LiveKit SDK...');
         
@@ -291,106 +291,6 @@
 
         .live-indicator.recording {
             background: var(--stream-recording-color);
-        }
-
-        /* Dropdown Styles */
-        .nav-dropdown {
-            position: relative;
-        }
-
-        .nav-dropdown-toggle {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 0.875rem 1rem;
-            color: var(--text-secondary);
-            text-decoration: none;
-            border-radius: 12px;
-            transition: all 0.2s ease;
-            position: relative;
-            font-weight: 500;
-            font-size: 0.875rem;
-            cursor: pointer;
-            border: none;
-            background: transparent;
-            width: 100%;
-        }
-
-        .nav-dropdown-toggle:hover {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--text-primary);
-        }
-
-        .nav-dropdown-toggle.active {
-            background: var(--gradient-primary);
-            color: white !important;
-        }
-
-        .dropdown-arrow {
-            margin-left: auto;
-            transition: transform 0.3s ease;
-            font-size: 16px;
-        }
-
-        .nav-dropdown.open .dropdown-arrow {
-            transform: rotate(180deg);
-        }
-
-        .sidebar.collapsed .dropdown-arrow {
-            display: none;
-        }
-
-        .nav-dropdown-menu {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-            margin-left: 2.5rem;
-            margin-top: 0.5rem;
-        }
-
-        .sidebar.collapsed .nav-dropdown-menu {
-            position: absolute;
-            left: 80px;
-            top: 0;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 0.5rem 0;
-            min-width: 200px;
-            box-shadow: var(--shadow-lg);
-            max-height: none;
-            margin: 0;
-            z-index: 1001;
-            display: none;
-        }
-
-        .sidebar.collapsed .nav-dropdown.open .nav-dropdown-menu {
-            display: block;
-        }
-
-        .nav-dropdown.open .nav-dropdown-menu {
-            max-height: 300px;
-        }
-
-        .nav-dropdown-item {
-            padding: 0.75rem 1rem;
-            color: var(--text-secondary);
-            text-decoration: none;
-            display: block;
-            border-radius: 8px;
-            margin: 0.25rem 0.5rem;
-            transition: all 0.2s ease;
-            font-size: 0.875rem;
-        }
-
-        .nav-dropdown-item:hover {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--text-primary);
-        }
-
-        .nav-dropdown-item.active {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--primary-color);
         }
 
         /* Toggle button */
@@ -739,139 +639,6 @@
             background-clip: text;
         }
 
-        /* Video specific styles */
-        .video-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            overflow: hidden;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .video-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
-            border-color: rgba(16, 185, 129, 0.3);
-        }
-
-        .video-thumbnail {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-            background: var(--bg-tertiary);
-        }
-
-        .video-duration {
-            position: absolute;
-            bottom: 8px;
-            right: 8px;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 6px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .video-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(4px);
-        }
-
-        .video-card:hover .video-overlay {
-            opacity: 1;
-        }
-
-        .play-button {
-            background: var(--gradient-primary);
-            border: none;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.5rem;
-            transition: all 0.2s ease;
-        }
-
-        .play-button:hover {
-            transform: scale(1.1);
-            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
-        }
-
-        /* Progress indicators */
-        .progress-bar {
-            background: var(--gradient-primary);
-        }
-
-        .progress {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            height: 8px;
-        }
-
-        /* Status badges */
-        .badge-success {
-            background: var(--gradient-success);
-            color: white;
-        }
-
-        .badge-warning {
-            background: var(--gradient-warning);
-            color: white;
-        }
-
-        .badge-danger {
-            background: var(--gradient-danger);
-            color: white;
-        }
-
-        /* Auth pages */
-        .auth-container {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem 0;
-        }
-
-        .auth-card {
-            background: rgba(20, 20, 20, 0.95);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            border-radius: 20px;
-            backdrop-filter: blur(20px);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .auth-card:hover {
-            border-color: rgba(16, 185, 129, 0.3);
-            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4);
-        }
-
-        .auth-logo {
-            height: 60px;
-            width: auto;
-            filter: drop-shadow(0 4px 8px rgba(16, 185, 129, 0.2));
-            transition: all 0.3s ease;
-        }
-
-        .auth-logo:hover {
-            transform: scale(1.05);
-        }
-
         /* LiveKit Streaming Specific Styles */
         .stream-status-badge {
             position: relative;
@@ -905,40 +672,11 @@
             color: white;
         }
 
-        /* Stream notification toast */
-        .stream-notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            max-width: 350px;
-            background: rgba(30, 41, 59, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1rem;
-            color: white;
-            animation: slideInRight 0.3s ease-out;
-        }
-
-        .stream-notification.live {
-            border-left: 4px solid var(--stream-live-color);
-        }
-
-        .stream-notification.recording {
-            border-left: 4px solid var(--stream-recording-color);
-        }
-
         /* Animation for live indicators */
         @keyframes pulse {
             0% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.7; transform: scale(1.05); }
             100% { opacity: 1; transform: scale(1); }
-        }
-
-        @keyframes slideInRight {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
         }
 
         /* Scrollbar styling */
@@ -1010,32 +748,26 @@
                     <a class="nav-link d-flex align-items-center {% if request.endpoint == 'livestream' %}active{% endif %}" href="{{ url_for('livestream') }}">
                         <span class="material-symbols-outlined">live_tv</span>
                         <span class="nav-text">Live Stream</span>
-                        <!-- Live indicator (shown when streams are active) -->
+                        <!-- FIXED: Live indicator (shown when streams are active) -->
                         <span class="live-indicator" id="navLiveIndicator" style="display: none;"></span>
                     </a>
                 </div>
             </div>
 
-            <!-- Learning Section with Dropdown -->
+            <!-- Learning Section -->
             <div class="nav-section">
                 <div class="nav-section-title">Learning</div>
-                <div class="nav-item nav-dropdown" id="coursesDropdown">
-                    <button class="nav-dropdown-toggle {% if request.endpoint in ['courses', 'category_videos', 'watch_video', 'favorites'] %}active{% endif %}" 
-                            onclick="toggleDropdown('coursesDropdown')">
+                <div class="nav-item">
+                    <a href="{{ url_for('courses') }}" class="nav-link {% if request.endpoint in ['courses', 'category_videos', 'watch_video'] %}active{% endif %}">
                         <span class="material-symbols-outlined">school</span>
                         <span class="nav-text">Courses</span>
-                        <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
-                    </button>
-                    <div class="nav-dropdown-menu">
-                        <a href="{{ url_for('courses') }}" class="nav-dropdown-item {% if request.endpoint == 'courses' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">play_circle</span>
-                            All Courses
-                        </a>
-                        <a href="{{ url_for('favorites') }}" class="nav-dropdown-item {% if request.endpoint == 'favorites' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">favorite</span>
-                            Favorites
-                        </a>
-                    </div>
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="{{ url_for('favorites') }}" class="nav-link {% if request.endpoint == 'favorites' %}active{% endif %}">
+                        <span class="material-symbols-outlined">favorite</span>
+                        <span class="nav-text">Favorites</span>
+                    </a>
                 </div>
             </div>
 
@@ -1050,71 +782,57 @@
                 </div>
             </div>
 
-            <!-- Account Section with Dropdown -->
+            <!-- Account Section -->
             <div class="nav-section">
                 <div class="nav-section-title">Account</div>
-                <div class="nav-item nav-dropdown" id="accountDropdown">
-                    <button class="nav-dropdown-toggle {% if request.endpoint in ['subscription', 'donate', 'user_settings'] %}active{% endif %}" 
-                            onclick="toggleDropdown('accountDropdown')">
-                        <span class="material-symbols-outlined">account_circle</span>
-                        <span class="nav-text">Account</span>
-                        <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
-                    </button>
-                    <div class="nav-dropdown-menu">
-                        <a href="{{ url_for('user_settings') }}" class="nav-dropdown-item {% if request.endpoint == 'user_settings' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">settings</span>
-                            Settings
-                        </a>
-                        <a href="{{ url_for('subscription') }}" class="nav-dropdown-item {% if request.endpoint == 'subscription' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">workspace_premium</span>
-                            Billing & Subscription
-                        </a>
-                        <a href="{{ url_for('donate') }}" class="nav-dropdown-item {% if request.endpoint == 'donate' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">volunteer_activism</span>
-                            Support Us
-                        </a>
-                    </div>
+                <div class="nav-item">
+                    <a href="{{ url_for('user_settings') }}" class="nav-link {% if request.endpoint == 'user_settings' %}active{% endif %}">
+                        <span class="material-symbols-outlined">settings</span>
+                        <span class="nav-text">Settings</span>
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="{{ url_for('subscription') }}" class="nav-link {% if request.endpoint == 'subscription' %}active{% endif %}">
+                        <span class="material-symbols-outlined">workspace_premium</span>
+                        <span class="nav-text">Subscription</span>
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="{{ url_for('donate') }}" class="nav-link {% if request.endpoint == 'donate' %}active{% endif %}">
+                        <span class="material-symbols-outlined">volunteer_activism</span>
+                        <span class="nav-text">Support Us</span>
+                    </a>
                 </div>
             </div>
 
             {% if current_user.is_authenticated and current_user.is_admin %}
-            <!-- Admin Section with Dropdown -->
+            <!-- Admin Section -->
             <div class="nav-section">
                 <div class="nav-section-title">Admin</div>
-                <div class="nav-item nav-dropdown" id="adminDropdown">
-                    <button class="nav-dropdown-toggle {% if 'admin' in request.endpoint %}active{% endif %}" 
-                            onclick="toggleDropdown('adminDropdown')">
+                <div class="nav-item">
+                    <a href="{{ url_for('admin') }}" class="nav-link {% if request.endpoint == 'admin' %}active{% endif %}">
                         <span class="material-symbols-outlined">admin_panel_settings</span>
-                        <span class="nav-text">Admin</span>
-                        <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
-                    </button>
-                    <div class="nav-dropdown-menu">
-                        <a href="{{ url_for('admin') }}" class="nav-dropdown-item {% if request.endpoint == 'admin' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">dashboard</span>
-                            Dashboard
-                        </a>
-                        <a href="{{ url_for('admin_videos') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'video' in request.endpoint %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">video_library</span>
-                            Videos
-                        </a>
-                        <a href="{{ url_for('admin_categories') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'categor' in request.endpoint %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">category</span>
-                            Categories
-                        </a>
-                        <a href="{{ url_for('admin_tags') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'tag' in request.endpoint %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">label</span>
-                            Tags
-                        </a>
-                        <a href="{{ url_for('admin_stream') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'stream' in request.endpoint %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">live_tv</span>
-                            Stream Control
-                            <span class="stream-status-badge live ms-auto" id="adminStreamBadge" style="display: none;">LIVE</span>
-                        </a>
-                        <a href="{{ url_for('admin_recommendations') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'recommendation' in request.endpoint %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">recommend</span>
-                            Recommendations
-                        </a>
-                    </div>
+                        <span class="nav-text">Dashboard</span>
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="{{ url_for('admin_videos') }}" class="nav-link {% if 'admin' in request.endpoint and 'video' in request.endpoint %}active{% endif %}">
+                        <span class="material-symbols-outlined">video_library</span>
+                        <span class="nav-text">Videos</span>
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="{{ url_for('admin_categories') }}" class="nav-link {% if 'admin' in request.endpoint and 'categor' in request.endpoint %}active{% endif %}">
+                        <span class="material-symbols-outlined">category</span>
+                        <span class="nav-text">Categories</span>
+                    </a>
+                </div>
+                <div class="nav-item">
+                    <a href="{{ url_for('admin_stream') }}" class="nav-link {% if 'admin' in request.endpoint and 'stream' in request.endpoint %}active{% endif %}">
+                        <span class="material-symbols-outlined">live_tv</span>
+                        <span class="nav-text">Stream Control</span>
+                        <span class="stream-status-badge live" id="adminStreamBadge" style="display: none;">LIVE</span>
+                    </a>
                 </div>
             </div>
             {% endif %}
@@ -1170,12 +888,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        // ===== GLOBAL LIVEKIT UTILITIES =====
-        // Enhanced global utilities for professional streaming integration
-
-        console.log('🚀 TGFX Trade Lab - LiveKit Integration Loaded');
-
-        // Global LiveKit utilities and state management
+        // FIXED: Global LiveKit utilities and state management
         window.TGFXLiveKit = {
             // Configuration from backend
             config: {
@@ -1185,7 +898,7 @@
                 username: {{ current_user.username|tojson if current_user.is_authenticated else 'null' }},
                 displayName: {{ current_user.display_name|tojson if current_user.is_authenticated and current_user.display_name else 'null' }},
                 streamColor: {{ current_user.stream_color|tojson if current_user.is_authenticated and current_user.stream_color else '"#10B981"' }},
-                livekitAvailable: typeof LiveKitClient !== 'undefined'
+                livekitAvailable: false
             },
 
             // Global state
@@ -1201,31 +914,7 @@
             utils: {
                 // Check if LiveKit is available
                 isLiveKitAvailable() {
-                    return typeof LivekitClient !== 'undefined' || typeof LiveKitClient !== 'undefined' || !window.livekitLoadError;
-                },
-
-                // Generate participant identity
-                generateParticipantIdentity(role = 'viewer') {
-                    const userId = window.TGFXLiveKit.config.userId || 'anon';
-                    const timestamp = Date.now().toString(36);
-                    return `${role}-${userId}-${timestamp}`;
-                },
-
-                // Format connection quality
-                formatConnectionQuality(quality) {
-                    const LiveKitClient = window.LivekitClient || window.LiveKitClient;
-                    if (!LiveKitClient) return { text: 'Unknown', class: 'connection-quality-unknown' };
-                    
-                    switch (quality) {
-                        case LiveKitClient.ConnectionQuality?.Excellent:
-                            return { text: 'Excellent', class: 'connection-quality-excellent' };
-                        case LiveKitClient.ConnectionQuality?.Good:
-                            return { text: 'Good', class: 'connection-quality-good' };
-                        case LiveKitClient.ConnectionQuality?.Poor:
-                            return { text: 'Poor', class: 'connection-quality-poor' };
-                        default:
-                            return { text: 'Unknown', class: 'connection-quality-unknown' };
-                    }
+                    return typeof window.LiveKitClient !== 'undefined' && !window.livekitLoadError;
                 },
 
                 // Show global notification
@@ -1284,33 +973,6 @@
                     }
                 },
 
-                // Show stream notification
-                showStreamNotification(title, message, type = 'live') {
-                    const notification = document.createElement('div');
-                    notification.className = `stream-notification ${type}`;
-                    notification.innerHTML = `
-                        <div class="d-flex align-items-start">
-                            <span class="material-symbols-outlined me-2" style="color: ${type === 'live' ? 'var(--stream-live-color)' : 'var(--stream-recording-color)'};">
-                                ${type === 'live' ? 'live_tv' : 'fiber_manual_record'}
-                            </span>
-                            <div class="flex-grow-1">
-                                <div class="fw-bold mb-1">${title}</div>
-                                <div style="font-size: 0.9rem; opacity: 0.9;">${message}</div>
-                            </div>
-                            <button type="button" class="btn-close btn-close-white ms-2" onclick="this.parentElement.parentElement.remove()"></button>
-                        </div>
-                    `;
-                    
-                    document.body.appendChild(notification);
-                    
-                    setTimeout(() => {
-                        if (notification.parentNode) {
-                            notification.style.animation = 'slideOutRight 0.3s ease-in';
-                            setTimeout(() => notification.remove(), 300);
-                        }
-                    }, 8000);
-                },
-
                 // Initialize WebSocket connection for real-time updates
                 initializeRealtimeUpdates() {
                     if (typeof io === 'undefined') {
@@ -1341,9 +1003,9 @@
                         window.TGFXLiveKit.utils.updateNavLiveIndicator(true, false);
                         
                         // Show notification
-                        window.TGFXLiveKit.utils.showStreamNotification(
-                            `${data.streamer_name} is now live!`,
-                            data.title,
+                        window.TGFXLiveKit.utils.showNotification(
+                            'success',
+                            `🎬 ${data.streamer_name} is now live!`,
                             'live'
                         );
                         
@@ -1361,21 +1023,6 @@
                         
                         // Show notification
                         window.TGFXLiveKit.utils.showNotification('info', data.message, 4000);
-                    });
-
-                    socket.on('recording_started', (data) => {
-                        console.log('🔴 Recording started:', data);
-                        window.TGFXLiveKit.utils.updateNavLiveIndicator(true, true);
-                        window.TGFXLiveKit.utils.showStreamNotification(
-                            'Recording Started',
-                            `${data.streamer_name}'s stream is now being recorded`,
-                            'recording'
-                        );
-                    });
-
-                    socket.on('recording_stopped', (data) => {
-                        console.log('⏹️ Recording stopped:', data);
-                        window.TGFXLiveKit.utils.updateNavLiveIndicator(true, false);
                     });
 
                     return socket;
@@ -1400,29 +1047,6 @@
                     } catch (error) {
                         console.error('Error checking stream status:', error);
                     }
-                },
-
-                // Debug function for LiveKit troubleshooting
-                debugLiveKitSetup() {
-                    console.log('=== 🔍 LIVEKIT DEBUG INFO ===');
-                    console.log('LiveKit Client Available:', this.isLiveKitAvailable());
-                    console.log('Socket.IO Available:', typeof io !== 'undefined');
-                    console.log('User Config:', window.TGFXLiveKit.config);
-                    console.log('Current State:', window.TGFXLiveKit.state);
-                    console.log('Active Streams:', window.TGFXLiveKit.state.activeStreams.length);
-                    
-                    if (this.isLiveKitAvailable()) {
-                        const LiveKitClient = window.LivekitClient || window.LiveKitClient;
-                        console.log('LiveKit Version:', LiveKitClient?.version || 'Unknown');
-                        console.log('LiveKit Room States:', LiveKitClient?.RoomState || 'Not available');
-                    }
-                    
-                    return {
-                        livekitAvailable: this.isLiveKitAvailable(),
-                        socketIOAvailable: typeof io !== 'undefined',
-                        config: window.TGFXLiveKit.config,
-                        state: window.TGFXLiveKit.state
-                    };
                 }
             }
         };
@@ -1431,20 +1055,27 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎬 Initializing TGFX LiveKit Integration...');
             
-            // Check LiveKit availability
-            if (!window.TGFXLiveKit.utils.isLiveKitAvailable()) {
-                console.warn('⚠️ LiveKit client not available');
-                if (window.livekitLoadError) {
-                    window.TGFXLiveKit.utils.showNotification('error', 'LiveKit streaming client failed to load. Please refresh the page.', 8000);
-                } else {
-                    window.TGFXLiveKit.utils.showNotification('warning', 'LiveKit streaming client is loading...', 3000);
-                }
-            } else {
-                console.log('✅ LiveKit client loaded successfully');
-                const LiveKitClient = window.LivekitClient || window.LiveKitClient;
+            // Wait for LiveKit ready event
+            document.addEventListener('livekitReady', function() {
+                console.log('✅ LiveKit client ready');
+                window.TGFXLiveKit.config.livekitAvailable = true;
+                
+                const LiveKitClient = window.LiveKitClient;
                 if (LiveKitClient?.version) {
                     console.log('📦 LiveKit Version:', LiveKitClient.version);
                 }
+            });
+
+            // Check LiveKit availability immediately
+            if (window.TGFXLiveKit.utils.isLiveKitAvailable()) {
+                console.log('✅ LiveKit client already available');
+                window.TGFXLiveKit.config.livekitAvailable = true;
+            } else if (window.livekitLoadError) {
+                console.error('❌ LiveKit failed to load');
+                window.TGFXLiveKit.utils.showNotification('error', 'LiveKit streaming client failed to load. Please refresh the page.', 8000);
+            } else {
+                console.log('⏳ Waiting for LiveKit to load...');
+                // Will be handled by the livekitReady event
             }
 
             // Initialize real-time updates
@@ -1460,13 +1091,10 @@
             }, 30000); // Every 30 seconds
             {% endif %}
             
-            console.log('🚀 TGFX LiveKit Integration ready!');
+            console.log('🚀 TGFX LiveKit Integration initialized!');
         });
 
-        // Make debug function available globally for troubleshooting
-        window.debugLiveKit = window.TGFXLiveKit.utils.debugLiveKitSetup;
-
-        // Sidebar functionality (existing code)
+        // Sidebar functionality
         document.addEventListener('DOMContentLoaded', function() {
             const sidebar = document.getElementById('sidebar');
             const sidebarToggle = document.getElementById('sidebarToggle');
@@ -1497,52 +1125,11 @@
             });
         });
 
-        // Dropdown functionality
-        function toggleDropdown(dropdownId) {
-            const dropdown = document.getElementById(dropdownId);
-            const sidebar = document.getElementById('sidebar');
-            
-            if (sidebar.classList.contains('collapsed')) {
-                // In collapsed mode, show as absolute positioned menu
-                dropdown.classList.toggle('open');
-            } else {
-                // In normal mode, show as expandable menu
-                dropdown.classList.toggle('open');
-            }
-            
-            // Close other dropdowns
-            const allDropdowns = document.querySelectorAll('.nav-dropdown');
-            allDropdowns.forEach(dd => {
-                if (dd.id !== dropdownId) {
-                    dd.classList.remove('open');
-                }
-            });
-        }
-
-        // Close dropdowns when clicking outside
-        document.addEventListener('click', function(event) {
-            const dropdowns = document.querySelectorAll('.nav-dropdown');
-            let clickedInside = false;
-            
-            dropdowns.forEach(dropdown => {
-                if (dropdown.contains(event.target)) {
-                    clickedInside = true;
-                }
-            });
-            
-            if (!clickedInside) {
-                dropdowns.forEach(dropdown => {
-                    dropdown.classList.remove('open');
-                });
-            }
-        });
-
         // Global notification function (legacy compatibility)
         function showToast(message, type = 'info') {
             window.TGFXLiveKit.utils.showNotification(type, message);
         }
 
-        console.log('💡 Global LiveKit utilities available:', Object.keys(window.TGFXLiveKit.utils));
         console.log('🔊 Professional streaming system loaded!');
     </script>
     
