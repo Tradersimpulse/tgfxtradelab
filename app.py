@@ -30,13 +30,27 @@ import pytz
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
 
-# OLD (broken):
-from livekit.api import LiveKitAPI
+# FIXED: Correct imports for LiveKit 1.0.12
+try:
+    import livekit
+    from livekit import api
+    print("✓ LiveKit package available")
+    LIVEKIT_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠ LiveKit package not available: {e}")
+    api = None
+    LIVEKIT_AVAILABLE = False
 
-# NEW (working):
-import livekit
-from livekit import api
-from livekit import AccessToken, VideoGrants
+# FIXED: Correct AccessToken import for LiveKit 1.0.12
+try:
+    from livekit import AccessToken, VideoGrants
+    print("✓ AccessToken and VideoGrants available")
+    TOKEN_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠ AccessToken not available: {e}")
+    AccessToken = None
+    VideoGrants = None
+    TOKEN_AVAILABLE = False
 
 import jwt
 # FIXED: Better error handling for database connections
