@@ -404,10 +404,10 @@
 
 {% block scripts %}
 <script>
-// ENHANCED LIVEKIT INTEGRATION - FIXED ALL MAJOR ISSUES
+// ENHANCED LIVEKIT INTEGRATION - FIXED CONNECTION OVERLAY ISSUE
 // Professional streaming with reliable connection handling
 
-console.log('🚀 Loading Enhanced LiveKit Viewer with Professional Integration...');
+console.log('🚀 Loading Enhanced LiveKit Viewer with Fixed Overlay Management...');
 
 // Global Configuration
 window.StreamViewerConfig = {
@@ -451,53 +451,7 @@ window.StreamViewerConfig.activeStreams.forEach(stream => {
 
 console.log('📊 Loaded', window.StreamViewerConfig.activeStreams.length, 'active streams');
 
-// 1. Enhanced Media Capture and Local Preview (for stream.html)
-window.initializeMediaCapture = async function() {
-    try {
-        console.log('🎥 Initializing media capture...');
-        
-        // Test basic media access first
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: true, 
-            audio: true 
-        });
-        
-        // Show local preview immediately
-        const videoElement = document.createElement('video');
-        videoElement.srcObject = stream;
-        videoElement.muted = true; // Prevent echo
-        videoElement.autoplay = true;
-        videoElement.style.width = '100%';
-        videoElement.style.height = '100%';
-        videoElement.style.objectFit = 'contain';
-        
-        const previewContainer = document.getElementById('mainPreview');
-        if (previewContainer) {
-            previewContainer.innerHTML = '';
-            previewContainer.appendChild(videoElement);
-        }
-        
-        // Store stream for later use
-        window.localMediaStream = stream;
-        
-        // Update media status
-        updateMediaCard('camera', true, 'Ready');
-        updateMediaCard('mic', true, 'Ready');
-        
-        console.log('✅ Media capture initialized successfully');
-        return stream;
-        
-    } catch (error) {
-        console.error('❌ Media capture failed:', error);
-        updateMediaCard('camera', false, 'Permission Denied');
-        updateMediaCard('mic', false, 'Permission Denied');
-        
-        showNotification('error', 'Camera/microphone permission required for streaming');
-        throw error;
-    }
-};
-
-// 2. Enhanced LiveKit Room Creation (for both admin and viewer)
+// 2. Enhanced LiveKit Room Creation
 window.createLiveKitRoom = function(config = {}) {
     if (!window.LiveKitClient) {
         throw new Error('LiveKit client not available');
@@ -529,13 +483,13 @@ window.createLiveKitRoom = function(config = {}) {
     return new window.LiveKitClient.Room(roomOptions);
 };
 
-// 3. Enhanced Connection Function (for viewer - livestream.html)
+// 3. FIXED: Enhanced Connection Function with proper overlay removal
 window.joinStreamFixed = async function(streamId) {
     console.log('🎬 [FIXED] Joining stream:', streamId);
     
     try {
-        // Clear any previous error states
-        hideElement(`errorState-${streamId}`);
+        // Clear any previous states and overlays
+        cleanupStreamOverlays(streamId);
         showElement(`loadingState-${streamId}`);
         
         // Get stream configuration
@@ -565,8 +519,11 @@ window.joinStreamFixed = async function(streamId) {
         // Set up event handlers BEFORE connecting
         room.on('connected', () => {
             console.log('✅ Connected to stream:', streamId);
-            hideElement(`loadingState-${streamId}`);
-            hideElement(`connectingState-${streamId}`);
+            
+            // FIXED: Properly clean up all overlays
+            cleanupStreamOverlays(streamId);
+            
+            // Show the video container and controls
             showElement(`livekitContainer-${streamId}`);
             showElement(`statusBadges-${streamId}`);
             showElement(`liveIndicator-${streamId}`);
@@ -577,6 +534,14 @@ window.joinStreamFixed = async function(streamId) {
             // Store connection
             window.StreamViewerConfig.roomConnections.set(streamId, room);
             window.StreamViewerConfig.joinedStreams.add(streamId);
+            
+            // Update stream state
+            const state = window.StreamViewerConfig.streamStates.get(streamId);
+            if (state) {
+                state.connected = true;
+                state.joined = true;
+                state.room = room;
+            }
         });
         
         room.on('disconnected', (reason) => {
@@ -587,6 +552,9 @@ window.joinStreamFixed = async function(streamId) {
         room.on('trackSubscribed', (track, publication, participant) => {
             console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
             handleTrackSubscription(streamId, track, publication, participant);
+            
+            // FIXED: Extra cleanup when we get tracks
+            cleanupStreamOverlays(streamId);
         });
         
         room.on('connectionQualityChanged', (quality, participant) => {
@@ -608,8 +576,16 @@ window.joinStreamFixed = async function(streamId) {
         
         console.log('✅ Successfully joined stream:', streamId);
         
+        // FIXED: Final cleanup with a short delay to ensure everything is loaded
+        setTimeout(() => {
+            cleanupStreamOverlays(streamId);
+        }, 500);
+        
     } catch (error) {
         console.error('❌ Failed to join stream:', error);
+        
+        // Clean up on error
+        cleanupStreamOverlays(streamId);
         
         // Show user-friendly error
         let errorMessage = error.message;
@@ -626,13 +602,45 @@ window.joinStreamFixed = async function(streamId) {
     }
 };
 
-// 4. Enhanced Track Subscription Handling
+// FIXED: New function to properly clean up all overlays
+function cleanupStreamOverlays(streamId) {
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (container) {
+        // Remove all overlay elements except the ones we need
+        container.querySelectorAll('.stream-state-overlay').forEach(el => {
+            if (el.id === `connectingState-${streamId}` || 
+                el.id === `loadingState-${streamId}` ||
+                el.id === `errorState-${streamId}`) {
+                el.style.display = 'none';
+                // Also try to remove connecting state completely
+                if (el.id === `connectingState-${streamId}`) {
+                    el.remove();
+                }
+            }
+        });
+        
+        // Specifically remove any connecting overlays
+        const connectingOverlay = document.getElementById(`connectingState-${streamId}`);
+        if (connectingOverlay) {
+            connectingOverlay.remove();
+        }
+    }
+    
+    // Hide loading and error states
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`errorState-${streamId}`);
+}
+
+// 4. FIXED: Enhanced Track Subscription Handling
 function handleTrackSubscription(streamId, track, publication, participant) {
     const container = document.getElementById(`livekitContainer-${streamId}`);
     if (!container) {
         console.warn('No container found for stream:', streamId);
         return;
     }
+    
+    // Make sure container is visible
+    container.style.display = 'block';
     
     if (track.kind === 'video') {
         console.log('📹 Adding video track for stream:', streamId);
@@ -650,6 +658,17 @@ function handleTrackSubscription(streamId, track, publication, participant) {
         container.innerHTML = '';
         container.appendChild(videoElement);
         
+        // FIXED: Clean up overlays when video loads
+        videoElement.addEventListener('loadeddata', () => {
+            console.log('Video loaded, final overlay cleanup');
+            cleanupStreamOverlays(streamId);
+        });
+        
+        // FIXED: Also try to play the video to ensure it starts
+        videoElement.play().catch(e => {
+            console.log('Video autoplay blocked, user interaction required');
+        });
+        
         // Update quality indicator
         if (publication.dimensions) {
             updateVideoQuality(streamId, publication);
@@ -664,6 +683,11 @@ function handleTrackSubscription(streamId, track, publication, participant) {
         // Add audio element to page (hidden)
         audioElement.style.display = 'none';
         document.body.appendChild(audioElement);
+        
+        // Try to play audio
+        audioElement.play().catch(e => {
+            console.log('Audio autoplay blocked, user interaction required');
+        });
         
         // Show audio indicator
         showAudioIndicator(streamId, true);
@@ -877,7 +901,7 @@ window.StreamCoordinator = {
     }
 };
 
-// 5. Enhanced Retry Connection Function
+// 5. FIXED: Enhanced Retry Connection Function
 window.retryConnection = function(streamId) {
     console.log('🔄 [FIXED] Retrying connection for stream:', streamId);
     
@@ -894,8 +918,8 @@ window.retryConnection = function(streamId) {
     
     window.StreamViewerConfig.joinedStreams.delete(streamId);
     
-    // Reset UI state
-    hideElement(`errorState-${streamId}`);
+    // Clean up all overlays
+    cleanupStreamOverlays(streamId);
     
     // Try connecting again
     setTimeout(() => {
@@ -928,9 +952,18 @@ window.leaveStream = function(streamId) {
     window.StreamViewerConfig.joinedStreams.delete(streamId);
     stopAudioVisualization(streamId);
     
+    // FIXED: Complete cleanup
+    cleanupStreamOverlays(streamId);
+    
+    // Clear the LiveKit container
+    const livekitContainer = document.getElementById(`livekitContainer-${streamId}`);
+    if (livekitContainer) {
+        livekitContainer.innerHTML = '';
+        livekitContainer.style.display = 'none';
+    }
+    
     // Reset UI to initial state
     showElement(`loadingState-${streamId}`);
-    hideElement(`livekitContainer-${streamId}`);
     hideElement(`statusBadges-${streamId}`);
     hideElement(`liveIndicator-${streamId}`);
     hideElement(`streamControls-${streamId}`);
@@ -1055,6 +1088,43 @@ function showAudioIndicator(streamId, hasAudio) {
     }
 }
 
+// FIXED: Improved connecting state function
+function showConnectingState(streamId, streamerName) {
+    // First, hide other states
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`errorState-${streamId}`);
+    
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (container) {
+        // Remove any existing connecting overlay first
+        const existingOverlay = document.getElementById(`connectingState-${streamId}`);
+        if (existingOverlay) {
+            existingOverlay.remove();
+        }
+        
+        const connectingOverlay = document.createElement('div');
+        connectingOverlay.id = `connectingState-${streamId}`;
+        connectingOverlay.className = 'stream-state-overlay d-flex align-items-center justify-content-center';
+        connectingOverlay.style.zIndex = '10'; // Ensure it's on top
+        connectingOverlay.innerHTML = `
+            <div class="text-center text-white">
+                <div class="connecting-animation mb-3">
+                    <div class="connecting-ring"></div>
+                    <span class="material-symbols-outlined connecting-icon">wifi</span>
+                </div>
+                <h5 class="mb-2">Connecting...</h5>
+                <p class="text-muted">Joining ${streamerName}'s stream</p>
+                <div class="progress" style="width: 200px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 70%"></div>
+                </div>
+            </div>
+        `;
+        
+        // Add to container
+        container.appendChild(connectingOverlay);
+    }
+}
+
 // Helper Functions
 function showElement(elementId) {
     const element = document.getElementById(elementId);
@@ -1109,38 +1179,8 @@ function showNotification(type, message, duration = 4000) {
     }, duration);
 }
 
-function showConnectingState(streamId, streamerName) {
-    hideElement(`loadingState-${streamId}`);
-    hideElement(`errorState-${streamId}`);
-    
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        const connectingOverlay = document.createElement('div');
-        connectingOverlay.id = `connectingState-${streamId}`;
-        connectingOverlay.className = 'stream-state-overlay d-flex align-items-center justify-content-center';
-        connectingOverlay.innerHTML = `
-            <div class="text-center text-white">
-                <div class="connecting-animation mb-3">
-                    <div class="connecting-ring"></div>
-                    <span class="material-symbols-outlined connecting-icon">wifi</span>
-                </div>
-                <h5 class="mb-2">Connecting...</h5>
-                <p class="text-muted">Joining ${streamerName}'s stream</p>
-                <div class="progress" style="width: 200px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 70%"></div>
-                </div>
-            </div>
-        `;
-        
-        // Remove existing overlays and add connecting state
-        container.querySelectorAll('.stream-state-overlay').forEach(el => el.remove());
-        container.appendChild(connectingOverlay);
-    }
-}
-
 function showErrorState(streamId, title, message) {
-    hideElement(`loadingState-${streamId}`);
-    hideElement(`connectingState-${streamId}`);
+    cleanupStreamOverlays(streamId);
     showElement(`errorState-${streamId}`);
     
     const errorTitle = document.querySelector(`#errorState-${streamId} h5`);
@@ -1496,7 +1536,7 @@ window.addEventListener('beforeunload', () => {
 });
 
 console.log('💡 Available functions: joinStreamFixed(), leaveStream(), toggleFullscreen(), shareStream()');
-console.log('🔊 Enhanced LiveKit streaming system ready!');
+console.log('🔊 Enhanced LiveKit streaming system ready with fixed overlay management!');
 </script>
 
 <style>
