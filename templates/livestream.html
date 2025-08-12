@@ -404,10 +404,10 @@
 
 {% block scripts %}
 <script>
-// ENHANCED LIVEKIT INTEGRATION - FIXED CONNECTION OVERLAY ISSUE
-// Professional streaming with reliable connection handling
+// FIXED LIVEKIT INTEGRATION FOR VIEWERS
+// Using correct LiveKit v2.x API methods
 
-console.log('🚀 Loading Enhanced LiveKit Viewer with Fixed Overlay Management...');
+console.log('🚀 Loading Fixed LiveKit Viewer Integration...');
 
 // Global Configuration
 window.StreamViewerConfig = {
@@ -451,250 +451,7 @@ window.StreamViewerConfig.activeStreams.forEach(stream => {
 
 console.log('📊 Loaded', window.StreamViewerConfig.activeStreams.length, 'active streams');
 
-// 2. Enhanced LiveKit Room Creation
-window.createLiveKitRoom = function(config = {}) {
-    if (!window.LiveKitClient) {
-        throw new Error('LiveKit client not available');
-    }
-    
-    const roomOptions = {
-        // Essential options only to avoid conflicts
-        adaptiveStream: true,
-        dynacast: true,
-        videoCaptureDefaults: {
-            resolution: {
-                width: 1280,
-                height: 720
-            },
-            facingMode: 'user'
-        },
-        publishDefaults: {
-            videoEncoding: {
-                maxBitrate: 2000000, // 2 Mbps
-                maxFramerate: 30
-            },
-            audioEncoding: {
-                maxBitrate: 128000 // 128 kbps
-            }
-        },
-        ...config
-    };
-    
-    return new window.LiveKitClient.Room(roomOptions);
-};
-
-// 3. FIXED: Enhanced Connection Function with proper overlay removal
-window.joinStreamFixed = async function(streamId) {
-    console.log('🎬 [FIXED] Joining stream:', streamId);
-    
-    try {
-        // Clear any previous states and overlays
-        cleanupStreamOverlays(streamId);
-        showElement(`loadingState-${streamId}`);
-        
-        // Get stream configuration
-        const streamData = window.StreamViewerConfig.activeStreams.find(s => s.id === streamId);
-        const tokenData = window.StreamViewerConfig.streamTokens[streamId];
-        const livekitUrl = window.StreamViewerConfig.livekitUrl;
-        
-        if (!streamData || !tokenData || !livekitUrl) {
-            throw new Error('Missing stream configuration data');
-        }
-        
-        // Validate LiveKit client
-        if (!window.LiveKitClient) {
-            throw new Error('LiveKit client not loaded. Please refresh the page.');
-        }
-        
-        console.log('📊 Connecting with:', {
-            streamId,
-            roomName: tokenData.room_name,
-            participantIdentity: tokenData.participant_identity,
-            livekitUrl
-        });
-        
-        // Create room with minimal configuration
-        const room = createLiveKitRoom();
-        
-        // Set up event handlers BEFORE connecting
-        room.on('connected', () => {
-            console.log('✅ Connected to stream:', streamId);
-            
-            // FIXED: Properly clean up all overlays
-            cleanupStreamOverlays(streamId);
-            
-            // Show the video container and controls
-            showElement(`livekitContainer-${streamId}`);
-            showElement(`statusBadges-${streamId}`);
-            showElement(`liveIndicator-${streamId}`);
-            showElement(`streamControls-${streamId}`);
-            
-            showNotification('success', `Connected to ${streamData.streamer_name}'s stream!`);
-            
-            // Store connection
-            window.StreamViewerConfig.roomConnections.set(streamId, room);
-            window.StreamViewerConfig.joinedStreams.add(streamId);
-            
-            // Update stream state
-            const state = window.StreamViewerConfig.streamStates.get(streamId);
-            if (state) {
-                state.connected = true;
-                state.joined = true;
-                state.room = room;
-            }
-        });
-        
-        room.on('disconnected', (reason) => {
-            console.log('👋 Disconnected from stream:', streamId, reason);
-            handleStreamDisconnection(streamId, reason);
-        });
-        
-        room.on('trackSubscribed', (track, publication, participant) => {
-            console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
-            handleTrackSubscription(streamId, track, publication, participant);
-            
-            // FIXED: Extra cleanup when we get tracks
-            cleanupStreamOverlays(streamId);
-        });
-        
-        room.on('connectionQualityChanged', (quality, participant) => {
-            if (participant.isLocal) {
-                updateConnectionQuality(streamId, quality);
-            }
-        });
-        
-        // Show connecting state
-        showConnectingState(streamId, streamData.streamer_name);
-        
-        // Connect to room with timeout
-        const connectTimeout = setTimeout(() => {
-            throw new Error('Connection timeout after 15 seconds');
-        }, 15000);
-        
-        await room.connect(livekitUrl, tokenData.token);
-        clearTimeout(connectTimeout);
-        
-        console.log('✅ Successfully joined stream:', streamId);
-        
-        // FIXED: Final cleanup with a short delay to ensure everything is loaded
-        setTimeout(() => {
-            cleanupStreamOverlays(streamId);
-        }, 500);
-        
-    } catch (error) {
-        console.error('❌ Failed to join stream:', error);
-        
-        // Clean up on error
-        cleanupStreamOverlays(streamId);
-        
-        // Show user-friendly error
-        let errorMessage = error.message;
-        if (error.message.includes('token')) {
-            errorMessage = 'Authentication failed - please refresh the page';
-        } else if (error.message.includes('timeout')) {
-            errorMessage = 'Connection timeout - please check your internet connection';
-        } else if (error.message.includes('not loaded')) {
-            errorMessage = 'System not ready - please refresh the page';
-        }
-        
-        showErrorState(streamId, 'Connection Failed', errorMessage);
-        showNotification('error', `Failed to connect: ${errorMessage}`);
-    }
-};
-
-// FIXED: New function to properly clean up all overlays
-function cleanupStreamOverlays(streamId) {
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        // Remove all overlay elements except the ones we need
-        container.querySelectorAll('.stream-state-overlay').forEach(el => {
-            if (el.id === `connectingState-${streamId}` || 
-                el.id === `loadingState-${streamId}` ||
-                el.id === `errorState-${streamId}`) {
-                el.style.display = 'none';
-                // Also try to remove connecting state completely
-                if (el.id === `connectingState-${streamId}`) {
-                    el.remove();
-                }
-            }
-        });
-        
-        // Specifically remove any connecting overlays
-        const connectingOverlay = document.getElementById(`connectingState-${streamId}`);
-        if (connectingOverlay) {
-            connectingOverlay.remove();
-        }
-    }
-    
-    // Hide loading and error states
-    hideElement(`loadingState-${streamId}`);
-    hideElement(`errorState-${streamId}`);
-}
-
-// 4. FIXED: Enhanced Track Subscription Handling
-function handleTrackSubscription(streamId, track, publication, participant) {
-    const container = document.getElementById(`livekitContainer-${streamId}`);
-    if (!container) {
-        console.warn('No container found for stream:', streamId);
-        return;
-    }
-    
-    // Make sure container is visible
-    container.style.display = 'block';
-    
-    if (track.kind === 'video') {
-        console.log('📹 Adding video track for stream:', streamId);
-        
-        const videoElement = track.attach();
-        videoElement.style.cssText = `
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            border-radius: 8px;
-            background: black;
-        `;
-        
-        // Clear container and add video
-        container.innerHTML = '';
-        container.appendChild(videoElement);
-        
-        // FIXED: Clean up overlays when video loads
-        videoElement.addEventListener('loadeddata', () => {
-            console.log('Video loaded, final overlay cleanup');
-            cleanupStreamOverlays(streamId);
-        });
-        
-        // FIXED: Also try to play the video to ensure it starts
-        videoElement.play().catch(e => {
-            console.log('Video autoplay blocked, user interaction required');
-        });
-        
-        // Update quality indicator
-        if (publication.dimensions) {
-            updateVideoQuality(streamId, publication);
-        }
-        
-    } else if (track.kind === 'audio') {
-        console.log('🔊 Adding audio track for stream:', streamId);
-        
-        const audioElement = track.attach();
-        audioElement.volume = 0.8; // Default volume
-        
-        // Add audio element to page (hidden)
-        audioElement.style.display = 'none';
-        document.body.appendChild(audioElement);
-        
-        // Try to play audio
-        audioElement.play().catch(e => {
-            console.log('Audio autoplay blocked, user interaction required');
-        });
-        
-        // Show audio indicator
-        showAudioIndicator(streamId, true);
-    }
-}
-
-// Enhanced WebSocket Manager for Real-time Coordination
+// Enhanced WebSocket Manager
 window.StreamCoordinator = {
     socket: null,
     isConnected: false,
@@ -898,36 +655,259 @@ window.StreamCoordinator = {
             console.log('❌ Max reconnection attempts reached');
             showNotification('error', 'Connection lost. Please refresh the page.', 8000);
         }
-    }
-};
-
-// 5. FIXED: Enhanced Retry Connection Function
-window.retryConnection = function(streamId) {
-    console.log('🔄 [FIXED] Retrying connection for stream:', streamId);
+    },
     
-    // Clean up any existing connection
-    const existingRoom = window.StreamViewerConfig.roomConnections.get(streamId);
-    if (existingRoom) {
-        try {
-            existingRoom.disconnect();
-        } catch (e) {
-            console.warn('Error disconnecting existing room:', e);
+    updateStreamQuality(streamId, quality) {
+        const qualityBadge = document.getElementById(`qualityBadge-${streamId}`);
+        if (qualityBadge) {
+            qualityBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 10px;">hd</span>${quality}`;
         }
-        window.StreamViewerConfig.roomConnections.delete(streamId);
+    },
+    
+    updateRecordingStatus(streamId, isRecording) {
+        // Update recording indicator if needed
     }
-    
-    window.StreamViewerConfig.joinedStreams.delete(streamId);
-    
-    // Clean up all overlays
-    cleanupStreamOverlays(streamId);
-    
-    // Try connecting again
-    setTimeout(() => {
-        joinStreamFixed(streamId);
-    }, 1000);
 };
 
-// Stream Control Functions
+// FIXED: Join Stream Function with proper overlay management
+window.joinStreamFixed = async function(streamId) {
+    console.log('🎬 Joining stream:', streamId);
+    
+    try {
+        // Clear any previous states and overlays
+        cleanupStreamOverlays(streamId);
+        showElement(`loadingState-${streamId}`);
+        
+        // Get stream configuration
+        const streamData = window.StreamViewerConfig.activeStreams.find(s => s.id === streamId);
+        const tokenData = window.StreamViewerConfig.streamTokens[streamId];
+        const livekitUrl = window.StreamViewerConfig.livekitUrl;
+        
+        if (!streamData || !tokenData || !livekitUrl) {
+            throw new Error('Missing stream configuration data');
+        }
+        
+        // Validate LiveKit client
+        if (!window.LiveKitClient) {
+            throw new Error('LiveKit client not loaded. Please refresh the page.');
+        }
+        
+        console.log('📊 Connecting with:', {
+            streamId,
+            roomName: tokenData.room_name,
+            participantIdentity: tokenData.participant_identity,
+            livekitUrl
+        });
+        
+        // Create room with minimal configuration
+        const room = new window.LiveKitClient.Room({
+            adaptiveStream: true,
+            dynacast: true,
+            videoCaptureDefaults: {
+                resolution: {
+                    width: 1280,
+                    height: 720
+                },
+                facingMode: 'user'
+            }
+        });
+        
+        // Set up event handlers BEFORE connecting
+        room.on(window.LiveKitClient.RoomEvent.Connected, () => {
+            console.log('✅ Connected to stream:', streamId);
+            
+            // Clean up all overlays
+            cleanupStreamOverlays(streamId);
+            
+            // Show the video container and controls
+            showElement(`livekitContainer-${streamId}`);
+            showElement(`statusBadges-${streamId}`);
+            showElement(`liveIndicator-${streamId}`);
+            showElement(`streamControls-${streamId}`);
+            
+            showNotification('success', `Connected to ${streamData.streamer_name}'s stream!`);
+            
+            // Store connection
+            window.StreamViewerConfig.roomConnections.set(streamId, room);
+            window.StreamViewerConfig.joinedStreams.add(streamId);
+            
+            // Update stream state
+            const state = window.StreamViewerConfig.streamStates.get(streamId);
+            if (state) {
+                state.connected = true;
+                state.joined = true;
+                state.room = room;
+            }
+            
+            // Update participant count
+            updateParticipantCount(streamId);
+        });
+        
+        room.on(window.LiveKitClient.RoomEvent.Disconnected, (reason) => {
+            console.log('👋 Disconnected from stream:', streamId, reason);
+            handleStreamDisconnection(streamId, reason);
+        });
+        
+        room.on(window.LiveKitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
+            handleTrackSubscription(streamId, track, publication, participant);
+            
+            // Extra cleanup when we get tracks
+            cleanupStreamOverlays(streamId);
+        });
+        
+        room.on(window.LiveKitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+            console.log('📺 Track unsubscribed:', track.kind);
+        });
+        
+        room.on(window.LiveKitClient.RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+            if (participant.isLocal) {
+                updateConnectionQuality(streamId, quality);
+            }
+        });
+        
+        room.on(window.LiveKitClient.RoomEvent.ParticipantConnected, (participant) => {
+            console.log('👥 Participant joined:', participant.identity);
+            updateParticipantCount(streamId);
+        });
+        
+        room.on(window.LiveKitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+            console.log('👋 Participant left:', participant.identity);
+            updateParticipantCount(streamId);
+        });
+        
+        // Show connecting state
+        showConnectingState(streamId, streamData.streamer_name);
+        
+        // Connect to room with timeout
+        const connectTimeout = setTimeout(() => {
+            throw new Error('Connection timeout after 15 seconds');
+        }, 15000);
+        
+        await room.connect(livekitUrl, tokenData.token);
+        clearTimeout(connectTimeout);
+        
+        console.log('✅ Successfully joined stream:', streamId);
+        
+        // Final cleanup with a short delay to ensure everything is loaded
+        setTimeout(() => {
+            cleanupStreamOverlays(streamId);
+        }, 500);
+        
+    } catch (error) {
+        console.error('❌ Failed to join stream:', error);
+        
+        // Clean up on error
+        cleanupStreamOverlays(streamId);
+        
+        // Show user-friendly error
+        let errorMessage = error.message;
+        if (error.message.includes('token')) {
+            errorMessage = 'Authentication failed - please refresh the page';
+        } else if (error.message.includes('timeout')) {
+            errorMessage = 'Connection timeout - please check your internet connection';
+        } else if (error.message.includes('not loaded')) {
+            errorMessage = 'System not ready - please refresh the page';
+        }
+        
+        showErrorState(streamId, 'Connection Failed', errorMessage);
+        showNotification('error', `Failed to connect: ${errorMessage}`);
+    }
+};
+
+// Clean up all overlays
+function cleanupStreamOverlays(streamId) {
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (container) {
+        // Remove all overlay elements except the ones we need
+        container.querySelectorAll('.stream-state-overlay').forEach(el => {
+            if (el.id === `connectingState-${streamId}` || 
+                el.id === `loadingState-${streamId}` ||
+                el.id === `errorState-${streamId}`) {
+                el.style.display = 'none';
+                // Also try to remove connecting state completely
+                if (el.id === `connectingState-${streamId}`) {
+                    el.remove();
+                }
+            }
+        });
+        
+        // Specifically remove any connecting overlays
+        const connectingOverlay = document.getElementById(`connectingState-${streamId}`);
+        if (connectingOverlay) {
+            connectingOverlay.remove();
+        }
+    }
+    
+    // Hide loading and error states
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`errorState-${streamId}`);
+}
+
+// Handle track subscription
+function handleTrackSubscription(streamId, track, publication, participant) {
+    const container = document.getElementById(`livekitContainer-${streamId}`);
+    if (!container) {
+        console.warn('No container found for stream:', streamId);
+        return;
+    }
+    
+    // Make sure container is visible
+    container.style.display = 'block';
+    
+    if (track.kind === 'video') {
+        console.log('📹 Adding video track for stream:', streamId);
+        
+        const videoElement = track.attach();
+        videoElement.style.cssText = `
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+            background: black;
+        `;
+        
+        // Clear container and add video
+        container.innerHTML = '';
+        container.appendChild(videoElement);
+        
+        // Clean up overlays when video loads
+        videoElement.addEventListener('loadeddata', () => {
+            console.log('Video loaded, final overlay cleanup');
+            cleanupStreamOverlays(streamId);
+        });
+        
+        // Try to play the video
+        videoElement.play().catch(e => {
+            console.log('Video autoplay blocked, user interaction required');
+        });
+        
+        // Update quality indicator
+        if (publication.dimensions) {
+            updateVideoQuality(streamId, publication);
+        }
+        
+    } else if (track.kind === 'audio') {
+        console.log('🔊 Adding audio track for stream:', streamId);
+        
+        const audioElement = track.attach();
+        audioElement.volume = 0.8; // Default volume
+        
+        // Add audio element to page (hidden)
+        audioElement.style.display = 'none';
+        document.body.appendChild(audioElement);
+        
+        // Try to play audio
+        audioElement.play().catch(e => {
+            console.log('Audio autoplay blocked, user interaction required');
+        });
+        
+        // Show audio indicator
+        showAudioIndicator(streamId, true);
+    }
+}
+
+// Leave stream
 window.leaveStream = function(streamId) {
     console.log('👋 Leaving stream:', streamId);
     
@@ -952,7 +932,7 @@ window.leaveStream = function(streamId) {
     window.StreamViewerConfig.joinedStreams.delete(streamId);
     stopAudioVisualization(streamId);
     
-    // FIXED: Complete cleanup
+    // Complete cleanup
     cleanupStreamOverlays(streamId);
     
     // Clear the LiveKit container
@@ -980,6 +960,7 @@ window.leaveStream = function(streamId) {
     console.log('✅ Successfully left stream:', streamId);
 };
 
+// Toggle stream audio
 window.toggleStreamAudio = function(streamId) {
     const audioState = window.StreamViewerConfig.audioStates.get(streamId);
     if (!audioState) return;
@@ -1008,6 +989,7 @@ window.toggleStreamAudio = function(streamId) {
     console.log(`🔊 Audio ${newAudioEnabled ? 'enabled' : 'muted'} for stream:`, streamId);
 };
 
+// Toggle fullscreen
 window.toggleFullscreen = function(streamId) {
     const container = document.getElementById(`videoContainer-${streamId}`);
     if (!container) return;
@@ -1030,6 +1012,32 @@ window.toggleFullscreen = function(streamId) {
     }
 };
 
+// Retry connection
+window.retryConnection = function(streamId) {
+    console.log('🔄 Retrying connection for stream:', streamId);
+    
+    // Clean up any existing connection
+    const existingRoom = window.StreamViewerConfig.roomConnections.get(streamId);
+    if (existingRoom) {
+        try {
+            existingRoom.disconnect();
+        } catch (e) {
+            console.warn('Error disconnecting existing room:', e);
+        }
+        window.StreamViewerConfig.roomConnections.delete(streamId);
+    }
+    
+    window.StreamViewerConfig.joinedStreams.delete(streamId);
+    
+    // Clean up all overlays
+    cleanupStreamOverlays(streamId);
+    
+    // Try connecting again
+    setTimeout(() => {
+        joinStreamFixed(streamId);
+    }, 1000);
+};
+
 // Audio Visualization Functions
 function startAudioVisualization(streamId, audioTrack) {
     const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
@@ -1040,14 +1048,12 @@ function startAudioVisualization(streamId, audioTrack) {
     const bars = visualizer.querySelectorAll('.audio-bar');
     let animationId;
     
-    // Create audio context for real audio analysis (if needed)
-    // For now, we'll simulate audio activity
     function animate() {
         if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
             return;
         }
         
-        // Simulate audio levels (in real implementation, you'd use Web Audio API)
+        // Simulate audio levels
         const baseLevel = 30 + Math.random() * 40;
         
         bars.forEach((bar, index) => {
@@ -1088,9 +1094,8 @@ function showAudioIndicator(streamId, hasAudio) {
     }
 }
 
-// FIXED: Improved connecting state function
+// UI Helper Functions
 function showConnectingState(streamId, streamerName) {
-    // First, hide other states
     hideElement(`loadingState-${streamId}`);
     hideElement(`errorState-${streamId}`);
     
@@ -1105,7 +1110,7 @@ function showConnectingState(streamId, streamerName) {
         const connectingOverlay = document.createElement('div');
         connectingOverlay.id = `connectingState-${streamId}`;
         connectingOverlay.className = 'stream-state-overlay d-flex align-items-center justify-content-center';
-        connectingOverlay.style.zIndex = '10'; // Ensure it's on top
+        connectingOverlay.style.zIndex = '10';
         connectingOverlay.innerHTML = `
             <div class="text-center text-white">
                 <div class="connecting-animation mb-3">
@@ -1120,12 +1125,10 @@ function showConnectingState(streamId, streamerName) {
             </div>
         `;
         
-        // Add to container
         container.appendChild(connectingOverlay);
     }
 }
 
-// Helper Functions
 function showElement(elementId) {
     const element = document.getElementById(elementId);
     if (element) element.style.display = 'block';
@@ -1134,49 +1137,6 @@ function showElement(elementId) {
 function hideElement(elementId) {
     const element = document.getElementById(elementId);
     if (element) element.style.display = 'none';
-}
-
-function showNotification(type, message, duration = 4000) {
-    const notification = document.createElement('div');
-    const alertClass = type === 'error' ? 'alert-danger' : 
-                      type === 'success' ? 'alert-success' : 
-                      type === 'warning' ? 'alert-warning' : 'alert-info';
-    
-    notification.className = `alert ${alertClass} notification-toast`;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 9999;
-        min-width: 320px;
-        max-width: 400px;
-        font-size: 14px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(10px);
-        animation: slideInRight 0.3s ease-out;
-    `;
-    
-    const icon = type === 'error' ? 'error' : 
-                 type === 'success' ? 'check_circle' : 
-                 type === 'warning' ? 'warning' : 'info';
-    
-    notification.innerHTML = `
-        <div class="d-flex align-items-center">
-            <span class="material-symbols-outlined me-2">${icon}</span>
-            <div class="flex-grow-1">${message}</div>
-            <button type="button" class="btn-close btn-close-white ms-2" onclick="this.parentElement.parentElement.remove()"></button>
-        </div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.style.animation = 'slideOutRight 0.3s ease-in';
-            setTimeout(() => notification.remove(), 300);
-        }
-    }, duration);
 }
 
 function showErrorState(streamId, title, message) {
@@ -1233,19 +1193,27 @@ function updateConnectionQuality(streamId, quality) {
     let qualityText = 'Connected';
     let badgeClass = 'bg-success';
     
-    if (quality === LiveKitClient.ConnectionQuality.Poor) {
+    if (quality === window.LiveKitClient.ConnectionQuality.Poor) {
         qualityText = 'Poor';
         badgeClass = 'bg-danger';
-    } else if (quality === LiveKitClient.ConnectionQuality.Good) {
+    } else if (quality === window.LiveKitClient.ConnectionQuality.Good) {
         qualityText = 'Good';
         badgeClass = 'bg-success';
-    } else if (quality === LiveKitClient.ConnectionQuality.Excellent) {
+    } else if (quality === window.LiveKitClient.ConnectionQuality.Excellent) {
         qualityText = 'Excellent';
         badgeClass = 'bg-success';
     }
     
     connectionBadge.className = `badge badge-connection ${badgeClass}`;
     connectionBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 10px;">wifi</span>${qualityText}`;
+}
+
+function updateParticipantCount(streamId) {
+    const room = window.StreamViewerConfig.roomConnections.get(streamId);
+    if (!room || !room.remoteParticipants) return;
+    
+    const count = room.remoteParticipants.size;
+    console.log(`Stream ${streamId} has ${count} remote participants`);
 }
 
 function handleStreamDisconnection(streamId, reason) {
@@ -1270,6 +1238,49 @@ function handleStreamDisconnection(streamId, reason) {
     
     showNotification('info', message);
     console.log('Stream disconnected:', streamId, reason);
+}
+
+function showNotification(type, message, duration = 4000) {
+    const notification = document.createElement('div');
+    const alertClass = type === 'error' ? 'alert-danger' : 
+                      type === 'success' ? 'alert-success' : 
+                      type === 'warning' ? 'alert-warning' : 'alert-info';
+    
+    notification.className = `alert ${alertClass} notification-toast`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 320px;
+        max-width: 400px;
+        font-size: 14px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
+        animation: slideInRight 0.3s ease-out;
+    `;
+    
+    const icon = type === 'error' ? 'error' : 
+                 type === 'success' ? 'check_circle' : 
+                 type === 'warning' ? 'warning' : 'info';
+    
+    notification.innerHTML = `
+        <div class="d-flex align-items-center">
+            <span class="material-symbols-outlined me-2">${icon}</span>
+            <div class="flex-grow-1">${message}</div>
+            <button type="button" class="btn-close btn-close-white ms-2" onclick="this.parentElement.parentElement.remove()"></button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.style.animation = 'slideOutRight 0.3s ease-in';
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, duration);
 }
 
 // Global Functions
@@ -1320,13 +1331,13 @@ window.debugStreamInfo = function(streamId) {
     console.log('Audio State:', window.StreamViewerConfig.audioStates.get(streamId));
     console.log('Room Connection:', window.StreamViewerConfig.roomConnections.get(streamId));
     console.log('WebSocket Connected:', window.StreamCoordinator.isConnected);
-    console.log('LiveKit Available:', typeof LiveKitClient !== 'undefined');
+    console.log('LiveKit Available:', typeof window.LiveKitClient !== 'undefined');
     
     const room = window.StreamViewerConfig.roomConnections.get(streamId);
     if (room) {
         console.log('Room State:', room.state);
         console.log('Participants:', room.participants.size);
-        console.log('Connection Quality:', room.engine?.connectionManager?.connectionQuality);
+        console.log('Remote Participants:', room.remoteParticipants.size);
     }
     
     showNotification('info', '🔍 Debug information logged to console (Press F12)');
@@ -1336,7 +1347,7 @@ window.testConnectionSystem = async function() {
     console.log('🔧 Testing connection system...');
     
     const results = {
-        livekitClient: typeof LiveKitClient !== 'undefined',
+        livekitClient: typeof window.LiveKitClient !== 'undefined',
         webSocket: window.StreamCoordinator.isConnected,
         activeStreams: window.StreamViewerConfig.activeStreams.length,
         streamTokens: Object.keys(window.StreamViewerConfig.streamTokens).length,
@@ -1414,92 +1425,32 @@ window.setupConnectionMonitoring = function() {
     });
 };
 
-// FIXED: Enhanced initialization with better error handling
-function initializeEnhancedLiveKit() {
-    console.log('🔧 Initializing Enhanced LiveKit System...');
-    
-    // Check if we have the required configuration
-    if (!window.StreamViewerConfig.livekitUrl) {
-        console.error('❌ LiveKit URL not configured');
-        showNotification('error', 'Streaming system not properly configured');
-        return false;
-    }
-    
-    // Wait for LiveKit client with better detection
-    function waitForLiveKit(attempts = 0) {
-        const maxAttempts = 20; // 10 seconds total wait time
-        
-        if (typeof window.LiveKitClient !== 'undefined') {
-            console.log('✅ LiveKit client ready, version:', window.LiveKitClient.version || 'unknown');
-            initializeLiveKitFeatures();
-            return true;
-        }
-        
-        if (attempts < maxAttempts) {
-            setTimeout(() => waitForLiveKit(attempts + 1), 500);
-        } else {
-            console.error('❌ LiveKit client failed to load after maximum attempts');
-            showNotification('error', 'LiveKit streaming client failed to load. Please refresh the page.');
-            return false;
-        }
-    }
-    
-    return waitForLiveKit();
-}
-
-function initializeLiveKitFeatures() {
-    try {
-        console.log('🎯 Activating LiveKit features...');
-        
-        // Replace functions with enhanced versions
-        if (typeof window.joinStream !== 'undefined') {
-            window.joinStream = window.joinStreamFixed;
-        }
-        
-        // Set up connection monitoring
-        if (typeof window.setupConnectionMonitoring === 'function') {
-            setupConnectionMonitoring();
-        }
-        
-        // Initialize stream coordinator
-        window.StreamCoordinator.init();
-        
-        // Start periodic updates
-        setInterval(updateStreamStatistics, 10000);
-        updateStreamStatistics();
-        
-        console.log('✅ Enhanced LiveKit integration activated!');
-        console.log('🎵 Professional streaming with real-time audio/video ready');
-        
-        // Show success notification after a delay
-        setTimeout(() => {
-            showNotification('success', '🚀 Professional streaming system ready!', 3000);
-        }, 1000);
-        
-        return true;
-        
-    } catch (error) {
-        console.error('❌ Error initializing LiveKit features:', error);
-        showNotification('error', 'Failed to initialize streaming features');
-        return false;
-    }
-}
-
-// Enhanced document ready handler
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 Enhanced LiveKit Professional Viewer Loading...');
+    console.log('📱 Fixed LiveKit Viewer Integration Loading...');
     console.log(`📊 Configured for ${window.StreamViewerConfig.activeStreams.length} active streams`);
     
-    // Initialize immediately if LiveKit is already loaded
-    if (typeof window.LiveKitClient !== 'undefined') {
-        initializeLiveKitFeatures();
-    } else {
-        // Wait for LiveKit or use the enhanced initialization
-        document.addEventListener('livekitReady', initializeLiveKitFeatures);
-        
-        // Also try the enhanced initialization method
-        setTimeout(initializeEnhancedLiveKit, 100);
+    // Check if LiveKit is available
+    if (typeof window.LiveKitClient === 'undefined') {
+        console.error('❌ LiveKit client not loaded');
+        showNotification('error', 'LiveKit client failed to load. Please refresh the page.');
+        return;
     }
+    
+    console.log('✅ LiveKit client loaded successfully');
+    
+    // Initialize stream coordinator
+    window.StreamCoordinator.init();
+    
+    // Set up connection monitoring
+    setupConnectionMonitoring();
+    
+    // Start periodic updates
+    setInterval(updateStreamStatistics, 10000);
+    updateStreamStatistics();
+    
+    console.log('✅ Fixed LiveKit integration ready!');
+    showNotification('success', '🚀 Streaming system ready!', 3000);
 });
 
 // Handle fullscreen events
@@ -1513,7 +1464,6 @@ document.addEventListener('fullscreenchange', () => {
 // Page visibility handling
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-        // Page became visible, update statistics
         updateStreamStatistics();
     }
 });
@@ -1535,8 +1485,7 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-console.log('💡 Available functions: joinStreamFixed(), leaveStream(), toggleFullscreen(), shareStream()');
-console.log('🔊 Enhanced LiveKit streaming system ready with fixed overlay management!');
+console.log('💡 Fixed LiveKit viewer integration loaded successfully!');
 </script>
 
 <style>
