@@ -30,27 +30,20 @@ import pytz
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import time
 import jwt
-import time
 from datetime import datetime, timedelta
 import logging
 import signal
 import threading
 
-# FIXED: LiveKit imports with fallback to manual token generation
-try:
-    import livekit
-    from livekit import api
-    print("✓ LiveKit package available")
-    LIVEKIT_AVAILABLE = True
-except ImportError as e:
-    print(f"⚠ LiveKit package not available: {e}")
-    api = None
-    LIVEKIT_AVAILABLE = False
 
-# AccessToken import is failing, so we'll use manual token generation
+# Later in the file (around line 60-90), your LiveKit section should look like:
+
+# LiveKit - Manual token generation (no SDK needed for server-side)
+LIVEKIT_AVAILABLE = False  # SDK not needed
+TOKEN_AVAILABLE = True     # We generate tokens manually
 AccessToken = None
 VideoGrants = None
-TOKEN_AVAILABLE = True  # We can generate tokens manually
+api = None
 
 print("✓ Using manual LiveKit token generation")
 
