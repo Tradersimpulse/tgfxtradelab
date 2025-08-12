@@ -23,7 +23,7 @@ stripe==6.6.0
 
 # LiveKit Streaming - FIXED VERSIONS
 livekit==1.0.12
-livekit-api==0.5.8
+livekit-api==1.0.5  # Changed from 0.5.8 to compatible version
 livekit-protocol==1.5.9
 
 # Real-time Communication
