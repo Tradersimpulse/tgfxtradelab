@@ -21,10 +21,10 @@ botocore==1.31.85
 # Payments
 stripe==6.6.0
 
-# LiveKit Streaming - FIXED VERSIONS
-livekit==1.0.12
-livekit-api==1.0.5  # Changed from 0.5.8 to compatible version
-livekit-protocol==1.5.9
+# LiveKit Streaming - Let pip resolve compatible versions
+livekit>=1.0.0,<2.0.0
+livekit-api>=1.0.0,<2.0.0
+livekit-protocol>=1.0.0,<2.0.0
 
 # Real-time Communication
 Flask-SocketIO==5.3.6
