@@ -55,7 +55,7 @@ Flask-Caching==2.1.0
 
 # Data Processing
 pandas==2.1.1
-numpy==1.24.4
+numpy==2.3.2
 
 # Image Processing (for thumbnails)
 Pillow==10.0.1
