@@ -13,6 +13,7 @@ Flask-Login==0.6.3
 # Forms
 Flask-WTF==1.1.1
 WTForms==3.0.1
+email-validator==2.0.0
 
 # AWS Services
 boto3==1.28.85
