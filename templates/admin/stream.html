@@ -848,6 +848,13 @@ window.toggleScreenShare = async function() {
                 publication.track.stop();
             }
             
+            // Also stop screen share audio if it exists
+            const audioPublication = room.localParticipant.getTrack(LiveKitClient.Track.Source.ScreenShareAudio);
+            if (audioPublication) {
+                await room.localParticipant.unpublishTrack(audioPublication.track);
+                audioPublication.track.stop();
+            }
+            
             // If camera is on, switch back to camera view
             if (window.streamState.publishers.camera) {
                 showPreview(window.streamState.localTracks.camera, 'main');
@@ -862,39 +869,148 @@ window.toggleScreenShare = async function() {
             showNotification('info', 'Screen sharing stopped');
             
         } else {
-            // Start screen sharing
-            const track = await LiveKitClient.createLocalScreenShareTrack({
-                resolution: LiveKitClient.ScreenSharePresets.h1080fps15.resolution
-            });
-            
-            await room.localParticipant.publishTrack(track);
-            
-            // Show screen share in main view, move camera to PiP if active
-            if (window.streamState.publishers.camera) {
-                showPreview(window.streamState.localTracks.camera, 'pip');
-            }
-            showPreview(track, 'main');
-            
-            // Handle screen share end by user
-            track.mediaStreamTrack.onended = () => {
-                console.log('Screen share ended by user');
+            // Start screen sharing - FIXED METHOD
+            try {
+                // Method 1: Try the newer API
+                let tracks;
+                
+                // Check which method is available
+                if (typeof LiveKitClient.createScreenShareTracks === 'function') {
+                    // Newer API - returns array of [video, audio] tracks
+                    tracks = await LiveKitClient.createScreenShareTracks({
+                        audio: true,  // Include system audio if available
+                        video: {
+                            resolution: { width: 1920, height: 1080 },
+                            frameRate: 15
+                        }
+                    });
+                } else if (room.localParticipant && typeof room.localParticipant.setScreenShareEnabled === 'function') {
+                    // Alternative: Use room's built-in method
+                    await room.localParticipant.setScreenShareEnabled(true);
+                    
+                    // Get the published track
+                    const publication = room.localParticipant.getTrack(LiveKitClient.Track.Source.ScreenShare);
+                    if (publication && publication.track) {
+                        tracks = [publication.track];
+                    }
+                } else {
+                    // Fallback: Try to get screen media directly
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: {
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 },
+                            frameRate: { ideal: 15 }
+                        },
+                        audio: false
+                    });
+                    
+                    // Create a LiveKit track from the stream
+                    const videoTrack = stream.getVideoTracks()[0];
+                    if (!videoTrack) {
+                        throw new Error('No video track from screen share');
+                    }
+                    
+                    // Publish the native MediaStreamTrack
+                    await room.localParticipant.publishTrack(videoTrack, {
+                        name: 'screen',
+                        source: LiveKitClient.Track.Source.ScreenShare
+                    });
+                    
+                    // Store reference
+                    window.streamState.localTracks.screen = videoTrack;
+                    
+                    // Handle screen share end by user
+                    videoTrack.onended = () => {
+                        console.log('Screen share ended by user');
+                        window.streamState.publishers.screen = false;
+                        updateScreenShareButton(false);
+                        updateMediaCard('screen', false);
+                        
+                        // Move camera back to main if active
+                        if (window.streamState.publishers.camera) {
+                            showPreview(window.streamState.localTracks.camera, 'main');
+                        }
+                        clearPreview('pip');
+                    };
+                    
+                    // Show in preview
+                    const videoElement = document.createElement('video');
+                    videoElement.srcObject = new MediaStream([videoTrack]);
+                    videoElement.autoplay = true;
+                    videoElement.muted = true;
+                    videoElement.style.width = '100%';
+                    videoElement.style.height = '100%';
+                    videoElement.style.objectFit = 'contain';
+                    
+                    const mainPreview = document.getElementById('mainPreview');
+                    if (mainPreview) {
+                        mainPreview.innerHTML = '';
+                        mainPreview.appendChild(videoElement);
+                    }
+                    
+                    window.streamState.publishers.screen = true;
+                    updateScreenShareButton(true);
+                    updateMediaCard('screen', true, 'Sharing');
+                    
+                    showNotification('success', 'Screen sharing started successfully');
+                    updateStatus('Ready');
+                    return;
+                }
+                
+                // Process tracks if we got them from LiveKit methods
+                if (tracks && tracks.length > 0) {
+                    // Publish video track
+                    const videoTrack = tracks[0];
+                    await room.localParticipant.publishTrack(videoTrack);
+                    
+                    // Publish audio track if available
+                    if (tracks[1]) {
+                        await room.localParticipant.publishTrack(tracks[1]);
+                    }
+                    
+                    // Show screen share in main view, move camera to PiP if active
+                    if (window.streamState.publishers.camera) {
+                        showPreview(window.streamState.localTracks.camera, 'pip');
+                    }
+                    showPreview(videoTrack, 'main');
+                    
+                    // Handle screen share end by user
+                    videoTrack.mediaStreamTrack.onended = () => {
+                        console.log('Screen share ended by user');
+                        window.streamState.publishers.screen = false;
+                        updateScreenShareButton(false);
+                        updateMediaCard('screen', false);
+                        
+                        // Move camera back to main if active
+                        if (window.streamState.publishers.camera) {
+                            showPreview(window.streamState.localTracks.camera, 'main');
+                        }
+                        clearPreview('pip');
+                    };
+                    
+                    window.streamState.localTracks.screen = videoTrack;
+                    window.streamState.publishers.screen = true;
+                    updateScreenShareButton(true);
+                    updateMediaCard('screen', true, 'Sharing');
+                    
+                    showNotification('success', 'Screen sharing started successfully');
+                } else {
+                    throw new Error('Failed to create screen share tracks');
+                }
+                
+            } catch (error) {
+                // Handle user cancellation or other errors
+                if (error.name === 'NotAllowedError' || error.message.includes('Permission denied')) {
+                    showNotification('info', 'Screen sharing was cancelled');
+                } else {
+                    console.error('Screen share error:', error);
+                    showNotification('error', 'Screen sharing error: ' + error.message);
+                }
+                
                 window.streamState.publishers.screen = false;
                 updateScreenShareButton(false);
                 updateMediaCard('screen', false);
-                
-                // Move camera back to main if active
-                if (window.streamState.publishers.camera) {
-                    showPreview(window.streamState.localTracks.camera, 'main');
-                }
-                clearPreview('pip');
-            };
-            
-            window.streamState.localTracks.screen = track;
-            window.streamState.publishers.screen = true;
-            updateScreenShareButton(true);
-            updateMediaCard('screen', true, 'Sharing');
-            
-            showNotification('success', 'Screen sharing started successfully');
+            }
         }
         
         updateStatus('Ready');
@@ -908,6 +1024,63 @@ window.toggleScreenShare = async function() {
             showNotification('error', 'Screen sharing error: ' + error.message);
         }
         updateStatus('Screen share error');
+    }
+};
+
+// Also add this helper function if it doesn't exist
+window.showPreview = function(track, location = 'main') {
+    const container = location === 'main' ? document.getElementById('mainPreview') : document.getElementById('pipPreview');
+    if (!container) return;
+    
+    // Clear existing content
+    container.innerHTML = '';
+    
+    if (track) {
+        let videoElement;
+        
+        // Check if it's a LiveKit track or a native MediaStreamTrack
+        if (track.attach && typeof track.attach === 'function') {
+            // LiveKit track - use attach method
+            videoElement = track.attach();
+        } else if (track instanceof MediaStreamTrack) {
+            // Native MediaStreamTrack
+            videoElement = document.createElement('video');
+            videoElement.srcObject = new MediaStream([track]);
+            videoElement.autoplay = true;
+            videoElement.muted = true;
+        } else {
+            console.warn('Unknown track type:', track);
+            return;
+        }
+        
+        videoElement.style.width = '100%';
+        videoElement.style.height = '100%';
+        videoElement.style.objectFit = location === 'main' ? 'contain' : 'cover';
+        videoElement.muted = true; // Prevent echo
+        
+        container.appendChild(videoElement);
+        
+        if (location === 'pip') {
+            container.style.display = 'block';
+        }
+    }
+};
+
+window.clearPreview = function(location = 'main') {
+    const container = location === 'main' ? document.getElementById('mainPreview') : document.getElementById('pipPreview');
+    if (!container) return;
+    
+    if (location === 'main') {
+        container.innerHTML = `
+            <div class="text-center text-white">
+                <span class="material-symbols-outlined mb-2" style="font-size: 3rem;">videocam_off</span>
+                <p class="mb-2">Local Preview</p>
+                <small class="text-white-50">Camera and screen sharing will appear here</small>
+            </div>
+        `;
+    } else {
+        container.innerHTML = '';
+        container.style.display = 'none';
     }
 };
 
