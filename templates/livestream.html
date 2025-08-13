@@ -451,15 +451,6 @@ window.StreamViewerConfig.activeStreams.forEach(stream => {
 
 console.log('📊 Loaded', window.StreamViewerConfig.activeStreams.length, 'active streams');
 
-// Update the current connected button to show Leave Stream
-window.StreamViewerConfig.activeStreams.forEach(stream => {
-    if (window.StreamViewerConfig.joinedStreams.has(stream.id)) {
-        updateHeaderButtonToLeave(stream.id);
-    }
-});
-
-console.log('✅ Fixed track.setEnabled error and Leave Stream button');
-
 // Enhanced WebSocket Manager
 window.StreamCoordinator = {
     socket: null,
@@ -469,7 +460,7 @@ window.StreamCoordinator = {
     heartbeatInterval: null,
     
     init() {
-        console.log('🔌 Initializing Stream Coordinator...');
+        console.log('📌 Initializing Stream Coordinator...');
         
         this.socket = io({
             transports: ['websocket', 'polling'],
@@ -522,16 +513,12 @@ window.StreamCoordinator = {
         this.socket.on('new_stream_started', (data) => {
             console.log('🎬 New stream started:', data);
             showNotification('success', `🎬 ${data.streamer_name} just went live!`, 6000);
-            
-            // Auto-refresh after delay to show new stream
             setTimeout(() => this.refreshStreamList(), 2000);
         });
         
         this.socket.on('stream_ended', (data) => {
             console.log('📺 Stream ended:', data);
             showNotification('info', `📺 ${data.message}`, 4000);
-            
-            // Handle stream end
             const streamId = data.stream_id;
             if (window.StreamViewerConfig.joinedStreams.has(streamId)) {
                 this.handleStreamEnd(streamId);
@@ -549,13 +536,11 @@ window.StreamCoordinator = {
             if (this.isConnected) {
                 this.socket.emit('heartbeat', { timestamp: Date.now() });
             }
-        }, 30000); // 30 seconds
+        }, 30000);
     },
     
     updateConnectionStatus(isConnected) {
-        const indicator = document.getElementById('streamStatusIndicator');
         const badge = document.getElementById('statusBadge');
-        
         if (badge) {
             if (isConnected) {
                 badge.className = 'badge bg-success';
@@ -578,7 +563,6 @@ window.StreamCoordinator = {
             element.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 12px;">visibility</span>${count} viewers`;
         }
         
-        // Update total viewers
         this.updateTotalViewers();
     },
     
@@ -600,7 +584,6 @@ window.StreamCoordinator = {
     },
     
     handleStreamUpdate(data) {
-        // Handle various stream updates
         const streamId = data.stream_id;
         const state = window.StreamViewerConfig.streamStates.get(streamId);
         
@@ -627,8 +610,6 @@ window.StreamCoordinator = {
         }
         
         window.StreamViewerConfig.joinedStreams.delete(streamId);
-        
-        // Show stream ended state
         this.showStreamEndedState(streamId);
     },
     
@@ -678,28 +659,329 @@ window.StreamCoordinator = {
     }
 };
 
-// Add Join Stream button to the header area for each stream
+// Main join stream function
+window.joinStreamFixed = async function(streamId) {
+    console.log('🎬 Joining stream:', streamId);
+    
+    // Clean up UI first
+    const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
+    if (loadingStateEl) {
+        loadingStateEl.style.display = 'none';
+    }
+    
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (container) {
+        container.querySelectorAll('.stream-state-overlay').forEach(el => {
+            if (el.id !== `livekitContainer-${streamId}`) {
+                el.style.display = 'none';
+            }
+        });
+        // Remove any error overlays
+        container.querySelectorAll('*').forEach(el => {
+            if (el.textContent && (el.textContent.includes('Connection Issue') || 
+                el.textContent.includes('Unable to connect'))) {
+                el.remove();
+            }
+        });
+    }
+    
+    try {
+        const streamData = window.StreamViewerConfig.activeStreams.find(s => s.id === streamId);
+        const tokenData = window.StreamViewerConfig.streamTokens[streamId];
+        const livekitUrl = window.StreamViewerConfig.livekitUrl;
+        
+        if (!streamData || !tokenData || !livekitUrl) {
+            showNotification('error', 'Stream configuration missing. Please refresh the page.');
+            if (loadingStateEl) {
+                loadingStateEl.style.display = 'flex';
+            }
+            return;
+        }
+        
+        if (!window.LiveKitClient) {
+            showNotification('error', 'Streaming system not ready. Please refresh the page.');
+            if (loadingStateEl) {
+                loadingStateEl.style.display = 'flex';
+            }
+            return;
+        }
+        
+        showConnectingAnimation(streamId, streamData.streamer_name);
+        
+        console.log('📊 Connecting with:', {
+            streamId,
+            roomName: tokenData.room_name,
+            participantIdentity: tokenData.participant_identity,
+            livekitUrl
+        });
+        
+        const room = new window.LiveKitClient.Room({
+            adaptiveStream: true,
+            dynacast: true,
+            videoCaptureDefaults: {
+                resolution: { width: 1280, height: 720 },
+                facingMode: 'user'
+            },
+            audioCaptureDefaults: {
+                autoGainControl: true,
+                echoCancellation: true,
+                noiseSuppression: true
+            }
+        });
+        
+        room.on(window.LiveKitClient.RoomEvent.Connected, () => {
+            console.log('✅ Connected to stream:', streamId);
+            
+            removeConnectingAnimation(streamId);
+            
+            if (loadingStateEl) {
+                loadingStateEl.style.display = 'none';
+            }
+            
+            const livekitContainer = document.getElementById(`livekitContainer-${streamId}`);
+            if (livekitContainer) {
+                livekitContainer.style.cssText = 'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;';
+            }
+            
+            showElement(`statusBadges-${streamId}`);
+            showElement(`liveIndicator-${streamId}`);
+            showElement(`streamControls-${streamId}`);
+            
+            showNotification('success', `Connected to ${streamData.streamer_name}'s stream!`);
+            
+            window.StreamViewerConfig.roomConnections.set(streamId, room);
+            window.StreamViewerConfig.joinedStreams.add(streamId);
+            
+            const state = window.StreamViewerConfig.streamStates.get(streamId);
+            if (state) {
+                state.connected = true;
+                state.joined = true;
+                state.room = room;
+            }
+            
+            updateHeaderButtonToLeave(streamId);
+        });
+        
+        room.on(window.LiveKitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
+            handleTrackSubscription(streamId, track, publication, participant);
+        });
+        
+        room.on(window.LiveKitClient.RoomEvent.Disconnected, (reason) => {
+            console.log('👋 Disconnected from stream:', streamId, reason);
+            handleStreamDisconnection(streamId, reason);
+            updateHeaderButtonToJoin(streamId);
+        });
+        
+        await room.connect(livekitUrl, tokenData.token);
+        console.log('✅ Successfully joined stream:', streamId);
+        
+    } catch (error) {
+        console.error('❌ Failed to join stream:', error);
+        
+        removeConnectingAnimation(streamId);
+        showNotification('error', `Failed to connect: ${error.message}`);
+        updateHeaderButtonToJoin(streamId);
+        
+        if (loadingStateEl) {
+            loadingStateEl.style.display = 'flex';
+            const button = loadingStateEl.querySelector('.join-stream-btn');
+            if (button) {
+                button.innerHTML = '<span class="material-symbols-outlined me-2">refresh</span>Retry Connection';
+            }
+        }
+    }
+};
+
+// Handle track subscription
+function handleTrackSubscription(streamId, track, publication, participant) {
+    const container = document.getElementById(`livekitContainer-${streamId}`);
+    if (!container) return;
+    
+    container.style.cssText = 'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;';
+    
+    if (track.kind === 'video') {
+        console.log('📹 Adding video track');
+        
+        const videoElement = track.attach();
+        videoElement.id = `video-${streamId}`;
+        videoElement.style.cssText = 'width: 100%; height: 100%; object-fit: contain; border-radius: 8px; background: black;';
+        
+        container.innerHTML = '';
+        container.appendChild(videoElement);
+        
+        videoElement.addEventListener('loadeddata', () => {
+            console.log('✅ Video loaded');
+            removeConnectingAnimation(streamId);
+            const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
+            if (loadingStateEl) {
+                loadingStateEl.style.display = 'none';
+            }
+        });
+        
+        videoElement.play().catch(e => {
+            console.log('Autoplay blocked, adding play button');
+            addPlayButton(streamId, videoElement);
+        });
+        
+    } else if (track.kind === 'audio') {
+        console.log('🔊 Adding audio track');
+        
+        const audioElement = track.attach();
+        audioElement.id = `audio-${streamId}`;
+        audioElement.volume = 1.0;
+        audioElement.muted = false;
+        audioElement.style.display = 'none';
+        
+        container.appendChild(audioElement);
+        
+        audioElement.play().then(() => {
+            console.log('✅ Audio playing');
+            showAudioIndicator(streamId, true);
+        }).catch(e => {
+            console.log('Audio will play on interaction');
+        });
+    }
+}
+
+// Leave stream
+window.leaveStream = function(streamId) {
+    console.log('👋 Leaving stream:', streamId);
+    
+    if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
+        console.log('Not connected to this stream');
+        return;
+    }
+    
+    const room = window.StreamViewerConfig.roomConnections.get(streamId);
+    if (room) {
+        room.disconnect();
+        window.StreamViewerConfig.roomConnections.delete(streamId);
+    }
+    
+    if (window.StreamCoordinator.isConnected) {
+        window.StreamCoordinator.socket.emit('leave_stream', { stream_id: streamId });
+    }
+    
+    window.StreamViewerConfig.joinedStreams.delete(streamId);
+    stopAudioVisualization(streamId);
+    
+    const livekitContainer = document.getElementById(`livekitContainer-${streamId}`);
+    if (livekitContainer) {
+        livekitContainer.innerHTML = '';
+        livekitContainer.style.display = 'none';
+    }
+    
+    showElement(`loadingState-${streamId}`);
+    hideElement(`statusBadges-${streamId}`);
+    hideElement(`liveIndicator-${streamId}`);
+    hideElement(`streamControls-${streamId}`);
+    
+    const state = window.StreamViewerConfig.streamStates.get(streamId);
+    if (state) {
+        state.joined = false;
+        state.connected = false;
+        state.room = null;
+    }
+    
+    updateHeaderButtonToJoin(streamId);
+    showNotification('info', 'Left stream successfully');
+    console.log('✅ Successfully left stream:', streamId);
+};
+
+// Toggle audio
+window.toggleStreamAudio = function(streamId) {
+    const audioElement = document.getElementById(`audio-${streamId}`);
+    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
+    
+    if (!audioElement || !audioState) {
+        console.log('No audio element found');
+        return;
+    }
+    
+    const newAudioEnabled = !audioState.enabled;
+    audioState.enabled = newAudioEnabled;
+    audioElement.muted = !newAudioEnabled;
+    
+    updateAudioToggleButton(streamId, newAudioEnabled);
+    
+    const message = newAudioEnabled ? 'Audio unmuted' : 'Audio muted';
+    showNotification('info', message);
+    console.log(`🔊 Audio ${newAudioEnabled ? 'unmuted' : 'muted'} for stream:`, streamId);
+};
+
+// Toggle fullscreen
+window.toggleFullscreen = function(streamId) {
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (!container) return;
+    
+    if (document.fullscreenElement) {
+        document.exitFullscreen().then(() => {
+            updateFullscreenButton(streamId, false);
+            showNotification('info', 'Exited fullscreen');
+        }).catch(err => {
+            console.error('Error exiting fullscreen:', err);
+        });
+    } else {
+        container.requestFullscreen().then(() => {
+            updateFullscreenButton(streamId, true);
+            showNotification('success', 'Entered fullscreen mode');
+        }).catch(err => {
+            console.error('Error entering fullscreen:', err);
+            showNotification('warning', 'Fullscreen not supported');
+        });
+    }
+};
+
+// Retry connection
+window.retryConnection = function(streamId) {
+    console.log('🔄 Retrying connection for stream:', streamId);
+    
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (container) {
+        container.querySelectorAll('.stream-state-overlay').forEach(el => el.remove());
+        container.querySelectorAll('*').forEach(el => {
+            if (el.textContent && (el.textContent.includes('Connection Issue') || 
+                el.textContent.includes('Unable to connect'))) {
+                el.remove();
+            }
+        });
+    }
+    
+    const existingRoom = window.StreamViewerConfig.roomConnections.get(streamId);
+    if (existingRoom) {
+        try {
+            existingRoom.disconnect();
+        } catch (e) {
+            console.warn('Error disconnecting:', e);
+        }
+        window.StreamViewerConfig.roomConnections.delete(streamId);
+    }
+    
+    window.StreamViewerConfig.joinedStreams.delete(streamId);
+    
+    setTimeout(() => {
+        joinStreamFixed(streamId);
+    }, 1000);
+};
+
+// Header button functions
 function addJoinStreamButtonToHeader(streamId) {
-    // Find the card header for this stream
     const streamCard = document.querySelector(`[data-stream-id="${streamId}"]`);
     if (!streamCard) return;
     
     const cardHeader = streamCard.querySelector('.card-header');
     if (!cardHeader) return;
     
-    // Check if button already exists
     if (cardHeader.querySelector(`.header-join-btn-${streamId}`)) return;
     
-    // Get the stream data
     const streamData = window.StreamViewerConfig.activeStreams.find(s => s.id === streamId);
     if (!streamData) return;
     
-    // Create button container
     const buttonContainer = document.createElement('div');
     buttonContainer.className = `header-join-button-container ms-3`;
     buttonContainer.style.cssText = 'display: flex; align-items: center;';
     
-    // Create the join button
     const joinButton = document.createElement('button');
     joinButton.className = `btn btn-success btn-sm header-join-btn-${streamId}`;
     joinButton.style.cssText = `
@@ -721,17 +1003,10 @@ function addJoinStreamButtonToHeader(streamId) {
         Join Stream
     `;
     
-    // Check if already joined
     if (window.StreamViewerConfig.joinedStreams.has(streamId)) {
-        joinButton.innerHTML = `
-            <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span>
-            Connected
-        `;
-        joinButton.disabled = true;
-        joinButton.style.opacity = '0.7';
+        updateHeaderButtonToLeave(streamId);
     }
     
-    // Add hover effect
     joinButton.onmouseover = () => {
         if (!joinButton.disabled) {
             joinButton.style.transform = 'scale(1.05)';
@@ -744,58 +1019,33 @@ function addJoinStreamButtonToHeader(streamId) {
         joinButton.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
     };
     
-    // Add click handler
     joinButton.onclick = async () => {
         if (joinButton.disabled) return;
         
-        // Update button to show connecting
         joinButton.disabled = true;
         joinButton.innerHTML = `
             <span class="spinner-border spinner-border-sm"></span>
             Connecting...
         `;
         
-        // Hide the main loading overlay immediately
         const loadingState = document.getElementById(`loadingState-${streamId}`);
         if (loadingState) {
             loadingState.style.display = 'none';
         }
         
-        // Join the stream
-        try {
-            await joinStreamFixed(streamId);
-            
-            // Update button to show connected
-            joinButton.innerHTML = `
-                <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span>
-                Connected
-            `;
-            joinButton.style.opacity = '0.7';
-            
-        } catch (error) {
-            // Reset button on error
-            joinButton.disabled = false;
-            joinButton.innerHTML = `
-                <span class="material-symbols-outlined" style="font-size: 18px;">play_arrow</span>
-                Join Stream
-            `;
-            joinButton.style.opacity = '1';
-        }
+        await joinStreamFixed(streamId);
     };
     
     buttonContainer.appendChild(joinButton);
     
-    // Find the dropdown menu and insert button before it
     const dropdown = cardHeader.querySelector('.dropdown');
     if (dropdown) {
         dropdown.parentNode.insertBefore(buttonContainer, dropdown);
     } else {
-        // If no dropdown, append to header
         cardHeader.appendChild(buttonContainer);
     }
 }
 
-// Add Leave button functionality
 function updateHeaderButtonToLeave(streamId) {
     const button = document.querySelector(`.header-join-btn-${streamId}`);
     if (!button) return;
@@ -812,11 +1062,9 @@ function updateHeaderButtonToLeave(streamId) {
     
     button.onclick = () => {
         leaveStream(streamId);
-        updateHeaderButtonToJoin(streamId);
     };
 }
 
-// Update button back to Join
 function updateHeaderButtonToJoin(streamId) {
     const button = document.querySelector(`.header-join-btn-${streamId}`);
     if (!button) return;
@@ -849,274 +1097,11 @@ function updateHeaderButtonToJoin(streamId) {
     };
 }
 
-// Override the room connected event to update header button
-const originalJoinStreamFixed = window.joinStreamFixed;
-window.joinStreamFixed = async function(streamId) {
-    // Call original function
-    const result = await originalJoinStreamFixed.call(this, streamId);
-    
-    // Update header button when connected
-    if (window.StreamViewerConfig.joinedStreams.has(streamId)) {
-        updateHeaderButtonToLeave(streamId);
-    }
-    
-    return result;
-};
-
-// Override leave stream to update button
-const originalLeaveStream = window.leaveStream;
-window.leaveStream = function(streamId) {
-    const result = originalLeaveStream.call(this, streamId);
-    updateHeaderButtonToJoin(streamId);
-    return result;
-};
-
-// Initialize buttons for all active streams
-window.StreamViewerConfig.activeStreams.forEach(stream => {
-    addJoinStreamButtonToHeader(stream.id);
-});
-
-// Also hide the big loading overlay with the centered join button
-window.StreamViewerConfig.activeStreams.forEach(stream => {
-    const loadingState = document.getElementById(`loadingState-${stream.id}`);
-    if (loadingState && !window.StreamViewerConfig.joinedStreams.has(stream.id)) {
-        // Keep it visible but remove the join button from it
-        const joinBtn = loadingState.querySelector('.join-stream-btn');
-        if (joinBtn) {
-            joinBtn.style.display = 'none';
-        }
-        
-        // Update the text
-        const h5 = loadingState.querySelector('h5');
-        if (h5) {
-            h5.textContent = `${stream.streamer_name} is streaming`;
-        }
-        
-        const p = loadingState.querySelector('p.text-muted');
-        if (p) {
-            p.textContent = 'Click "Join Stream" above to watch';
-        }
-    }
-});
-
-console.log('✅ Header Join Stream buttons added');
-
-// First, let's forcefully remove the Connection Issue overlay RIGHT NOW
-(function removeConnectionOverlay() {
-    const containers = document.querySelectorAll('.stream-video-container');
-    containers.forEach(container => {
-        // Find and remove any overlay with Connection Issue
-        container.querySelectorAll('*').forEach(el => {
-            if (el.textContent.includes('Connection Issue') || 
-                el.textContent.includes('Unable to connect') ||
-                (el.querySelector && el.querySelector('.material-symbols-outlined')?.textContent === 'warning')) {
-                console.log('Removing connection overlay:', el);
-                el.remove();
-            }
-        });
-    });
-    
-    // Make sure video containers are visible
-    document.querySelectorAll('.livekit-video-container').forEach(container => {
-        container.style.display = 'block';
-        container.style.zIndex = '10';
-    });
-})();
-
-// Define the missing retryConnection function
-window.retryConnection = function(streamId) {
-    console.log('🔄 Retrying connection for stream:', streamId);
-    
-    // First, clean everything up
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        // Remove ALL overlays
-        container.querySelectorAll('.stream-state-overlay').forEach(el => el.remove());
-        container.querySelectorAll('[id*="errorState"]').forEach(el => el.remove());
-        container.querySelectorAll('[id*="connectingState"]').forEach(el => el.remove());
-        
-        // Remove anything with warning or connection issue
-        container.querySelectorAll('*').forEach(el => {
-            if (el.textContent && (el.textContent.includes('Connection Issue') || 
-                el.textContent.includes('Unable to connect'))) {
-                el.remove();
-            }
-        });
-    }
-    
-    // Clean up any existing connection
-    const existingRoom = window.StreamViewerConfig.roomConnections.get(streamId);
-    if (existingRoom) {
-        try {
-            existingRoom.disconnect();
-        } catch (e) {
-            console.warn('Error disconnecting:', e);
-        }
-        window.StreamViewerConfig.roomConnections.delete(streamId);
-    }
-    
-    window.StreamViewerConfig.joinedStreams.delete(streamId);
-    
-    // Show loading state
-    const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
-    if (loadingStateEl) {
-        loadingStateEl.style.display = 'flex';
-    }
-    
-    // Try connecting again
-    setTimeout(() => {
-        joinStreamFixed(streamId);
-    }, 1000);
-};
-
-// Override the joinStreamFixed function to ensure it cleans up properly
-window.joinStreamFixed = async function(streamId) {
-    console.log('🎬 Joining stream:', streamId);
-    
-    // IMPORTANT: First, hide the loading state that contains the Join Stream button
-    const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
-    if (loadingStateEl) {
-        loadingStateEl.style.display = 'none';
-    }
-    
-    // Clean up any existing overlays
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        // Remove ALL overlays except the livekit container
-        container.querySelectorAll('.stream-state-overlay').forEach(el => {
-            el.style.display = 'none';
-            if (el.id && el.id.includes('errorState')) {
-                el.remove();
-            }
-        });
-    }
-    
-    try {
-        // Get stream configuration
-        const streamData = window.StreamViewerConfig.activeStreams.find(s => s.id === streamId);
-        const tokenData = window.StreamViewerConfig.streamTokens[streamId];
-        const livekitUrl = window.StreamViewerConfig.livekitUrl;
-        
-        if (!streamData || !tokenData || !livekitUrl) {
-            showNotification('error', 'Stream configuration missing. Please refresh the page.');
-            // Show loading state again if error
-            if (loadingStateEl) {
-                loadingStateEl.style.display = 'flex';
-            }
-            return;
-        }
-        
-        if (!window.LiveKitClient) {
-            showNotification('error', 'Streaming system not ready. Please refresh the page.');
-            if (loadingStateEl) {
-                loadingStateEl.style.display = 'flex';
-            }
-            return;
-        }
-        
-        // Show connecting animation
-        showConnectingAnimation(streamId, streamData.streamer_name);
-        
-        console.log('📊 Connecting with:', {
-            streamId,
-            roomName: tokenData.room_name,
-            participantIdentity: tokenData.participant_identity,
-            livekitUrl
-        });
-        
-        // Create room
-        const room = new window.LiveKitClient.Room({
-            adaptiveStream: true,
-            dynacast: true,
-            videoCaptureDefaults: {
-                resolution: { width: 1280, height: 720 },
-                facingMode: 'user'
-            },
-            audioCaptureDefaults: {
-                autoGainControl: true,
-                echoCancellation: true,
-                noiseSuppression: true
-            }
-        });
-        
-        // Set up event handlers
-        room.on(window.LiveKitClient.RoomEvent.Connected, () => {
-            console.log('✅ Connected to stream:', streamId);
-            
-            // Remove connecting animation
-            removeConnectingAnimation(streamId);
-            
-            // Make sure loading state is hidden
-            if (loadingStateEl) {
-                loadingStateEl.style.display = 'none';
-            }
-            
-            // Show video container
-            const livekitContainer = document.getElementById(`livekitContainer-${streamId}`);
-            if (livekitContainer) {
-                livekitContainer.style.cssText = 'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;';
-            }
-            
-            // Show controls
-            showElement(`statusBadges-${streamId}`);
-            showElement(`liveIndicator-${streamId}`);
-            showElement(`streamControls-${streamId}`);
-            
-            showNotification('success', `Connected to ${streamData.streamer_name}'s stream!`);
-            
-            // Store connection
-            window.StreamViewerConfig.roomConnections.set(streamId, room);
-            window.StreamViewerConfig.joinedStreams.add(streamId);
-            
-            // Update state
-            const state = window.StreamViewerConfig.streamStates.get(streamId);
-            if (state) {
-                state.connected = true;
-                state.joined = true;
-                state.room = room;
-            }
-        });
-        
-        room.on(window.LiveKitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-            console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
-            handleTrackSubscriptionComplete(streamId, track, publication, participant);
-        });
-        
-        room.on(window.LiveKitClient.RoomEvent.Disconnected, (reason) => {
-            console.log('👋 Disconnected from stream:', streamId, reason);
-            handleStreamDisconnection(streamId, reason);
-        });
-        
-        // Connect
-        await room.connect(livekitUrl, tokenData.token);
-        console.log('✅ Successfully joined stream:', streamId);
-        
-    } catch (error) {
-        console.error('❌ Failed to join stream:', error);
-        
-        // Remove connecting animation
-        removeConnectingAnimation(streamId);
-        
-        showNotification('error', `Failed to connect: ${error.message}`);
-        
-        // Show loading state with retry option
-        if (loadingStateEl) {
-            loadingStateEl.style.display = 'flex';
-            // Update button text to "Retry"
-            const button = loadingStateEl.querySelector('.join-stream-btn');
-            if (button) {
-                button.innerHTML = '<span class="material-symbols-outlined me-2">refresh</span>Retry Connection';
-            }
-        }
-    }
-};
-
-// Simple connecting animation
+// UI Helper functions
 function showConnectingAnimation(streamId, streamerName) {
     const container = document.getElementById(`videoContainer-${streamId}`);
     if (!container) return;
     
-    // Remove any existing connecting overlay
     removeConnectingAnimation(streamId);
     
     const connectingDiv = document.createElement('div');
@@ -1153,237 +1138,7 @@ function removeConnectingAnimation(streamId) {
     }
 }
 
-// Fix the track.setEnabled error and update button handling
-function handleTrackSubscriptionComplete(streamId, track, publication, participant) {
-    const container = document.getElementById(`livekitContainer-${streamId}`);
-    if (!container) return;
-    
-    // Ensure container is visible
-    container.style.cssText = 'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;';
-    
-    if (track.kind === 'video') {
-        console.log('📹 Adding video track');
-        
-        const videoElement = track.attach();
-        videoElement.id = `video-${streamId}`;
-        videoElement.style.cssText = 'width: 100%; height: 100%; object-fit: contain; border-radius: 8px; background: black;';
-        
-        container.innerHTML = '';
-        container.appendChild(videoElement);
-        
-        videoElement.addEventListener('loadeddata', () => {
-            console.log('✅ Video loaded');
-            // Final cleanup
-            removeConnectingAnimation(streamId);
-            const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
-            if (loadingStateEl) {
-                loadingStateEl.style.display = 'none';
-            }
-        });
-        
-        videoElement.play().catch(e => {
-            console.log('Autoplay blocked, adding play button');
-            addInteractivePlayButton(streamId, videoElement);
-        });
-        
-    } else if (track.kind === 'audio') {
-        console.log('🔊 Adding audio track');
-        
-        const audioElement = track.attach();
-        audioElement.id = `audio-${streamId}`;
-        audioElement.volume = 1.0;
-        audioElement.muted = false;
-        audioElement.style.display = 'none';
-        
-        container.appendChild(audioElement);
-        
-        audioElement.play().then(() => {
-            console.log('✅ Audio playing');
-            showAudioIndicator(streamId, true);
-        }).catch(e => {
-            console.log('Audio will play on interaction');
-        });
-        
-        // REMOVED: track.setEnabled(true) - this doesn't exist in LiveKit v2.x
-        // The track is already enabled when subscribed
-    }
-}
-
-// Update the button to show Leave Stream when connected
-function updateHeaderButtonToLeave(streamId) {
-    const button = document.querySelector(`.header-join-btn-${streamId}`);
-    if (!button) return;
-    
-    button.disabled = false;
-    button.style.opacity = '1';
-    button.className = `btn btn-danger btn-sm header-join-btn-${streamId}`;
-    button.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
-    
-    button.innerHTML = `
-        <span class="material-symbols-outlined" style="font-size: 18px;">call_end</span>
-        Leave Stream
-    `;
-    
-    // Remove old onclick handler and add new one
-    const newButton = button.cloneNode(true);
-    button.parentNode.replaceChild(newButton, button);
-    
-    newButton.onclick = () => {
-        leaveStream(streamId);
-        updateHeaderButtonToJoin(streamId);
-    };
-}
-
-// Override joinStreamFixed to update button on successful connection
-const originalJoinStreamFixed = window.joinStreamFixed;
-window.joinStreamFixed = async function(streamId) {
-    console.log('🎬 Joining stream:', streamId);
-    
-    // Hide loading state first
-    const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
-    if (loadingStateEl) {
-        loadingStateEl.style.display = 'none';
-    }
-    
-    // Clean up any existing overlays
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        container.querySelectorAll('.stream-state-overlay').forEach(el => {
-            el.style.display = 'none';
-            if (el.id && el.id.includes('errorState')) {
-                el.remove();
-            }
-        });
-    }
-    
-    try {
-        // Get stream configuration
-        const streamData = window.StreamViewerConfig.activeStreams.find(s => s.id === streamId);
-        const tokenData = window.StreamViewerConfig.streamTokens[streamId];
-        const livekitUrl = window.StreamViewerConfig.livekitUrl;
-        
-        if (!streamData || !tokenData || !livekitUrl) {
-            showNotification('error', 'Stream configuration missing. Please refresh the page.');
-            if (loadingStateEl) {
-                loadingStateEl.style.display = 'flex';
-            }
-            return;
-        }
-        
-        if (!window.LiveKitClient) {
-            showNotification('error', 'Streaming system not ready. Please refresh the page.');
-            if (loadingStateEl) {
-                loadingStateEl.style.display = 'flex';
-            }
-            return;
-        }
-        
-        // Show connecting animation
-        showConnectingAnimation(streamId, streamData.streamer_name);
-        
-        console.log('📊 Connecting with:', {
-            streamId,
-            roomName: tokenData.room_name,
-            participantIdentity: tokenData.participant_identity,
-            livekitUrl
-        });
-        
-        // Create room
-        const room = new window.LiveKitClient.Room({
-            adaptiveStream: true,
-            dynacast: true,
-            videoCaptureDefaults: {
-                resolution: { width: 1280, height: 720 },
-                facingMode: 'user'
-            },
-            audioCaptureDefaults: {
-                autoGainControl: true,
-                echoCancellation: true,
-                noiseSuppression: true
-            }
-        });
-        
-        // Set up event handlers
-        room.on(window.LiveKitClient.RoomEvent.Connected, () => {
-            console.log('✅ Connected to stream:', streamId);
-            
-            // Remove connecting animation
-            removeConnectingAnimation(streamId);
-            
-            // Make sure loading state is hidden
-            if (loadingStateEl) {
-                loadingStateEl.style.display = 'none';
-            }
-            
-            // Show video container
-            const livekitContainer = document.getElementById(`livekitContainer-${streamId}`);
-            if (livekitContainer) {
-                livekitContainer.style.cssText = 'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;';
-            }
-            
-            // Show controls
-            showElement(`statusBadges-${streamId}`);
-            showElement(`liveIndicator-${streamId}`);
-            showElement(`streamControls-${streamId}`);
-            
-            showNotification('success', `Connected to ${streamData.streamer_name}'s stream!`);
-            
-            // Store connection
-            window.StreamViewerConfig.roomConnections.set(streamId, room);
-            window.StreamViewerConfig.joinedStreams.add(streamId);
-            
-            // Update state
-            const state = window.StreamViewerConfig.streamStates.get(streamId);
-            if (state) {
-                state.connected = true;
-                state.joined = true;
-                state.room = room;
-            }
-            
-            // UPDATE BUTTON TO LEAVE STREAM
-            updateHeaderButtonToLeave(streamId);
-        });
-        
-        room.on(window.LiveKitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-            console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
-            handleTrackSubscriptionComplete(streamId, track, publication, participant);
-        });
-        
-        room.on(window.LiveKitClient.RoomEvent.Disconnected, (reason) => {
-            console.log('👋 Disconnected from stream:', streamId, reason);
-            handleStreamDisconnection(streamId, reason);
-            // Update button back to Join
-            updateHeaderButtonToJoin(streamId);
-        });
-        
-        // Connect
-        await room.connect(livekitUrl, tokenData.token);
-        console.log('✅ Successfully joined stream:', streamId);
-        
-    } catch (error) {
-        console.error('❌ Failed to join stream:', error);
-        
-        // Remove connecting animation
-        removeConnectingAnimation(streamId);
-        
-        showNotification('error', `Failed to connect: ${error.message}`);
-        
-        // Reset button to Join state
-        updateHeaderButtonToJoin(streamId);
-        
-        // Show loading state with retry option
-        if (loadingStateEl) {
-            loadingStateEl.style.display = 'flex';
-            const button = loadingStateEl.querySelector('.join-stream-btn');
-            if (button) {
-                button.innerHTML = '<span class="material-symbols-outlined me-2">refresh</span>Retry Connection';
-            }
-        }
-    }
-};
-
-// Interactive play button that starts both video and audio
-function addInteractivePlayButton(streamId, videoElement) {
+function addPlayButton(streamId, videoElement) {
     const container = document.getElementById(`livekitContainer-${streamId}`);
     if (!container || document.getElementById(`playButton-${streamId}`)) return;
     
@@ -1420,13 +1175,11 @@ function addInteractivePlayButton(streamId, videoElement) {
     };
     
     playButton.onclick = () => {
-        // Play video
         videoElement.play().then(() => {
             playButton.remove();
             console.log('✅ Video started');
         });
         
-        // Play audio
         const audioElement = document.getElementById(`audio-${streamId}`);
         if (audioElement) {
             audioElement.muted = false;
@@ -1440,481 +1193,10 @@ function addInteractivePlayButton(streamId, videoElement) {
     container.appendChild(playButton);
 }
 
-// Helper to show elements
 function showElement(elementId) {
     const element = document.getElementById(elementId);
     if (element) {
         element.style.display = 'block';
-    }
-}
-
-console.log('✅ Join Stream button fix applied');
-
-// Clean up all overlays
-function cleanupStreamOverlays(streamId) {
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        // Remove all overlay elements except the ones we need
-        container.querySelectorAll('.stream-state-overlay').forEach(el => {
-            if (el.id === `connectingState-${streamId}` || 
-                el.id === `loadingState-${streamId}` ||
-                el.id === `errorState-${streamId}`) {
-                el.style.display = 'none';
-                // Also try to remove connecting state completely
-                if (el.id === `connectingState-${streamId}`) {
-                    el.remove();
-                }
-            }
-        });
-        
-        // Specifically remove any connecting overlays
-        const connectingOverlay = document.getElementById(`connectingState-${streamId}`);
-        if (connectingOverlay) {
-            connectingOverlay.remove();
-        }
-    }
-    
-    // Hide loading and error states
-    hideElement(`loadingState-${streamId}`);
-    hideElement(`errorState-${streamId}`);
-}
-
-// Reset all overlays to initial state
-function resetAllOverlays(streamId) {
-    // Hide all overlays
-    hideElement(`loadingState-${streamId}`);
-    hideElement(`errorState-${streamId}`);
-    hideElement(`livekitContainer-${streamId}`);
-    hideElement(`statusBadges-${streamId}`);
-    hideElement(`liveIndicator-${streamId}`);
-    hideElement(`streamControls-${streamId}`);
-    hideElement(`audioVisualizer-${streamId}`);
-    
-    // Remove any dynamic overlays
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        const connectingOverlay = document.getElementById(`connectingState-${streamId}`);
-        if (connectingOverlay) {
-            connectingOverlay.remove();
-        }
-    }
-}
-
-// Add this function to completely clear all overlays when video is confirmed playing
-function forceCompleteOverlayCleanup(streamId) {
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (!container) return;
-    
-    // Find and hide/remove ALL overlays with warning triangles or connection issues
-    container.querySelectorAll('.stream-state-overlay').forEach(overlay => {
-        // Check if this overlay contains connection issue text or warning icon
-        const hasWarning = overlay.querySelector('.material-symbols-outlined')?.textContent === 'warning';
-        const hasConnectionIssue = overlay.textContent.includes('Connection Issue') || 
-                                   overlay.textContent.includes('Unable to connect');
-        
-        if (hasWarning || hasConnectionIssue || overlay.style.display !== 'none') {
-            console.log('Removing problematic overlay:', overlay.id || 'unnamed');
-            overlay.style.display = 'none';
-            overlay.remove(); // Actually remove it from DOM
-        }
-    });
-    
-    // Ensure video container is visible
-    const livekitContainer = document.getElementById(`livekitContainer-${streamId}`);
-    if (livekitContainer) {
-        livekitContainer.style.display = 'block';
-        livekitContainer.style.zIndex = '10'; // Bring it to front
-        
-        // Find the video element and ensure it's visible
-        const video = livekitContainer.querySelector('video');
-        if (video) {
-            video.style.display = 'block';
-            video.style.visibility = 'visible';
-            video.style.opacity = '1';
-            console.log('Video element forced visible');
-        }
-    }
-}
-    
-// Force hide all overlays (more aggressive)
-function forceHideAllOverlays(streamId) {
-    // Hide specific overlays
-    ['loadingState', 'errorState', 'connectingState'].forEach(overlayType => {
-        const overlay = document.getElementById(`${overlayType}-${streamId}`);
-        if (overlay) {
-            overlay.style.display = 'none';
-            // Also try removing connecting overlay
-            if (overlayType === 'connectingState') {
-                overlay.remove();
-            }
-        }
-    });
-    
-    // Hide all elements with stream-state-overlay class in this container
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        container.querySelectorAll('.stream-state-overlay').forEach(el => {
-            el.style.display = 'none';
-        });
-    }
-}
-
-// Handle tracks with proper audio
-function handleTrackSubscriptionWithAudio(streamId, track, publication, participant) {
-    const container = document.getElementById(`livekitContainer-${streamId}`);
-    if (!container) return;
-    
-    // Ensure container is visible and on top
-    container.style.cssText = 'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;';
-    
-    if (track.kind === 'video') {
-        console.log('📹 Adding video track');
-        
-        const videoElement = track.attach();
-        videoElement.id = `video-${streamId}`;
-        videoElement.style.cssText = 'width: 100%; height: 100%; object-fit: contain; border-radius: 8px; background: black;';
-        
-        container.innerHTML = '';
-        container.appendChild(videoElement);
-        
-        videoElement.addEventListener('loadeddata', () => {
-            console.log('✅ Video loaded');
-            // Final cleanup of any overlays
-            const mainContainer = document.getElementById(`videoContainer-${streamId}`);
-            if (mainContainer) {
-                mainContainer.querySelectorAll('.stream-state-overlay').forEach(el => {
-                    if (el.id !== `livekitContainer-${streamId}`) {
-                        el.style.display = 'none';
-                    }
-                });
-            }
-        });
-        
-        videoElement.play().catch(e => {
-            console.log('Autoplay blocked, adding play button');
-            addPlayButtonOverlay(streamId, videoElement);
-        });
-        
-    } else if (track.kind === 'audio') {
-        console.log('🔊 Adding audio track');
-        
-        const audioElement = track.attach();
-        audioElement.id = `audio-${streamId}`;
-        audioElement.volume = 1.0;
-        audioElement.muted = false;
-        audioElement.style.display = 'none';
-        
-        container.appendChild(audioElement);
-        
-        audioElement.play().then(() => {
-            console.log('✅ Audio playing');
-        }).catch(e => {
-            console.log('Audio will play on interaction');
-        });
-        
-        track.setEnabled(true);
-    }
-}
-
-// Immediately clean up the current stream
-setTimeout(() => {
-    const streamId = 46;
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        // Remove ALL error overlays
-        container.querySelectorAll('*').forEach(el => {
-            if (el.textContent && (el.textContent.includes('Connection Issue') || 
-                el.textContent.includes('Unable to connect') ||
-                el.textContent.includes('Try Again'))) {
-                console.log('Removing:', el);
-                el.remove();
-            }
-        });
-        
-        // Ensure video is visible
-        const livekitContainer = document.getElementById(`livekitContainer-${streamId}`);
-        if (livekitContainer) {
-            livekitContainer.style.cssText = 'display: block !important; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 100;';
-        }
-    }
-}, 100);
-
-// Leave stream
-window.leaveStream = function(streamId) {
-    console.log('👋 Leaving stream:', streamId);
-    
-    if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
-        console.log('Not connected to this stream');
-        return;
-    }
-    
-    // Disconnect from LiveKit room
-    const room = window.StreamViewerConfig.roomConnections.get(streamId);
-    if (room) {
-        room.disconnect();
-        window.StreamViewerConfig.roomConnections.delete(streamId);
-    }
-    
-    // Leave WebSocket room
-    if (window.StreamCoordinator.isConnected) {
-        window.StreamCoordinator.socket.emit('leave_stream', { stream_id: streamId });
-    }
-    
-    // Clean up state
-    window.StreamViewerConfig.joinedStreams.delete(streamId);
-    stopAudioVisualization(streamId);
-    
-    // Complete cleanup
-    cleanupStreamOverlays(streamId);
-    
-    // Clear the LiveKit container
-    const livekitContainer = document.getElementById(`livekitContainer-${streamId}`);
-    if (livekitContainer) {
-        livekitContainer.innerHTML = '';
-        livekitContainer.style.display = 'none';
-    }
-    
-    // Reset UI to initial state
-    showElement(`loadingState-${streamId}`);
-    hideElement(`statusBadges-${streamId}`);
-    hideElement(`liveIndicator-${streamId}`);
-    hideElement(`streamControls-${streamId}`);
-    
-    // Update stream state
-    const state = window.StreamViewerConfig.streamStates.get(streamId);
-    if (state) {
-        state.joined = false;
-        state.connected = false;
-        state.room = null;
-    }
-    
-    showNotification('info', 'Left stream successfully');
-    console.log('✅ Successfully left stream:', streamId);
-};
-
-// Fix the audio toggle function as well
-window.toggleStreamAudio = function(streamId) {
-    const audioElement = document.getElementById(`audio-${streamId}`);
-    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
-    
-    if (!audioElement || !audioState) {
-        console.log('No audio element found');
-        return;
-    }
-    
-    const newAudioEnabled = !audioState.enabled;
-    audioState.enabled = newAudioEnabled;
-    
-    // Toggle the actual audio element
-    audioElement.muted = !newAudioEnabled;
-    
-    // For LiveKit v2.x, we control audio through the room's audio tracks
-    const room = window.StreamViewerConfig.roomConnections.get(streamId);
-    if (room && room.remoteParticipants) {
-        room.remoteParticipants.forEach(participant => {
-            participant.audioTrackPublications.forEach(publication => {
-                // In LiveKit v2.x, we set the subscription status
-                if (publication.isSubscribed && publication.audioTrack) {
-                    const audioTrack = publication.audioTrack;
-                    // Mute/unmute by controlling the audio element, not the track
-                    const trackElement = audioTrack.attachedElements[0];
-                    if (trackElement) {
-                        trackElement.muted = !newAudioEnabled;
-                    }
-                }
-            });
-        });
-    }
-    
-    // Update UI
-    updateAudioToggleButton(streamId, newAudioEnabled);
-    
-    const message = newAudioEnabled ? 'Audio unmuted' : 'Audio muted';
-    showNotification('info', message);
-    
-    console.log(`🔊 Audio ${newAudioEnabled ? 'unmuted' : 'muted'} for stream:`, streamId);
-};
-
-    
-// Toggle fullscreen
-window.toggleFullscreen = function(streamId) {
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (!container) return;
-    
-    if (document.fullscreenElement) {
-        document.exitFullscreen().then(() => {
-            updateFullscreenButton(streamId, false);
-            showNotification('info', 'Exited fullscreen');
-        }).catch(err => {
-            console.error('Error exiting fullscreen:', err);
-        });
-    } else {
-        container.requestFullscreen().then(() => {
-            updateFullscreenButton(streamId, true);
-            showNotification('success', 'Entered fullscreen mode');
-        }).catch(err => {
-            console.error('Error entering fullscreen:', err);
-            showNotification('warning', 'Fullscreen not supported');
-        });
-    }
-};
-
-// Define the missing retryConnection function
-window.retryConnection = function(streamId) {
-    console.log('🔄 Retrying connection for stream:', streamId);
-    
-    // First, clean everything up
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        // Remove ALL overlays
-        container.querySelectorAll('.stream-state-overlay').forEach(el => el.remove());
-        container.querySelectorAll('[id*="errorState"]').forEach(el => el.remove());
-        container.querySelectorAll('[id*="connectingState"]').forEach(el => el.remove());
-        
-        // Remove anything with warning or connection issue
-        container.querySelectorAll('*').forEach(el => {
-            if (el.textContent && (el.textContent.includes('Connection Issue') || 
-                el.textContent.includes('Unable to connect'))) {
-                el.remove();
-            }
-        });
-    }
-    
-    // Clean up any existing connection
-    const existingRoom = window.StreamViewerConfig.roomConnections.get(streamId);
-    if (existingRoom) {
-        try {
-            existingRoom.disconnect();
-        } catch (e) {
-            console.warn('Error disconnecting:', e);
-        }
-        window.StreamViewerConfig.roomConnections.delete(streamId);
-    }
-    
-    window.StreamViewerConfig.joinedStreams.delete(streamId);
-    
-    // Show loading state
-    const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
-    if (loadingStateEl) {
-        loadingStateEl.style.display = 'flex';
-    }
-    
-    // Try connecting again
-    setTimeout(() => {
-        joinStreamFixed(streamId);
-    }, 1000);
-};
-
-    
-// Audio Visualization Functions
-function startAudioVisualization(streamId, audioTrack) {
-    const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
-    if (!visualizer) return;
-    
-    showElement(`audioVisualizer-${streamId}`);
-    
-    const bars = visualizer.querySelectorAll('.audio-bar');
-    let animationId;
-    
-    function animate() {
-        if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
-            return;
-        }
-        
-        // Simulate audio levels
-        const baseLevel = 30 + Math.random() * 40;
-        
-        bars.forEach((bar, index) => {
-            const variation = Math.random() * 30 - 15;
-            const level = Math.max(10, Math.min(100, baseLevel + variation));
-            
-            bar.style.height = `${level}%`;
-            bar.style.background = level > 70 ? '#10B981' : 
-                                  level > 40 ? '#F59E0B' : '#6B7280';
-        });
-        
-        animationId = requestAnimationFrame(animate);
-    }
-    
-    animate();
-    
-    // Store animation ID for cleanup
-    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
-    if (audioState) {
-        audioState.visualizer = { animationId, stop: () => cancelAnimationFrame(animationId) };
-    }
-}
-
-function stopAudioVisualization(streamId) {
-    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
-    if (audioState?.visualizer) {
-        audioState.visualizer.stop();
-        audioState.visualizer = null;
-    }
-    
-    hideElement(`audioVisualizer-${streamId}`);
-}
-
-function showAudioIndicator(streamId, hasAudio) {
-    const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
-    if (visualizer) {
-        visualizer.style.display = hasAudio ? 'block' : 'none';
-    }
-}
-
-// Show connecting state with better management
-function showConnectingState(streamId, streamerName) {
-    // Remove any existing connecting overlay
-    const existingOverlay = document.getElementById(`connectingState-${streamId}`);
-    if (existingOverlay) {
-        existingOverlay.remove();
-    }
-    
-    const container = document.getElementById(`videoContainer-${streamId}`);
-    if (container) {
-        const connectingOverlay = document.createElement('div');
-        connectingOverlay.id = `connectingState-${streamId}`;
-        connectingOverlay.className = 'stream-state-overlay d-flex align-items-center justify-content-center';
-        connectingOverlay.style.cssText = 'z-index: 10; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8);';
-        connectingOverlay.innerHTML = `
-            <div class="text-center text-white">
-                <div class="connecting-animation mb-3">
-                    <div class="connecting-ring"></div>
-                    <span class="material-symbols-outlined connecting-icon">wifi</span>
-                </div>
-                <h5 class="mb-2">Connecting...</h5>
-                <p class="text-muted">Joining ${streamerName}'s stream</p>
-                <div class="progress" style="width: 200px;">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 70%"></div>
-                </div>
-            </div>
-        `;
-        
-        container.appendChild(connectingOverlay);
-    }
-}
-
-// Override the error state creation to prevent it from ever showing
-window.showErrorState = function(streamId, title, message) {
-    console.log('Error state requested but suppressed:', title, message);
-    // Just show notification instead
-    showNotification('warning', message, 5000);
-    
-    // Show loading state with retry button instead
-    const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
-    if (loadingStateEl) {
-        loadingStateEl.style.display = 'flex';
-    }
-};
-
-
-// Utility functions
-function showElement(elementId) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.style.display = 'block';
-        // Force style recalculation
-        element.offsetHeight;
     }
 }
 
@@ -1947,50 +1229,6 @@ function updateFullscreenButton(streamId, isFullscreen) {
     }
 }
 
-function updateVideoQuality(streamId, publication) {
-    const qualityBadge = document.getElementById(`qualityBadge-${streamId}`);
-    if (!qualityBadge || !publication) return;
-    
-    const dimensions = publication.dimensions;
-    if (dimensions) {
-        let quality = 'SD';
-        if (dimensions.height >= 1080) quality = 'FHD';
-        else if (dimensions.height >= 720) quality = 'HD';
-        
-        qualityBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 10px;">hd</span>${quality}`;
-    }
-}
-
-function updateConnectionQuality(streamId, quality) {
-    const connectionBadge = document.getElementById(`connectionBadge-${streamId}`);
-    if (!connectionBadge) return;
-    
-    let qualityText = 'Connected';
-    let badgeClass = 'bg-success';
-    
-    if (quality === window.LiveKitClient.ConnectionQuality.Poor) {
-        qualityText = 'Poor';
-        badgeClass = 'bg-danger';
-    } else if (quality === window.LiveKitClient.ConnectionQuality.Good) {
-        qualityText = 'Good';
-        badgeClass = 'bg-success';
-    } else if (quality === window.LiveKitClient.ConnectionQuality.Excellent) {
-        qualityText = 'Excellent';
-        badgeClass = 'bg-success';
-    }
-    
-    connectionBadge.className = `badge badge-connection ${badgeClass}`;
-    connectionBadge.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 10px;">wifi</span>${qualityText}`;
-}
-
-function updateParticipantCount(streamId) {
-    const room = window.StreamViewerConfig.roomConnections.get(streamId);
-    if (!room || !room.remoteParticipants) return;
-    
-    const count = room.remoteParticipants.size;
-    console.log(`Stream ${streamId} has ${count} remote participants`);
-}
-
 function handleStreamDisconnection(streamId, reason) {
     const state = window.StreamViewerConfig.streamStates.get(streamId);
     if (state) {
@@ -2001,7 +1239,6 @@ function handleStreamDisconnection(streamId, reason) {
     window.StreamViewerConfig.joinedStreams.delete(streamId);
     window.StreamViewerConfig.roomConnections.delete(streamId);
     
-    // Show appropriate message based on disconnect reason
     let message = 'Disconnected from stream';
     if (reason === 'duplicate_identity') {
         message = 'Connected from another device';
@@ -2058,7 +1295,61 @@ function showNotification(type, message, duration = 4000) {
     }, duration);
 }
 
-// Global Functions
+// Audio visualization
+function startAudioVisualization(streamId) {
+    const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
+    if (!visualizer) return;
+    
+    showElement(`audioVisualizer-${streamId}`);
+    
+    const bars = visualizer.querySelectorAll('.audio-bar');
+    let animationId;
+    
+    function animate() {
+        if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
+            return;
+        }
+        
+        const baseLevel = 30 + Math.random() * 40;
+        
+        bars.forEach((bar, index) => {
+            const variation = Math.random() * 30 - 15;
+            const level = Math.max(10, Math.min(100, baseLevel + variation));
+            
+            bar.style.height = `${level}%`;
+            bar.style.background = level > 70 ? '#10B981' : 
+                                  level > 40 ? '#F59E0B' : '#6B7280';
+        });
+        
+        animationId = requestAnimationFrame(animate);
+    }
+    
+    animate();
+    
+    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
+    if (audioState) {
+        audioState.visualizer = { animationId, stop: () => cancelAnimationFrame(animationId) };
+    }
+}
+
+function stopAudioVisualization(streamId) {
+    const audioState = window.StreamViewerConfig.audioStates.get(streamId);
+    if (audioState?.visualizer) {
+        audioState.visualizer.stop();
+        audioState.visualizer = null;
+    }
+    
+    hideElement(`audioVisualizer-${streamId}`);
+}
+
+function showAudioIndicator(streamId, hasAudio) {
+    const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
+    if (visualizer) {
+        visualizer.style.display = hasAudio ? 'block' : 'none';
+    }
+}
+
+// Global functions
 window.shareStream = function(streamId, title, streamerName) {
     const url = `${window.location.origin}/livestream`;
     const shareData = {
@@ -2150,21 +1441,17 @@ async function updateStreamStatistics() {
         const data = await response.json();
         
         if (data.active && data.streams) {
-            // Update individual stream viewer counts
             data.streams.forEach(streamData => {
                 window.StreamCoordinator.updateViewerCount(streamData.id, streamData.viewer_count || 0);
             });
             
-            // Update totals
             const totalViewers = data.streams.reduce((sum, stream) => sum + (stream.viewer_count || 0), 0);
             const recordingCount = data.streams.filter(stream => stream.is_recording).length;
             
-            // Update analytics display
             document.getElementById('totalActiveStreams').textContent = data.count || 0;
             document.getElementById('combinedViewers').textContent = totalViewers;
             document.getElementById('recordingCount').textContent = recordingCount;
             
-            // Update status badge
             const statusBadge = document.getElementById('statusBadge');
             if (statusBadge && data.count > 0) {
                 statusBadge.className = 'badge bg-success';
@@ -2176,7 +1463,7 @@ async function updateStreamStatistics() {
     }
 }
 
-// Setup Connection Monitoring
+// Connection monitoring
 window.setupConnectionMonitoring = function() {
     let connectionCheckInterval;
     
@@ -2189,10 +1476,8 @@ window.setupConnectionMonitoring = function() {
         });
     }
     
-    // Check connections every 30 seconds
     connectionCheckInterval = setInterval(checkConnections, 30000);
     
-    // Clear on page unload
     window.addEventListener('beforeunload', () => {
         if (connectionCheckInterval) {
             clearInterval(connectionCheckInterval);
@@ -2205,7 +1490,6 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('📱 Fixed LiveKit Viewer Integration Loading...');
     console.log(`📊 Configured for ${window.StreamViewerConfig.activeStreams.length} active streams`);
     
-    // Check if LiveKit is available
     if (typeof window.LiveKitClient === 'undefined') {
         console.error('❌ LiveKit client not loaded');
         showNotification('error', 'LiveKit client failed to load. Please refresh the page.');
@@ -2213,6 +1497,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     console.log('✅ LiveKit client loaded successfully');
+    
+    // Initialize header buttons for all streams
+    window.StreamViewerConfig.activeStreams.forEach(stream => {
+        addJoinStreamButtonToHeader(stream.id);
+    });
+    
+    // Hide the big join buttons in loading overlays
+    window.StreamViewerConfig.activeStreams.forEach(stream => {
+        const loadingState = document.getElementById(`loadingState-${stream.id}`);
+        if (loadingState && !window.StreamViewerConfig.joinedStreams.has(stream.id)) {
+            const joinBtn = loadingState.querySelector('.join-stream-btn');
+            if (joinBtn) {
+                joinBtn.style.display = 'none';
+            }
+            
+            const h5 = loadingState.querySelector('h5');
+            if (h5) {
+                h5.textContent = `${stream.streamer_name} is streaming`;
+            }
+            
+            const p = loadingState.querySelector('p.text-muted');
+            if (p) {
+                p.textContent = 'Click "Join Stream" above to watch';
+            }
+        }
+    });
+    
+    // Remove any lingering error overlays
+    document.querySelectorAll('.stream-video-container').forEach(container => {
+        container.querySelectorAll('*').forEach(el => {
+            if (el.textContent && (el.textContent.includes('Connection Issue') || 
+                el.textContent.includes('Unable to connect'))) {
+                el.remove();
+            }
+        });
+    });
     
     // Initialize stream coordinator
     window.StreamCoordinator.init();
