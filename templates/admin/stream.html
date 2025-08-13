@@ -1405,6 +1405,106 @@ window.addEventListener('beforeunload', function() {
         window.streamState.room.disconnect();
     }
 });
+
+// ========================================================================
+// FORCE OVERRIDE - This ensures the correct function is always used
+// ========================================================================
+console.log('🔧 Applying LiveKit force override...');
+
+// Wait a bit to ensure all scripts have loaded, then override
+setTimeout(() => {
+    console.log('🔧 Force overriding toggleScreenShare...');
+    
+    window.toggleScreenShare = async function() {
+        if (!window.streamState.isConnected) {
+            showNotification('warning', 'Please wait for connection to complete');
+            return;
+        }
+        
+        const room = window.streamState.room;
+        const isEnabled = window.streamState.publishers.screen;
+        
+        try {
+            updateStatus(isEnabled ? 'Stopping screen share...' : 'Starting screen share...');
+            
+            if (isEnabled) {
+                // Stop screen sharing - Using correct method
+                await room.localParticipant.setScreenShareEnabled(false);
+                
+                if (window.streamState.publishers.camera) {
+                    const cameraTrack = window.streamState.localTracks.camera;
+                    if (cameraTrack) {
+                        showPreview(cameraTrack, 'main');
+                    }
+                } else {
+                    clearPreview('main');
+                }
+                
+                clearPreview('pip');
+                
+                window.streamState.publishers.screen = false;
+                updateScreenShareButton(false);
+                updateMediaCard('screen', false);
+                
+                showNotification('info', 'Screen sharing stopped');
+                
+            } else {
+                // Start screen sharing - Using correct method
+                try {
+                    const publication = await room.localParticipant.setScreenShareEnabled(true);
+                    
+                    if (publication && publication.track) {
+                        if (window.streamState.publishers.camera) {
+                            const cameraTrack = window.streamState.localTracks.camera;
+                            if (cameraTrack) {
+                                showPreview(cameraTrack, 'pip');
+                            }
+                        }
+                        showPreview(publication.track, 'main');
+                        
+                        window.streamState.localTracks.screen = publication.track;
+                        window.streamState.publishers.screen = true;
+                        updateScreenShareButton(true);
+                        updateMediaCard('screen', true, 'Sharing');
+                        
+                        showNotification('success', 'Screen sharing started successfully');
+                    }
+                    
+                } catch (error) {
+                    if (error.name === 'NotAllowedError' || error.message.includes('Permission denied')) {
+                        showNotification('info', 'Screen sharing was cancelled');
+                    } else {
+                        console.error('Screen share error:', error);
+                        showNotification('error', 'Screen sharing error: ' + error.message);
+                    }
+                    
+                    window.streamState.publishers.screen = false;
+                    updateScreenShareButton(false);
+                    updateMediaCard('screen', false);
+                }
+            }
+            
+            updateStatus('Ready');
+            
+        } catch (error) {
+            console.error('❌ Screen share error:', error);
+            
+            if (error.name === 'NotAllowedError') {
+                showNotification('error', 'Screen sharing was denied. Please try again and allow access.');
+            } else {
+                showNotification('error', 'Screen sharing error: ' + error.message);
+            }
+            updateStatus('Screen share error');
+        }
+    };
+    
+    console.log('✅ Force override applied! Function now uses:', 
+        window.toggleScreenShare.toString().includes('setScreenShareEnabled') ? 
+        'setScreenShareEnabled ✅' : 'Unknown method ❌'
+    );
+}, 1000); // Wait 1 second to ensure all scripts have loaded
+
+console.log('⏳ Force override scheduled...');
 </script>
 
 <style>
