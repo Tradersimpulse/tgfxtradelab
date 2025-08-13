@@ -519,10 +519,46 @@ window.StreamCoordinator = {
         this.socket.on('stream_ended', (data) => {
             console.log('📺 Stream ended:', data);
             showNotification('info', `📺 ${data.message}`, 4000);
+            
             const streamId = data.stream_id;
+            
+            // Immediately disconnect any active connections
             if (window.StreamViewerConfig.joinedStreams.has(streamId)) {
+                // Force disconnect from LiveKit
+                const room = window.StreamViewerConfig.roomConnections.get(streamId);
+                if (room) {
+                    try {
+                        room.disconnect();
+                    } catch (e) {
+                        console.warn('Error disconnecting:', e);
+                    }
+                }
+                
+                // Clean up all references
+                window.StreamViewerConfig.roomConnections.delete(streamId);
+                window.StreamViewerConfig.joinedStreams.delete(streamId);
+                
+                // Handle the stream end
                 this.handleStreamEnd(streamId);
+            } else if (data.redirect) {
+                // Even if not joined, refresh to show updated stream list
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
             }
+        });
+
+        // Also add a handler for stream_ending to prepare for disconnection
+        this.socket.on('stream_ending', (data) => {
+            console.log('⚠️ Stream ending soon:', data);
+            showNotification('warning', data.message, 3000);
+            
+            // Stop any active media playback
+            const videoElement = document.getElementById(`video-${data.stream_id}`);
+            const audioElement = document.getElementById(`audio-${data.stream_id}`);
+            
+            if (videoElement) videoElement.pause();
+            if (audioElement) audioElement.pause();
         });
         
         this.socket.on('error', (data) => {
