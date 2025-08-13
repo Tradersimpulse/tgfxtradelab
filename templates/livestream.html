@@ -608,62 +608,84 @@ window.StreamCoordinator = {
     
     // NEW: Stream status monitoring with heartbeat
     startStreamStatusMonitoring() {
-        console.log('💓 Starting stream status monitoring...');
+    console.log('💓 Starting stream status monitoring...');
+    
+    // Track failed checks to avoid false positives
+    const failedChecks = new Map();
+    
+    // Check stream status every 5 seconds
+    this.streamStatusCheckInterval = setInterval(async () => {
+        // Only check if we have joined streams
+        if (!window.StreamViewerConfig || window.StreamViewerConfig.joinedStreams.size === 0) {
+            return;
+        }
         
-        // Check stream status every 5 seconds
-        this.streamStatusCheckInterval = setInterval(async () => {
-            if (window.StreamViewerConfig && window.StreamViewerConfig.joinedStreams.size > 0) {
-                try {
-                    const response = await fetch('/api/stream/status');
-                    if (response.ok) {
-                        const data = await response.json();
-                        
-                        // Check each joined stream
-                        window.StreamViewerConfig.joinedStreams.forEach(streamId => {
-                            const streamStillActive = data.active && 
-                                data.streams && 
-                                data.streams.some(s => s.id === streamId && s.is_active);
-                            
-                            if (!streamStillActive) {
-                                console.log('⚠️ Stream no longer active:', streamId);
-                                this.handleInactiveStream(streamId);
-                            }
-                        });
-                        
-                        // If no streams are active at all, refresh the page
-                        if (!data.active || !data.streams || data.streams.length === 0) {
-                            console.log('📺 No active streams found, refreshing...');
-                            this.handleNoActiveStreams();
-                        }
+        try {
+            const response = await fetch('/api/stream/status');
+            if (!response.ok) {
+                console.warn('Stream status check failed:', response.status);
+                return;
+            }
+            
+            const data = await response.json();
+            console.log('📊 Stream status check:', {
+                active: data.active,
+                streamCount: data.streams ? data.streams.length : 0,
+                streams: data.streams
+            });
+            
+            // Check each joined stream
+            window.StreamViewerConfig.joinedStreams.forEach(joinedStreamId => {
+                // Convert to number for comparison (or use == instead of ===)
+                const streamId = parseInt(joinedStreamId);
+                
+                const streamStillActive = data.active && 
+                    data.streams && 
+                    data.streams.some(s => {
+                        // Use loose equality to handle string/number mismatch
+                        return s.id == streamId || s.id == joinedStreamId;
+                    });
+                
+                if (!streamStillActive) {
+                    // Increment failed check counter
+                    const currentFailCount = failedChecks.get(streamId) || 0;
+                    failedChecks.set(streamId, currentFailCount + 1);
+                    
+                    console.log(`⚠️ Stream ${streamId} not found in active streams (attempt ${currentFailCount + 1}/3)`);
+                    
+                    // Only treat as inactive after 3 consecutive failed checks (15 seconds)
+                    if (failedChecks.get(streamId) >= 3) {
+                        console.log('🔴 Stream confirmed inactive after 3 checks:', streamId);
+                        this.handleInactiveStream(joinedStreamId);
+                        failedChecks.delete(streamId);
                     }
-                } catch (error) {
-                    console.error('Error checking stream status:', error);
+                } else {
+                    // Stream is active, reset failed check counter
+                    if (failedChecks.has(streamId)) {
+                        console.log(`✅ Stream ${streamId} confirmed active again`);
+                        failedChecks.delete(streamId);
+                    }
+                }
+            });
+            
+            // Don't auto-refresh if at least one stream is still active
+            const hasActiveStreams = data.active && data.streams && data.streams.length > 0;
+            if (!hasActiveStreams && window.StreamViewerConfig.joinedStreams.size === 0) {
+                console.log('📺 No active streams and not joined to any, considering refresh...');
+                // Only refresh if we're on the streams page and expecting streams
+                const streamsContainer = document.getElementById('streamsContainer');
+                if (streamsContainer) {
+                    console.log('📺 No active streams found, refreshing page...');
+                    this.handleNoActiveStreams();
                 }
             }
             
-            // Also check if we're on a page with active streams but none are shown
-            const streamsContainer = document.getElementById('streamsContainer');
-            if (streamsContainer && window.StreamViewerConfig) {
-                const hasActiveStreams = window.StreamViewerConfig.activeStreams && 
-                                       window.StreamViewerConfig.activeStreams.length > 0;
-                if (hasActiveStreams) {
-                    // Verify streams are still active
-                    try {
-                        const response = await fetch('/api/stream/status');
-                        if (response.ok) {
-                            const data = await response.json();
-                            if (!data.active || !data.streams || data.streams.length === 0) {
-                                console.log('📺 All streams have ended, refreshing to show No Live Streams...');
-                                setTimeout(() => window.location.reload(), 1500);
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error verifying stream status:', error);
-                    }
-                }
-            }
-        }, 5000); // Check every 5 seconds
-    },
+        } catch (error) {
+            console.error('Error checking stream status:', error);
+            // Don't treat network errors as stream ending
+        }
+    }, 5000); // Check every 5 seconds
+},
     
     // NEW: Handle inactive stream
     handleInactiveStream(streamId) {
