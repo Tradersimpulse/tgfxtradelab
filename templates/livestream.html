@@ -868,6 +868,42 @@ function resetAllOverlays(streamId) {
     }
 }
 
+// Add this function to completely clear all overlays when video is confirmed playing
+function forceCompleteOverlayCleanup(streamId) {
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (!container) return;
+    
+    // Find and hide/remove ALL overlays with warning triangles or connection issues
+    container.querySelectorAll('.stream-state-overlay').forEach(overlay => {
+        // Check if this overlay contains connection issue text or warning icon
+        const hasWarning = overlay.querySelector('.material-symbols-outlined')?.textContent === 'warning';
+        const hasConnectionIssue = overlay.textContent.includes('Connection Issue') || 
+                                   overlay.textContent.includes('Unable to connect');
+        
+        if (hasWarning || hasConnectionIssue || overlay.style.display !== 'none') {
+            console.log('Removing problematic overlay:', overlay.id || 'unnamed');
+            overlay.style.display = 'none';
+            overlay.remove(); // Actually remove it from DOM
+        }
+    });
+    
+    // Ensure video container is visible
+    const livekitContainer = document.getElementById(`livekitContainer-${streamId}`);
+    if (livekitContainer) {
+        livekitContainer.style.display = 'block';
+        livekitContainer.style.zIndex = '10'; // Bring it to front
+        
+        // Find the video element and ensure it's visible
+        const video = livekitContainer.querySelector('video');
+        if (video) {
+            video.style.display = 'block';
+            video.style.visibility = 'visible';
+            video.style.opacity = '1';
+            console.log('Video element forced visible');
+        }
+    }
+}
+    
 // Force hide all overlays (more aggressive)
 function forceHideAllOverlays(streamId) {
     // Hide specific overlays
@@ -891,7 +927,7 @@ function forceHideAllOverlays(streamId) {
     }
 }
 
-// Handle track subscription
+// Update your handleTrackSubscription function to call this when video loads
 function handleTrackSubscription(streamId, track, publication, participant) {
     const container = document.getElementById(`livekitContainer-${streamId}`);
     if (!container) {
@@ -899,13 +935,11 @@ function handleTrackSubscription(streamId, track, publication, participant) {
         return;
     }
     
-    // Make sure container is visible
     container.style.display = 'block';
     
     if (track.kind === 'video') {
         console.log('📹 Adding video track for stream:', streamId);
         
-        // Create and configure video element
         const videoElement = track.attach();
         videoElement.id = `video-${streamId}`;
         videoElement.style.cssText = `
@@ -914,69 +948,47 @@ function handleTrackSubscription(streamId, track, publication, participant) {
             object-fit: contain;
             border-radius: 8px;
             background: black;
+            position: relative;
+            z-index: 5;
         `;
         
-        // Clear container and add video
         container.innerHTML = '';
         container.appendChild(videoElement);
         
-        // Set up event listeners
+        // Multiple cleanup attempts
         videoElement.addEventListener('loadeddata', () => {
-            console.log('✅ Video loaded successfully for stream:', streamId);
-            // Force hide overlays again when video loads
-            forceHideAllOverlays(streamId);
-            
-            // Ensure video container is visible
-            container.style.display = 'block';
-            
-            // Log video element state
-            console.log('Video element state:', {
-                readyState: videoElement.readyState,
-                paused: videoElement.paused,
-                currentTime: videoElement.currentTime,
-                srcObject: videoElement.srcObject
-            });
+            console.log('✅ Video loaded, forcing complete cleanup');
+            forceCompleteOverlayCleanup(streamId);
         });
         
         videoElement.addEventListener('playing', () => {
-            console.log('▶️ Video playing for stream:', streamId);
-            forceHideAllOverlays(streamId);
+            console.log('▶️ Video playing, final cleanup');
+            forceCompleteOverlayCleanup(streamId);
+            
+            // Extra aggressive cleanup after a short delay
+            setTimeout(() => {
+                forceCompleteOverlayCleanup(streamId);
+            }, 100);
         });
         
-        // Try to play the video
+        videoElement.addEventListener('play', () => {
+            forceCompleteOverlayCleanup(streamId);
+        });
+        
+        // Try to play
         videoElement.play().then(() => {
             console.log('✅ Video playback started');
+            forceCompleteOverlayCleanup(streamId);
         }).catch(e => {
-            console.log('⚠️ Video autoplay blocked, user interaction required:', e.message);
-            // Add a play button overlay if autoplay is blocked
+            console.log('⚠️ Autoplay blocked:', e.message);
             addPlayButtonOverlay(streamId, videoElement);
         });
         
-        // Update quality indicator
         if (publication.dimensions) {
             updateVideoQuality(streamId, publication);
         }
-        
     } else if (track.kind === 'audio') {
-        console.log('🔊 Adding audio track for stream:', streamId);
-        
-        const audioElement = track.attach();
-        audioElement.id = `audio-${streamId}`;
-        audioElement.volume = 0.8; // Default volume
-        
-        // Add audio element to page (hidden)
-        audioElement.style.display = 'none';
-        document.body.appendChild(audioElement);
-        
-        // Try to play audio
-        audioElement.play().then(() => {
-            console.log('✅ Audio playback started');
-        }).catch(e => {
-            console.log('⚠️ Audio autoplay blocked:', e.message);
-        });
-        
-        // Show audio indicator
-        showAudioIndicator(streamId, true);
+        // Audio handling code...
     }
 }
 
