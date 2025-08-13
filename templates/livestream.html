@@ -669,13 +669,14 @@ window.StreamCoordinator = {
     }
 };
 
-// FIXED: Join Stream Function with proper overlay management
 window.joinStreamFixed = async function(streamId) {
     console.log('🎬 Joining stream:', streamId);
     
     try {
-        // Clear any previous states and overlays
-        cleanupStreamOverlays(streamId);
+        // Reset ALL overlays first
+        resetAllOverlays(streamId);
+        
+        // Show loading state
         showElement(`loadingState-${streamId}`);
         
         // Get stream configuration
@@ -711,13 +712,14 @@ window.joinStreamFixed = async function(streamId) {
                 facingMode: 'user'
             }
         });
+
         
         // Set up event handlers BEFORE connecting
         room.on(window.LiveKitClient.RoomEvent.Connected, () => {
             console.log('✅ Connected to stream:', streamId);
             
-            // Clean up all overlays
-            cleanupStreamOverlays(streamId);
+            // IMPORTANT: Force hide ALL overlays
+            forceHideAllOverlays(streamId);
             
             // Show the video container and controls
             showElement(`livekitContainer-${streamId}`);
@@ -752,8 +754,8 @@ window.joinStreamFixed = async function(streamId) {
             console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
             handleTrackSubscription(streamId, track, publication, participant);
             
-            // Extra cleanup when we get tracks
-            cleanupStreamOverlays(streamId);
+            // Force hide overlays again when tracks arrive
+            forceHideAllOverlays(streamId);
         });
         
         room.on(window.LiveKitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
@@ -777,6 +779,7 @@ window.joinStreamFixed = async function(streamId) {
         });
         
         // Show connecting state
+        hideElement(`loadingState-${streamId}`);
         showConnectingState(streamId, streamData.streamer_name);
         
         // Connect to room with timeout
@@ -789,16 +792,16 @@ window.joinStreamFixed = async function(streamId) {
         
         console.log('✅ Successfully joined stream:', streamId);
         
-        // Final cleanup with a short delay to ensure everything is loaded
+        // Final cleanup after successful connection
         setTimeout(() => {
-            cleanupStreamOverlays(streamId);
+            forceHideAllOverlays(streamId);
         }, 500);
         
     } catch (error) {
         console.error('❌ Failed to join stream:', error);
         
-        // Clean up on error
-        cleanupStreamOverlays(streamId);
+        // Reset overlays
+        resetAllOverlays(streamId);
         
         // Show user-friendly error
         let errorMessage = error.message;
@@ -844,6 +847,50 @@ function cleanupStreamOverlays(streamId) {
     hideElement(`errorState-${streamId}`);
 }
 
+// Reset all overlays to initial state
+function resetAllOverlays(streamId) {
+    // Hide all overlays
+    hideElement(`loadingState-${streamId}`);
+    hideElement(`errorState-${streamId}`);
+    hideElement(`livekitContainer-${streamId}`);
+    hideElement(`statusBadges-${streamId}`);
+    hideElement(`liveIndicator-${streamId}`);
+    hideElement(`streamControls-${streamId}`);
+    hideElement(`audioVisualizer-${streamId}`);
+    
+    // Remove any dynamic overlays
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (container) {
+        const connectingOverlay = document.getElementById(`connectingState-${streamId}`);
+        if (connectingOverlay) {
+            connectingOverlay.remove();
+        }
+    }
+}
+
+// Force hide all overlays (more aggressive)
+function forceHideAllOverlays(streamId) {
+    // Hide specific overlays
+    ['loadingState', 'errorState', 'connectingState'].forEach(overlayType => {
+        const overlay = document.getElementById(`${overlayType}-${streamId}`);
+        if (overlay) {
+            overlay.style.display = 'none';
+            // Also try removing connecting overlay
+            if (overlayType === 'connectingState') {
+                overlay.remove();
+            }
+        }
+    });
+    
+    // Hide all elements with stream-state-overlay class in this container
+    const container = document.getElementById(`videoContainer-${streamId}`);
+    if (container) {
+        container.querySelectorAll('.stream-state-overlay').forEach(el => {
+            el.style.display = 'none';
+        });
+    }
+}
+
 // Handle track subscription
 function handleTrackSubscription(streamId, track, publication, participant) {
     const container = document.getElementById(`livekitContainer-${streamId}`);
@@ -858,7 +905,9 @@ function handleTrackSubscription(streamId, track, publication, participant) {
     if (track.kind === 'video') {
         console.log('📹 Adding video track for stream:', streamId);
         
+        // Create and configure video element
         const videoElement = track.attach();
+        videoElement.id = `video-${streamId}`;
         videoElement.style.cssText = `
             width: 100%;
             height: 100%;
@@ -871,15 +920,36 @@ function handleTrackSubscription(streamId, track, publication, participant) {
         container.innerHTML = '';
         container.appendChild(videoElement);
         
-        // Clean up overlays when video loads
+        // Set up event listeners
         videoElement.addEventListener('loadeddata', () => {
-            console.log('Video loaded, final overlay cleanup');
-            cleanupStreamOverlays(streamId);
+            console.log('✅ Video loaded successfully for stream:', streamId);
+            // Force hide overlays again when video loads
+            forceHideAllOverlays(streamId);
+            
+            // Ensure video container is visible
+            container.style.display = 'block';
+            
+            // Log video element state
+            console.log('Video element state:', {
+                readyState: videoElement.readyState,
+                paused: videoElement.paused,
+                currentTime: videoElement.currentTime,
+                srcObject: videoElement.srcObject
+            });
+        });
+        
+        videoElement.addEventListener('playing', () => {
+            console.log('▶️ Video playing for stream:', streamId);
+            forceHideAllOverlays(streamId);
         });
         
         // Try to play the video
-        videoElement.play().catch(e => {
-            console.log('Video autoplay blocked, user interaction required');
+        videoElement.play().then(() => {
+            console.log('✅ Video playback started');
+        }).catch(e => {
+            console.log('⚠️ Video autoplay blocked, user interaction required:', e.message);
+            // Add a play button overlay if autoplay is blocked
+            addPlayButtonOverlay(streamId, videoElement);
         });
         
         // Update quality indicator
@@ -891,6 +961,7 @@ function handleTrackSubscription(streamId, track, publication, participant) {
         console.log('🔊 Adding audio track for stream:', streamId);
         
         const audioElement = track.attach();
+        audioElement.id = `audio-${streamId}`;
         audioElement.volume = 0.8; // Default volume
         
         // Add audio element to page (hidden)
@@ -898,8 +969,10 @@ function handleTrackSubscription(streamId, track, publication, participant) {
         document.body.appendChild(audioElement);
         
         // Try to play audio
-        audioElement.play().catch(e => {
-            console.log('Audio autoplay blocked, user interaction required');
+        audioElement.play().then(() => {
+            console.log('✅ Audio playback started');
+        }).catch(e => {
+            console.log('⚠️ Audio autoplay blocked:', e.message);
         });
         
         // Show audio indicator
@@ -989,6 +1062,61 @@ window.toggleStreamAudio = function(streamId) {
     console.log(`🔊 Audio ${newAudioEnabled ? 'enabled' : 'muted'} for stream:`, streamId);
 };
 
+function addPlayButtonOverlay(streamId, videoElement) {
+    const container = document.getElementById(`livekitContainer-${streamId}`);
+    if (!container) return;
+    
+    // Check if play button already exists
+    if (document.getElementById(`playButton-${streamId}`)) return;
+    
+    const playButton = document.createElement('div');
+    playButton.id = `playButton-${streamId}`;
+    playButton.style.cssText = `
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10;
+        cursor: pointer;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        width: 80px;
+        height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s;
+    `;
+    
+    playButton.innerHTML = `
+        <span class="material-symbols-outlined" style="font-size: 48px; color: white;">play_arrow</span>
+    `;
+    
+    playButton.addEventListener('click', () => {
+        videoElement.play().then(() => {
+            playButton.remove();
+            // Also try to play audio
+            const audioElement = document.getElementById(`audio-${streamId}`);
+            if (audioElement) {
+                audioElement.play().catch(e => console.log('Audio play failed:', e));
+            }
+        }).catch(e => {
+            console.error('Manual play failed:', e);
+            showNotification('error', 'Unable to start playback');
+        });
+    });
+    
+    playButton.addEventListener('mouseenter', () => {
+        playButton.style.transform = 'translate(-50%, -50%) scale(1.1)';
+    });
+    
+    playButton.addEventListener('mouseleave', () => {
+        playButton.style.transform = 'translate(-50%, -50%) scale(1)';
+    });
+    
+    container.appendChild(playButton);
+}
+
 // Toggle fullscreen
 window.toggleFullscreen = function(streamId) {
     const container = document.getElementById(`videoContainer-${streamId}`);
@@ -1012,7 +1140,7 @@ window.toggleFullscreen = function(streamId) {
     }
 };
 
-// Retry connection
+// Retry connection with better cleanup
 window.retryConnection = function(streamId) {
     console.log('🔄 Retrying connection for stream:', streamId);
     
@@ -1029,8 +1157,8 @@ window.retryConnection = function(streamId) {
     
     window.StreamViewerConfig.joinedStreams.delete(streamId);
     
-    // Clean up all overlays
-    cleanupStreamOverlays(streamId);
+    // Reset all overlays
+    resetAllOverlays(streamId);
     
     // Try connecting again
     setTimeout(() => {
@@ -1038,6 +1166,8 @@ window.retryConnection = function(streamId) {
     }, 1000);
 };
 
+console.log('✅ Fixed LiveKit viewer connection handler loaded');
+    
 // Audio Visualization Functions
 function startAudioVisualization(streamId, audioTrack) {
     const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
@@ -1094,23 +1224,20 @@ function showAudioIndicator(streamId, hasAudio) {
     }
 }
 
-// UI Helper Functions
+// Show connecting state with better management
 function showConnectingState(streamId, streamerName) {
-    hideElement(`loadingState-${streamId}`);
-    hideElement(`errorState-${streamId}`);
+    // Remove any existing connecting overlay
+    const existingOverlay = document.getElementById(`connectingState-${streamId}`);
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
     
     const container = document.getElementById(`videoContainer-${streamId}`);
     if (container) {
-        // Remove any existing connecting overlay first
-        const existingOverlay = document.getElementById(`connectingState-${streamId}`);
-        if (existingOverlay) {
-            existingOverlay.remove();
-        }
-        
         const connectingOverlay = document.createElement('div');
         connectingOverlay.id = `connectingState-${streamId}`;
         connectingOverlay.className = 'stream-state-overlay d-flex align-items-center justify-content-center';
-        connectingOverlay.style.zIndex = '10';
+        connectingOverlay.style.cssText = 'z-index: 10; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8);';
         connectingOverlay.innerHTML = `
             <div class="text-center text-white">
                 <div class="connecting-animation mb-3">
@@ -1129,25 +1256,37 @@ function showConnectingState(streamId, streamerName) {
     }
 }
 
+// Improved error state display
+function showErrorState(streamId, title, message) {
+    resetAllOverlays(streamId);
+    
+    const errorState = document.getElementById(`errorState-${streamId}`);
+    if (errorState) {
+        errorState.style.display = 'flex';
+        
+        const errorTitle = errorState.querySelector('h5');
+        const errorMessage = document.getElementById(`errorMessage-${streamId}`);
+        
+        if (errorTitle) errorTitle.textContent = title;
+        if (errorMessage) errorMessage.textContent = message;
+    }
+}
+
+// Utility functions
 function showElement(elementId) {
     const element = document.getElementById(elementId);
-    if (element) element.style.display = 'block';
+    if (element) {
+        element.style.display = 'block';
+        // Force style recalculation
+        element.offsetHeight;
+    }
 }
 
 function hideElement(elementId) {
     const element = document.getElementById(elementId);
-    if (element) element.style.display = 'none';
-}
-
-function showErrorState(streamId, title, message) {
-    cleanupStreamOverlays(streamId);
-    showElement(`errorState-${streamId}`);
-    
-    const errorTitle = document.querySelector(`#errorState-${streamId} h5`);
-    const errorMessage = document.getElementById(`errorMessage-${streamId}`);
-    
-    if (errorTitle) errorTitle.textContent = title;
-    if (errorMessage) errorMessage.textContent = message;
+    if (element) {
+        element.style.display = 'none';
+    }
 }
 
 function updateAudioToggleButton(streamId, isEnabled) {
