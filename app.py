@@ -2624,13 +2624,15 @@ def api_start_stream():
         delete_livekit_room(room_name)
         return jsonify({'error': 'Failed to create streamer token'}), 500
     
-    # Create database record
+    # Create database record with auto-recording enabled for admins
     stream = Stream(
         title=title,
         description=description,
         room_name=room_name,
         room_sid=room_info.sid if room_info else None,
         is_active=True,
+        is_recording=False,  # Will be set to True after recording starts
+        recording_id=None,  # Will be populated when recording starts
         started_at=datetime.utcnow(),
         created_by=current_user.id,
         streamer_name=streamer_name,
@@ -2640,19 +2642,65 @@ def api_start_stream():
     db.session.add(stream)
     db.session.commit()
     
+    # Auto-start recording for admin streams
+    recording_started = False
+    recording_info = None
+    
+    if current_user.is_admin:
+        try:
+            print(f"🎬 Starting auto-recording for {streamer_name}'s stream...")
+            
+            # Generate S3 path with proper folder structure (Ray/ or Jordan/)
+            timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+            s3_key = f"livestream-recordings/{streamer_name}/{streamer_name}-stream-{stream.id}-{timestamp}.mp4"
+            
+            # Start LiveKit Cloud Recording
+            recording_info = start_livekit_cloud_recording(
+                room_name=room_name,
+                stream_id=stream.id,
+                streamer_name=streamer_name,
+                s3_key=s3_key
+            )
+            
+            if recording_info and recording_info.get('recording_id'):
+                # Update stream with recording info
+                stream.is_recording = True
+                stream.recording_id = recording_info.get('recording_id')
+                db.session.commit()
+                
+                recording_started = True
+                print(f"✅ Auto-recording started for {streamer_name}'s stream")
+                print(f"📁 Recording will be saved to: {s3_key}")
+                
+                # Notify about recording
+                if socketio:
+                    socketio.emit('recording_started', {
+                        'stream_id': stream.id,
+                        'streamer_name': stream.streamer_name,
+                        'message': f'Recording started for {streamer_name}\'s stream'
+                    })
+            else:
+                print(f"⚠️ Failed to start auto-recording - recording info not returned")
+                
+        except Exception as e:
+            print(f"⚠️ Failed to start auto-recording: {e}")
+            # Continue with stream even if recording fails
+            # Don't return error - stream should continue without recording
+    
     # Broadcast notification about new stream via WebSocket
     if socketio:
         socketio.emit('new_stream_started', {
             'stream_id': stream.id,
             'title': stream.title,
             'streamer_name': stream.streamer_name,
-            'message': f'{streamer_name} is now live!'
+            'message': f'{streamer_name} is now live!',
+            'is_recording': recording_started
         })
     
     # Also send traditional notification
     broadcast_notification(
         'Live Stream Started!',
-        f'{streamer_name} is now live: "{title}"',
+        f'{streamer_name} is now live: "{title}"' + (' 🔴 Recording' if recording_started else ''),
         'live_stream'
     )
     
@@ -2666,9 +2714,161 @@ def api_start_stream():
             'room_sid': stream.room_sid,
             'livekit_token': streamer_token,
             'livekit_url': app.config.get('LIVEKIT_URL'),
-            'participant_identity': participant_identity
+            'participant_identity': participant_identity,
+            'is_recording': recording_started,
+            'recording_id': stream.recording_id if recording_started else None,
+            'recording_info': {
+                'enabled': recording_started,
+                'message': 'Auto-recording enabled' if recording_started else 'Recording not started',
+                's3_path': recording_info.get('s3_path') if recording_info else None
+            }
         }
     })
+
+# Helper function for LiveKit Cloud Recording
+def start_livekit_cloud_recording(room_name, stream_id, streamer_name, s3_key):
+    """Start LiveKit Cloud Recording with S3 output"""
+    try:
+        import requests
+        import base64
+        
+        livekit_api_key = app.config.get('LIVEKIT_API_KEY')
+        livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+        livekit_url = app.config.get('LIVEKIT_URL')
+        
+        if not all([livekit_api_key, livekit_api_secret, livekit_url]):
+            print("❌ LiveKit credentials missing for recording")
+            return None
+        
+        # Extract server URL from LiveKit URL (remove wss://)
+        server_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
+        
+        # Prepare S3 configuration
+        aws_access_key = app.config.get('AWS_ACCESS_KEY_ID')
+        aws_secret_key = app.config.get('AWS_SECRET_ACCESS_KEY')
+        aws_region = app.config.get('AWS_REGION', 'us-east-1')
+        s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+        
+        if not all([aws_access_key, aws_secret_key, s3_bucket]):
+            print("❌ AWS credentials missing for recording")
+            return None
+        
+        # Create recording request for LiveKit Egress API
+        recording_request = {
+            "room_name": room_name,
+            "layout": "speaker",  # or "grid" for multi-participant
+            "audio_only": False,
+            "video_only": False,
+            "custom_base_url": "",  # Use default
+            "file_outputs": [{
+                "file_type": "MP4",
+                "filepath": s3_key,
+                "s3": {
+                    "access_key": aws_access_key,
+                    "secret": aws_secret_key,
+                    "region": aws_region,
+                    "bucket": s3_bucket,
+                    "force_path_style": False
+                }
+            }],
+            "preset": "HD_30",  # 720p at 30fps
+            "advanced": {
+                "width": 1280,
+                "height": 720,
+                "framerate": 30,
+                "audio_bitrate": 128,
+                "video_bitrate": 3000
+            }
+        }
+        
+        # Create auth token for LiveKit API
+        auth = base64.b64encode(f"{livekit_api_key}:{livekit_api_secret}".encode()).decode()
+        
+        # Start recording via LiveKit Egress API
+        headers = {
+            "Authorization": f"Basic {auth}",
+            "Content-Type": "application/json"
+        }
+        
+        # Try to start room composite egress
+        response = requests.post(
+            f"{server_url}/twirp/livekit.Egress/StartRoomCompositeEgress",
+            json=recording_request,
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            recording_data = response.json()
+            print(f"✅ Recording started successfully: {recording_data}")
+            return {
+                "recording_id": recording_data.get("egress_id"),
+                "s3_path": s3_key,
+                "status": "recording",
+                "room_name": room_name
+            }
+        else:
+            print(f"❌ Failed to start recording: {response.status_code} - {response.text}")
+            
+            # Fallback: Try alternative recording method if available
+            # This could be a simpler recording endpoint or a different approach
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Network error starting LiveKit recording: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Error starting LiveKit recording: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+@app.route('/api/stream/upload-recording', methods=['POST'])
+@login_required
+def upload_stream_recording():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        video_file = request.files.get('video')
+        stream_id = request.form.get('stream_id')
+        streamer_name = request.form.get('streamer_name')
+        
+        if not video_file:
+            return jsonify({'error': 'No video file provided'}), 400
+        
+        # Generate S3 key with proper folder structure
+        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+        s3_key = f"livestream-recordings/{streamer_name}/{streamer_name}-stream-{stream_id}-{timestamp}.webm"
+        
+        # Upload to S3
+        s3_client = init_s3_client()
+        s3_client.upload_fileobj(
+            video_file,
+            app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab'),
+            s3_key,
+            ExtraArgs={
+                'ContentType': 'video/webm',
+                'Metadata': {
+                    'streamer': streamer_name,
+                    'stream_id': str(stream_id)
+                }
+            }
+        )
+        
+        # Update stream record
+        stream = Stream.query.get(stream_id)
+        if stream:
+            stream.recording_url = f"https://{app.config.get('STREAM_RECORDINGS_BUCKET')}.s3.amazonaws.com/{s3_key}"
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'url': stream.recording_url
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     
 # Update your existing /api/stream/stop route
 @app.route('/api/stream/stop', methods=['POST'])
