@@ -330,6 +330,7 @@ class Stream(db.Model):
     # LiveKit specific fields
     room_name = db.Column(db.String(100), unique=True, nullable=True)
     room_sid = db.Column(db.String(100), unique=True, nullable=True)
+    recording_id = db.Column(db.String(100), nullable=True)
     
     # Stream status
     is_active = db.Column(db.Boolean, default=False, nullable=False)
