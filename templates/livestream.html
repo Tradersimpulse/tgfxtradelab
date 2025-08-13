@@ -1617,16 +1617,28 @@ document.addEventListener('visibilitychange', () => {
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
-    console.log('🧹 Cleaning up connections...');
+    console.log('🧹 Cleaning up connections before page unload...');
     
+    // Force disconnect all rooms immediately
     window.StreamViewerConfig.roomConnections.forEach((room, streamId) => {
         try {
             room.disconnect();
+            console.log(`✅ Disconnected from stream ${streamId}`);
         } catch (error) {
             console.error('Error disconnecting room:', streamId, error);
         }
     });
     
+    // Clear all connections
+    window.StreamViewerConfig.roomConnections.clear();
+    window.StreamViewerConfig.joinedStreams.clear();
+    
+    // Disconnect socket
+    if (window.StreamCoordinator.socket) {
+        window.StreamCoordinator.socket.disconnect();
+    }
+    
+    // Clear intervals
     if (window.StreamCoordinator.heartbeatInterval) {
         clearInterval(window.StreamCoordinator.heartbeatInterval);
     }
