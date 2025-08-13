@@ -1053,6 +1053,7 @@ window.handleStartUserStream = async function(e) {
     }
 };
 
+// In stream.html, update the stopUserStream function:
 window.stopUserStream = async function() {
     if (!confirm('Are you sure you want to end your stream? This will disconnect all viewers.')) {
         return;
@@ -1061,15 +1062,29 @@ window.stopUserStream = async function() {
     try {
         updateStatus('Ending stream...');
         
+        // First notify viewers through WebSocket BEFORE disconnecting
+        const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+        if (userActiveStream && window.WebSocketManager.socket && window.WebSocketManager.isConnected) {
+            // Emit stream ending notification
+            window.WebSocketManager.socket.emit('admin_ending_stream', { 
+                stream_id: userActiveStream.id,
+                message: 'Stream is ending...'
+            });
+            
+            // Give viewers a moment to receive the notification
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        
         // Stop all local tracks
         if (window.streamState.room) {
             const room = window.streamState.room;
             
-            // Disable all tracks using the convenience methods
+            // Disable all tracks
             await room.localParticipant.setCameraEnabled(false);
             await room.localParticipant.setMicrophoneEnabled(false);
             await room.localParticipant.setScreenShareEnabled(false);
             
+            // Disconnect from the room
             room.disconnect();
         }
         
@@ -1078,8 +1093,7 @@ window.stopUserStream = async function() {
             await toggleRecording();
         }
         
-        // Call backend to end stream
-        const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+        // Call backend to end stream (this will emit 'stream_ended' to all viewers)
         const response = await fetch('/api/stream/stop', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
