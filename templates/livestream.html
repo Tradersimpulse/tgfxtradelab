@@ -602,15 +602,31 @@ window.StreamCoordinator = {
         }
     },
     
-    handleStreamEnd(streamId) {
+      handleStreamEnd(streamId) {
+        console.log('📺 Handling stream end for:', streamId);
+        
+        // Disconnect from LiveKit room
         const room = window.StreamViewerConfig.roomConnections.get(streamId);
         if (room) {
-            room.disconnect();
+            try {
+                room.disconnect();
+            } catch (e) {
+                console.warn('Error disconnecting room:', e);
+            }
             window.StreamViewerConfig.roomConnections.delete(streamId);
         }
         
+        // Clean up state
         window.StreamViewerConfig.joinedStreams.delete(streamId);
+        
+        // Show temporary message then refresh
         this.showStreamEndedState(streamId);
+        
+        // Auto-refresh after 3 seconds to show "No Live Streams" page
+        setTimeout(() => {
+            console.log('🔄 Auto-refreshing to show current stream status...');
+            window.location.reload();
+        }, 3000);
     },
     
     showStreamEndedState(streamId) {
@@ -622,10 +638,10 @@ window.StreamCoordinator = {
                         <span class="material-symbols-outlined mb-3" style="font-size: 4rem;">live_tv</span>
                         <h5 class="mb-2">Stream Ended</h5>
                         <p class="text-muted mb-3">This stream has finished</p>
-                        <button class="btn btn-outline-primary" onclick="refreshStreams()">
-                            <span class="material-symbols-outlined me-2">refresh</span>
-                            Refresh Page
-                        </button>
+                        <p class="text-info">
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            Returning to stream list...
+                        </p>
                     </div>
                 </div>
             `;
