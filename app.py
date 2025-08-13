@@ -2695,21 +2695,38 @@ def api_stop_stream():
     if not stream:
         return jsonify({'error': 'No active stream found or access denied'}), 400
     
-    # Notify WebSocket clients before stopping
+    # IMPORTANT: Notify all viewers BEFORE stopping the stream
     room_id = f"stream_{stream.id}"
     if socketio and room_id in stream_rooms:
+        # Send multiple notifications to ensure viewers receive them
+        socketio.emit('stream_ending', {
+            'stream_id': stream.id,
+            'message': 'Stream is ending in 3 seconds...'
+        }, room=room_id)
+        
+        # Wait a moment
+        time.sleep(1)
+        
+        # Send final notification
         socketio.emit('stream_ended', {
             'stream_id': stream.id,
-            'message': f'{stream.streamer_name} has ended the stream'
+            'message': f'{stream.streamer_name} has ended the stream',
+            'redirect': True  # Tell viewers to redirect
         }, room=room_id)
+        
+        # Clean up room
+        if room_id in stream_rooms:
+            del stream_rooms[room_id]
     
     # Delete LiveKit room
     if stream.room_name:
         delete_livekit_room(stream.room_name)
     
+    # Update database
     stream.is_active = False
     stream.ended_at = datetime.utcnow()
     
+    # Update all viewer records
     StreamViewer.query.filter_by(stream_id=stream.id, is_active=True).update({
         'is_active': False,
         'left_at': datetime.utcnow()
@@ -2717,15 +2734,11 @@ def api_stop_stream():
     
     db.session.commit()
     
-    # Clean up WebSocket room
-    if socketio and room_id in stream_rooms:
-        del stream_rooms[room_id]
-    
     return jsonify({
         'success': True,
         'message': f'{stream.streamer_name}\'s stream ended'
     })
-    
+
 @app.route('/api/stream/status')
 @login_required
 def api_stream_status():
