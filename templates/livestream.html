@@ -669,6 +669,229 @@ window.StreamCoordinator = {
     }
 };
 
+// Add Join Stream button to the header area for each stream
+function addJoinStreamButtonToHeader(streamId) {
+    // Find the card header for this stream
+    const streamCard = document.querySelector(`[data-stream-id="${streamId}"]`);
+    if (!streamCard) return;
+    
+    const cardHeader = streamCard.querySelector('.card-header');
+    if (!cardHeader) return;
+    
+    // Check if button already exists
+    if (cardHeader.querySelector(`.header-join-btn-${streamId}`)) return;
+    
+    // Get the stream data
+    const streamData = window.StreamViewerConfig.activeStreams.find(s => s.id === streamId);
+    if (!streamData) return;
+    
+    // Create button container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = `header-join-button-container ms-3`;
+    buttonContainer.style.cssText = 'display: flex; align-items: center;';
+    
+    // Create the join button
+    const joinButton = document.createElement('button');
+    joinButton.className = `btn btn-success btn-sm header-join-btn-${streamId}`;
+    joinButton.style.cssText = `
+        background: linear-gradient(135deg, ${streamData.creator?.stream_color || '#10B981'}, ${streamData.creator?.stream_color || '#10B981'}dd);
+        border: none;
+        padding: 6px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.3s;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    `;
+    
+    joinButton.innerHTML = `
+        <span class="material-symbols-outlined" style="font-size: 18px;">play_arrow</span>
+        Join Stream
+    `;
+    
+    // Check if already joined
+    if (window.StreamViewerConfig.joinedStreams.has(streamId)) {
+        joinButton.innerHTML = `
+            <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span>
+            Connected
+        `;
+        joinButton.disabled = true;
+        joinButton.style.opacity = '0.7';
+    }
+    
+    // Add hover effect
+    joinButton.onmouseover = () => {
+        if (!joinButton.disabled) {
+            joinButton.style.transform = 'scale(1.05)';
+            joinButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        }
+    };
+    
+    joinButton.onmouseout = () => {
+        joinButton.style.transform = 'scale(1)';
+        joinButton.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+    };
+    
+    // Add click handler
+    joinButton.onclick = async () => {
+        if (joinButton.disabled) return;
+        
+        // Update button to show connecting
+        joinButton.disabled = true;
+        joinButton.innerHTML = `
+            <span class="spinner-border spinner-border-sm"></span>
+            Connecting...
+        `;
+        
+        // Hide the main loading overlay immediately
+        const loadingState = document.getElementById(`loadingState-${streamId}`);
+        if (loadingState) {
+            loadingState.style.display = 'none';
+        }
+        
+        // Join the stream
+        try {
+            await joinStreamFixed(streamId);
+            
+            // Update button to show connected
+            joinButton.innerHTML = `
+                <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span>
+                Connected
+            `;
+            joinButton.style.opacity = '0.7';
+            
+        } catch (error) {
+            // Reset button on error
+            joinButton.disabled = false;
+            joinButton.innerHTML = `
+                <span class="material-symbols-outlined" style="font-size: 18px;">play_arrow</span>
+                Join Stream
+            `;
+            joinButton.style.opacity = '1';
+        }
+    };
+    
+    buttonContainer.appendChild(joinButton);
+    
+    // Find the dropdown menu and insert button before it
+    const dropdown = cardHeader.querySelector('.dropdown');
+    if (dropdown) {
+        dropdown.parentNode.insertBefore(buttonContainer, dropdown);
+    } else {
+        // If no dropdown, append to header
+        cardHeader.appendChild(buttonContainer);
+    }
+}
+
+// Add Leave button functionality
+function updateHeaderButtonToLeave(streamId) {
+    const button = document.querySelector(`.header-join-btn-${streamId}`);
+    if (!button) return;
+    
+    button.disabled = false;
+    button.style.opacity = '1';
+    button.className = `btn btn-danger btn-sm header-join-btn-${streamId}`;
+    button.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
+    
+    button.innerHTML = `
+        <span class="material-symbols-outlined" style="font-size: 18px;">call_end</span>
+        Leave Stream
+    `;
+    
+    button.onclick = () => {
+        leaveStream(streamId);
+        updateHeaderButtonToJoin(streamId);
+    };
+}
+
+// Update button back to Join
+function updateHeaderButtonToJoin(streamId) {
+    const button = document.querySelector(`.header-join-btn-${streamId}`);
+    if (!button) return;
+    
+    const streamData = window.StreamViewerConfig.activeStreams.find(s => s.id === streamId);
+    
+    button.disabled = false;
+    button.style.opacity = '1';
+    button.className = `btn btn-success btn-sm header-join-btn-${streamId}`;
+    button.style.background = `linear-gradient(135deg, ${streamData?.creator?.stream_color || '#10B981'}, ${streamData?.creator?.stream_color || '#10B981'}dd)`;
+    
+    button.innerHTML = `
+        <span class="material-symbols-outlined" style="font-size: 18px;">play_arrow</span>
+        Join Stream
+    `;
+    
+    button.onclick = async () => {
+        button.disabled = true;
+        button.innerHTML = `
+            <span class="spinner-border spinner-border-sm"></span>
+            Connecting...
+        `;
+        
+        const loadingState = document.getElementById(`loadingState-${streamId}`);
+        if (loadingState) {
+            loadingState.style.display = 'none';
+        }
+        
+        await joinStreamFixed(streamId);
+    };
+}
+
+// Override the room connected event to update header button
+const originalJoinStreamFixed = window.joinStreamFixed;
+window.joinStreamFixed = async function(streamId) {
+    // Call original function
+    const result = await originalJoinStreamFixed.call(this, streamId);
+    
+    // Update header button when connected
+    if (window.StreamViewerConfig.joinedStreams.has(streamId)) {
+        updateHeaderButtonToLeave(streamId);
+    }
+    
+    return result;
+};
+
+// Override leave stream to update button
+const originalLeaveStream = window.leaveStream;
+window.leaveStream = function(streamId) {
+    const result = originalLeaveStream.call(this, streamId);
+    updateHeaderButtonToJoin(streamId);
+    return result;
+};
+
+// Initialize buttons for all active streams
+window.StreamViewerConfig.activeStreams.forEach(stream => {
+    addJoinStreamButtonToHeader(stream.id);
+});
+
+// Also hide the big loading overlay with the centered join button
+window.StreamViewerConfig.activeStreams.forEach(stream => {
+    const loadingState = document.getElementById(`loadingState-${stream.id}`);
+    if (loadingState && !window.StreamViewerConfig.joinedStreams.has(stream.id)) {
+        // Keep it visible but remove the join button from it
+        const joinBtn = loadingState.querySelector('.join-stream-btn');
+        if (joinBtn) {
+            joinBtn.style.display = 'none';
+        }
+        
+        // Update the text
+        const h5 = loadingState.querySelector('h5');
+        if (h5) {
+            h5.textContent = `${stream.streamer_name} is streaming`;
+        }
+        
+        const p = loadingState.querySelector('p.text-muted');
+        if (p) {
+            p.textContent = 'Click "Join Stream" above to watch';
+        }
+    }
+});
+
+console.log('✅ Header Join Stream buttons added');
+
 // First, let's forcefully remove the Connection Issue overlay RIGHT NOW
 (function removeConnectionOverlay() {
     const containers = document.querySelectorAll('.stream-video-container');
