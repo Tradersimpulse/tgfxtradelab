@@ -34,6 +34,8 @@ from datetime import datetime, timedelta
 import logging
 import signal
 import threading
+import requests
+import base64
 
 
 # Later in the file (around line 60-90), your LiveKit section should look like:
