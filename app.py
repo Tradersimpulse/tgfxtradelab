@@ -2727,59 +2727,45 @@ def api_start_stream():
         }
     })
 
-# Helper function for LiveKit Cloud Recording
-def start_livekit_cloud_recording(room_name, stream_id, streamer_name, s3_key):
+def start_livekit_cloud_recording(room_name, stream_id, streamer_name):
     """Start LiveKit Cloud Recording with S3 output"""
     try:
-        import requests
-        import base64
-        
         livekit_api_key = app.config.get('LIVEKIT_API_KEY')
         livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
         livekit_url = app.config.get('LIVEKIT_URL')
         
         if not all([livekit_api_key, livekit_api_secret, livekit_url]):
-            print("❌ LiveKit credentials missing for recording")
+            print("LiveKit credentials missing")
             return None
         
         # Extract server URL from LiveKit URL (remove wss://)
         server_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
         
-        # Prepare S3 configuration
-        aws_access_key = app.config.get('AWS_ACCESS_KEY_ID')
-        aws_secret_key = app.config.get('AWS_SECRET_ACCESS_KEY')
-        aws_region = app.config.get('AWS_REGION', 'us-east-1')
-        s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+        # Generate S3 output path based on streamer name
+        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+        s3_key = f"livestream-recordings/{streamer_name}/{streamer_name}-stream-{stream_id}-{timestamp}.mp4"
         
-        if not all([aws_access_key, aws_secret_key, s3_bucket]):
-            print("❌ AWS credentials missing for recording")
-            return None
-        
-        # Create recording request for LiveKit Egress API
+        # Create recording request
         recording_request = {
             "room_name": room_name,
-            "layout": "speaker",  # or "grid" for multi-participant
-            "audio_only": False,
-            "video_only": False,
-            "custom_base_url": "",  # Use default
-            "file_outputs": [{
-                "file_type": "MP4",
-                "filepath": s3_key,
-                "s3": {
-                    "access_key": aws_access_key,
-                    "secret": aws_secret_key,
-                    "region": aws_region,
-                    "bucket": s3_bucket,
+            "preset": "HD_30",  # 720p at 30fps
+            "s3": {
+                "access_key": app.config.get('AWS_ACCESS_KEY_ID'),
+                "secret": app.config.get('AWS_SECRET_ACCESS_KEY'),
+                "region": app.config.get('AWS_REGION', 'us-east-1'),
+                "bucket": app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab'),
+                "force_path_style": False
+            },
+            "filepath": s3_key,
+            "output": {
+                "case": "s3",
+                "value": {
+                    "access_key": app.config.get('AWS_ACCESS_KEY_ID'),
+                    "secret": app.config.get('AWS_SECRET_ACCESS_KEY'),
+                    "region": app.config.get('AWS_REGION', 'us-east-1'),
+                    "bucket": app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab'),
                     "force_path_style": False
                 }
-            }],
-            "preset": "HD_30",  # 720p at 30fps
-            "advanced": {
-                "width": 1280,
-                "height": 720,
-                "framerate": 30,
-                "audio_bitrate": 128,
-                "video_bitrate": 3000
             }
         }
         
@@ -2787,43 +2773,64 @@ def start_livekit_cloud_recording(room_name, stream_id, streamer_name, s3_key):
         auth = base64.b64encode(f"{livekit_api_key}:{livekit_api_secret}".encode()).decode()
         
         # Start recording via LiveKit Egress API
-        headers = {
-            "Authorization": f"Basic {auth}",
-            "Content-Type": "application/json"
-        }
-        
-        # Try to start room composite egress
         response = requests.post(
             f"{server_url}/twirp/livekit.Egress/StartRoomCompositeEgress",
             json=recording_request,
-            headers=headers,
-            timeout=10
+            headers={
+                "Authorization": f"Basic {auth}",
+                "Content-Type": "application/json"
+            }
         )
         
         if response.status_code == 200:
             recording_data = response.json()
-            print(f"✅ Recording started successfully: {recording_data}")
+            print(f"✅ Recording started: {recording_data}")
             return {
                 "recording_id": recording_data.get("egress_id"),
                 "s3_path": s3_key,
-                "status": "recording",
-                "room_name": room_name
+                "status": "recording"
             }
         else:
             print(f"❌ Failed to start recording: {response.status_code} - {response.text}")
-            
-            # Fallback: Try alternative recording method if available
-            # This could be a simpler recording endpoint or a different approach
             return None
             
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Network error starting LiveKit recording: {e}")
-        return None
     except Exception as e:
         print(f"❌ Error starting LiveKit recording: {e}")
-        import traceback
-        traceback.print_exc()
         return None
+
+def stop_livekit_cloud_recording(recording_id):
+    """Stop LiveKit Cloud Recording"""
+    try:
+        livekit_api_key = app.config.get('LIVEKIT_API_KEY')
+        livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+        livekit_url = app.config.get('LIVEKIT_URL')
+        
+        if not recording_id:
+            print("No recording ID provided")
+            return False
+        
+        server_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
+        auth = base64.b64encode(f"{livekit_api_key}:{livekit_api_secret}".encode()).decode()
+        
+        response = requests.post(
+            f"{server_url}/twirp/livekit.Egress/StopEgress",
+            json={"egress_id": recording_id},
+            headers={
+                "Authorization": f"Basic {auth}",
+                "Content-Type": "application/json"
+            }
+        )
+        
+        if response.status_code == 200:
+            print(f"✅ Recording stopped: {recording_id}")
+            return True
+        else:
+            print(f"❌ Failed to stop recording: {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error stopping recording: {e}")
+        return False
 
 @app.route('/api/stream/upload-recording', methods=['POST'])
 @login_required
