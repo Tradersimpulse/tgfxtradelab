@@ -974,82 +974,145 @@ if socketio:
             print(f"❌ Error in connect handler: {e}")
             emit('error', {'message': 'Connection error'})
 
-    @socketio.on('join_stream')
-    def handle_join_stream(data):
-        """Handle user joining a stream with automatic admin recording"""
-        try:
-            client_id = request.sid
-            stream_id = data.get('stream_id')
+@socketio.on('join_stream')
+def handle_join_stream(data):
+    """Handle user joining a stream with automatic admin recording"""
+    try:
+        client_id = request.sid
+        stream_id = data.get('stream_id')
+        
+        print(f"🎬 Join stream request - Client: {client_id}, Stream: {stream_id}")
+        
+        if not stream_id:
+            emit('error', {'message': 'Stream ID required'})
+            return
+
+        # Get user info from active connections
+        user_info = active_connections.get(client_id, {})
+        print(f"📊 User info for {client_id}: {user_info}")
+        
+        # Verify stream exists and is active
+        stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
+        if not stream:
+            emit('error', {'message': 'Stream not found or inactive'})
+            return
+
+        room_id = f"stream_{stream_id}"
+        
+        # Initialize room if it doesn't exist
+        if room_id not in stream_rooms:
+            stream_rooms[room_id] = {
+                'stream_id': stream_id,
+                'admin_client': None,
+                'viewers': [],
+                'created_at': time.time(),
+                'media_published': False  # Track if media is being published
+            }
+
+        # Join the room
+        join_room(room_id)
+        
+        # Check if user is admin/stream owner
+        is_authenticated = (
+            hasattr(current_user, 'is_authenticated') and 
+            current_user.is_authenticated
+        )
+        
+        is_stream_owner = (
+            is_authenticated and 
+            stream.created_by == current_user.id
+        )
+        
+        is_admin_user = user_info.get('is_admin', False)
+        can_stream_user = user_info.get('can_stream', False)
+        
+        # User is stream admin if they own the stream OR are admin with streaming rights
+        is_stream_admin = is_stream_owner or (is_admin_user and can_stream_user)
+        
+        print(f"🔍 Admin check for {client_id}:")
+        print(f"  - Final Admin Status: {is_stream_admin}")
+        
+        if is_stream_admin:
+            stream_rooms[room_id]['admin_client'] = client_id
+            emit('admin_joined', {'stream_id': stream_id}, room=room_id)
+            print(f"🎬 Admin joined stream room: {room_id}")
             
-            print(f"🎬 Join stream request - Client: {client_id}, Stream: {stream_id}")
+            # Generate LiveKit token for publisher (streamer)
+            participant_identity = f"streamer-{current_user.id}"
+            participant_name = stream.streamer_name or current_user.username
             
-            if not stream_id:
-                emit('error', {'message': 'Stream ID required'})
-                return
-    
-            # Get user info from active connections
-            user_info = active_connections.get(client_id, {})
-            print(f"📊 User info for {client_id}: {user_info}")
+            livekit_token = generate_livekit_token(
+                stream.room_name, 
+                participant_identity, 
+                participant_name,
+                is_publisher=True
+            )
             
-            # Verify stream exists and is active
-            stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
-            if not stream:
-                emit('error', {'message': 'Stream not found or inactive'})
-                return
-    
-            room_id = f"stream_{stream_id}"
+            # DON'T START RECORDING IMMEDIATELY - Wait for media_published event
+            emit('admin_status', {
+                'is_admin': True,
+                'can_broadcast': True,
+                'stream_id': stream_id,
+                'livekit_token': livekit_token,
+                'livekit_url': app.config.get('LIVEKIT_URL'),
+                'room_name': stream.room_name,
+                'participant_identity': participant_identity,
+                'wait_for_media': True  # Tell client to notify when media is ready
+            })
+        else:
+            # Handle viewer join...
+            pass
             
-            # Initialize room if it doesn't exist
-            if room_id not in stream_rooms:
-                stream_rooms[room_id] = {
+    except Exception as e:
+        print(f"❌ Error in join_stream handler: {e}")
+        emit('error', {'message': 'Failed to join stream'})
+
+# Add new event handler for media ready
+@socketio.on('media_published')
+def handle_media_published(data):
+    """Handle notification that media is being published"""
+    try:
+        client_id = request.sid
+        stream_id = data.get('stream_id')
+        
+        print(f"📹 Media published notification for stream {stream_id}")
+        
+        stream = Stream.query.get(stream_id)
+        if not stream or not stream.is_active:
+            return
+        
+        room_id = f"stream_{stream_id}"
+        if room_id in stream_rooms:
+            stream_rooms[room_id]['media_published'] = True
+        
+        # NOW start recording since media is being published
+        if not stream.is_recording:
+            print(f"🔴 Starting recording now that media is published...")
+            
+            recording_result = start_livekit_egress_recording(
+                room_name=stream.room_name,
+                stream_id=stream_id,
+                streamer_name=stream.streamer_name
+            )
+            
+            if recording_result and recording_result.get('success'):
+                stream.is_recording = True
+                stream.recording_id = recording_result.get('egress_id')
+                db.session.commit()
+                
+                print(f"✅ Recording started successfully!")
+                print(f"🔑 Egress ID: {recording_result.get('egress_id')}")
+                
+                socketio.emit('recording_started', {
                     'stream_id': stream_id,
-                    'admin_client': None,
-                    'viewers': [],
-                    'created_at': time.time()
-                }
-    
-            # Join the room
-            join_room(room_id)
-            
-            # Check if user is admin/stream owner
-            is_authenticated = (
-                hasattr(current_user, 'is_authenticated') and 
-                current_user.is_authenticated
-            )
-            
-            is_stream_owner = (
-                is_authenticated and 
-                stream.created_by == current_user.id
-            )
-            
-            is_admin_user = user_info.get('is_admin', False)
-            can_stream_user = user_info.get('can_stream', False)
-            
-            # User is stream admin if they own the stream OR are admin with streaming rights
-            is_stream_admin = is_stream_owner or (is_admin_user and can_stream_user)
-            
-            print(f"🔍 Admin check for {client_id}:")
-            print(f"  - Authenticated: {is_authenticated}")
-            print(f"  - Stream Owner: {is_stream_owner}")
-            print(f"  - Admin User: {is_admin_user}")
-            print(f"  - Can Stream: {can_stream_user}")
-            print(f"  - Final Admin Status: {is_stream_admin}")
-            
-            if is_stream_admin:
-                stream_rooms[room_id]['admin_client'] = client_id
-                emit('admin_joined', {'stream_id': stream_id}, room=room_id)
-                print(f"🎬 Admin joined stream room: {room_id}")
+                    'message': 'Recording has started',
+                    'egress_id': recording_result.get('egress_id')
+                }, room=room_id)
+            else:
+                print(f"⚠️ Failed to start recording: {recording_result.get('error')}")
                 
-                # Generate LiveKit token for publisher (streamer)
-                participant_identity = f"streamer-{current_user.id}"
-                participant_name = stream.streamer_name or current_user.username
-                
-                livekit_token = generate_livekit_token(
-                    stream.room_name, 
-                    participant_identity, 
-                    participant_name,
-                    is_publisher=True
-                )
+    except Exception as e:
+        print(f"❌ Error handling media published: {e}")
                 
                 # START RECORDING AUTOMATICALLY FOR ADMIN
                 # Small delay to ensure room is established
