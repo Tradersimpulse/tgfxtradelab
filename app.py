@@ -1819,33 +1819,29 @@ def user_settings():
 @app.route('/api/admin/check-livekit-egress', methods=['GET'])
 @login_required
 def check_livekit_egress():
-    """Check LiveKit egress capability and list any active egresses"""
+    """Check LiveKit egress capability with Bearer token"""
     if not current_user.is_admin:
         return jsonify({'error': 'Admin access required'}), 403
     
     try:
         import requests
-        import base64
         
-        livekit_api_key = app.config.get('LIVEKIT_API_KEY')
-        livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+        # Generate API token
+        api_token = generate_livekit_api_token()
+        if not api_token:
+            return jsonify({'error': 'Failed to generate API token'})
+        
         livekit_url = app.config.get('LIVEKIT_URL')
-        
-        if not all([livekit_api_key, livekit_api_secret, livekit_url]):
-            return jsonify({'error': 'LiveKit credentials not configured'})
         
         # Extract API URL
         if '.livekit.cloud' in livekit_url:
-            project = livekit_url.split('//')[1].split('.')[0]
-            api_url = f"https://{project}.livekit.cloud"
+            api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'https://')
         else:
             api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
         
-        # Create auth header
-        auth_b64 = base64.b64encode(f"{livekit_api_key}:{livekit_api_secret}".encode()).decode()
-        
+        # Create headers with Bearer token
         headers = {
-            "Authorization": f"Basic {auth_b64}",
+            "Authorization": f"Bearer {api_token}",
             "Content-Type": "application/json"
         }
         
@@ -1864,7 +1860,8 @@ def check_livekit_egress():
                 'api_url': api_url,
                 'egresses': data.get('items', []),
                 'count': len(data.get('items', [])),
-                'message': f"Found {len(data.get('items', []))} egress(es)"
+                'message': f"Found {len(data.get('items', []))} egress(es)",
+                'auth_method': 'Bearer token'
             })
         else:
             return jsonify({
