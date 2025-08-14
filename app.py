@@ -1805,6 +1805,66 @@ def user_settings():
     
     return render_template('settings.html', form=form)
 
+@app.route('/api/admin/check-livekit-egress', methods=['GET'])
+@login_required
+def check_livekit_egress():
+    """Check LiveKit egress capability and list any active egresses"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        import requests
+        import base64
+        
+        livekit_api_key = app.config.get('LIVEKIT_API_KEY')
+        livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+        livekit_url = app.config.get('LIVEKIT_URL')
+        
+        if not all([livekit_api_key, livekit_api_secret, livekit_url]):
+            return jsonify({'error': 'LiveKit credentials not configured'})
+        
+        # Extract API URL
+        if '.livekit.cloud' in livekit_url:
+            project = livekit_url.split('//')[1].split('.')[0]
+            api_url = f"https://{project}.livekit.cloud"
+        else:
+            api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
+        
+        # Create auth header
+        auth_b64 = base64.b64encode(f"{livekit_api_key}:{livekit_api_secret}".encode()).decode()
+        
+        headers = {
+            "Authorization": f"Basic {auth_b64}",
+            "Content-Type": "application/json"
+        }
+        
+        # List all egresses
+        response = requests.post(
+            f"{api_url}/twirp/livekit.Egress/ListEgress",
+            json={},
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return jsonify({
+                'success': True,
+                'api_url': api_url,
+                'egresses': data.get('items', []),
+                'count': len(data.get('items', [])),
+                'message': f"Found {len(data.get('items', []))} egress(es)"
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f"API returned {response.status_code}: {response.text}",
+                'api_url': api_url
+            })
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/courses')
 @login_required
 def courses():
