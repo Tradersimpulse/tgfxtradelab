@@ -219,9 +219,9 @@
                 <!-- Advanced Controls -->
                 <div class="row">
                     <div class="col-6">
-                        <button class="btn btn-outline-info btn-sm w-100" id="toggleRecordingBtn" onclick="toggleRecording()" disabled>
-                            <span class="material-symbols-outlined me-1" id="recordingIcon" style="font-size: 14px;">fiber_manual_record</span>
-                            <span id="recordingText">Record</span>
+                        <button class="btn btn-outline-info btn-sm w-100" id="toggleRecordingBtn" disabled title="Recording starts automatically">
+                            <span class="material-symbols-outlined me-1" style="font-size: 14px;">smart_display</span>
+                            <span id="recordingText">Auto-Record</span>
                         </button>
                     </div>
                     <div class="col-6">
@@ -520,6 +520,25 @@ window.WebSocketManager = {
         this.socket.on('connect_error', (error) => {
             console.error('❌ WebSocket error:', error);
             this.handleConnectionError();
+        });
+
+        this.socket.on('recording_started', (data) => {
+            console.log('🔴 Recording auto-started:', data);
+            window.streamState.stats.isRecording = true;
+            document.getElementById('recordingIndicator').style.display = 'block';
+            
+            const btn = document.getElementById('toggleRecordingBtn');
+            if (btn) {
+                btn.className = 'btn btn-danger btn-sm w-100';
+                btn.innerHTML = '<span class="material-symbols-outlined me-1" style="font-size: 14px;">fiber_manual_record</span><span>Recording</span>';
+            }
+            showNotification('success', '🔴 Recording started automatically');
+        });
+        
+        this.socket.on('recording_stopped', (data) => {
+            console.log('⏹️ Recording stopped');
+            window.streamState.stats.isRecording = false;
+            document.getElementById('recordingIndicator').style.display = 'none';
         });
         
         // Stream-specific events
