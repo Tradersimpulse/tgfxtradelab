@@ -1182,7 +1182,7 @@ if socketio:
             s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
             prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
             
-            print(f"📹 Starting LiveKit Egress recording")
+            print(f"🔹 Starting LiveKit Egress recording")
             print(f"  Room: {room_name}")
             print(f"  Streamer: {streamer_name}")
             print(f"  S3 Bucket: {s3_bucket}")
@@ -1205,7 +1205,6 @@ if socketio:
             print(f"📁 Recording will be saved to: s3://{s3_bucket}/{s3_key}")
             
             # Extract LiveKit Cloud project from URL
-            # Format: wss://tgfx-trade-lab-lt33xq0x.livekit.cloud
             if '.livekit.cloud' in livekit_url:
                 # Extract project name from URL
                 project = livekit_url.split('//')[1].split('.')[0]
@@ -1217,22 +1216,7 @@ if socketio:
             # Create Egress request for Room Composite Recording
             egress_request = {
                 "room_name": room_name,
-                "layout": "speaker",  # or "grid" for grid layout
-                "audio_only": False,
-                "video_only": False,
                 "file": {
-                    "filepath": s3_key,
-                    "s3": {
-                        "access_key": aws_access_key,
-                        "secret": aws_secret_key,
-                        "region": aws_region,
-                        "bucket": s3_bucket,
-                        "force_path_style": False
-                    }
-                },
-                "preset": "HD_30",  # 720p 30fps
-                "file_outputs": [{
-                    "file_type": "MP4",
                     "filepath": s3_key,
                     "s3": {
                         "access_key": aws_access_key,
@@ -1240,7 +1224,9 @@ if socketio:
                         "region": aws_region,
                         "bucket": s3_bucket
                     }
-                }]
+                },
+                "preset": "HD_30",  # 720p 30fps
+                "custom_base_url": f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com"  # Add this for public URLs
             }
             
             # Create authentication header
@@ -1272,7 +1258,7 @@ if socketio:
                 egress_id = data.get("egress_id")
                 
                 print(f"✅ Recording started successfully!")
-                print(f"📝 Egress ID: {egress_id}")
+                print(f"🔑 Egress ID: {egress_id}")
                 print(f"📁 S3 Path: s3://{s3_bucket}/{s3_key}")
                 
                 return {
@@ -1303,7 +1289,6 @@ if socketio:
             import traceback
             traceback.print_exc()
             return {'success': False, 'error': str(e)}
-    
 
     @socketio.on('screen_frame')
     def handle_screen_frame(data):
@@ -3208,7 +3193,6 @@ def upload_stream_recording():
         print(f"❌ Upload error: {e}")
         return jsonify({'error': str(e)}), 500
     
-# Update your existing /api/stream/stop route
 @app.route('/api/stream/stop', methods=['POST'])
 @login_required
 def api_stop_stream():
@@ -3233,18 +3217,51 @@ def api_stop_stream():
     if not stream:
         return jsonify({'error': 'No active stream found or access denied'}), 400
     
+    recording_url = None
+    recording_saved = False
+    
     # Stop recording if active
     if stream.is_recording and stream.recording_id:
-        print(f"⏹️ Stopping recording {stream.recording_id}...")
+        print(f"🔴 Stopping recording {stream.recording_id}...")
         stop_result = stop_livekit_egress_recording(stream.recording_id)
+        
         if stop_result.get('success'):
             print(f"✅ Recording stopped successfully")
+            
+            # Generate the S3 URL for the recording
+            timestamp = stream.started_at.strftime('%Y%m%d-%H%M%S') if stream.started_at else datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+            date_folder = stream.started_at.strftime('%Y/%m/%d') if stream.started_at else datetime.utcnow().strftime('%Y/%m/%d')
+            
+            aws_region = app.config.get('AWS_REGION', 'us-east-1')
+            s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+            prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
+            
+            # Build the S3 URL
+            s3_key = f"{prefix}{stream.streamer_name}/{date_folder}/{stream.streamer_name}-stream-{stream.id}-{timestamp}.mp4"
+            recording_url = f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}"
+            
+            # Save the recording URL to the database
+            stream.recording_url = recording_url
+            recording_saved = True
+            
+            print(f"📁 Recording saved to: {recording_url}")
         else:
-            print(f"⚠️ Failed to stop recording: {stop_result.get('error')}")
+            print(f"⚠️ Failed to stop recording properly: {stop_result.get('error')}")
     
     # Notify all viewers BEFORE stopping the stream
     room_id = f"stream_{stream.id}"
     if socketio and room_id in stream_rooms:
+        # Send recording info if available
+        end_message = {
+            'stream_id': stream.id,
+            'message': f'{stream.streamer_name} has ended the stream',
+            'redirect': True
+        }
+        
+        if recording_url:
+            end_message['recording_url'] = recording_url
+            end_message['recording_message'] = 'Recording has been saved'
+        
         socketio.emit('stream_ending', {
             'stream_id': stream.id,
             'message': 'Stream is ending in 3 seconds...'
@@ -3252,11 +3269,7 @@ def api_stop_stream():
         
         time.sleep(1)
         
-        socketio.emit('stream_ended', {
-            'stream_id': stream.id,
-            'message': f'{stream.streamer_name} has ended the stream',
-            'redirect': True
-        }, room=room_id)
+        socketio.emit('stream_ended', end_message, room=room_id)
         
         if room_id in stream_rooms:
             del stream_rooms[room_id]
@@ -3270,6 +3283,12 @@ def api_stop_stream():
     stream.is_recording = False
     stream.ended_at = datetime.utcnow()
     
+    # Calculate stream duration
+    duration_minutes = 0
+    if stream.started_at and stream.ended_at:
+        duration = stream.ended_at - stream.started_at
+        duration_minutes = int(duration.total_seconds() / 60)
+    
     # Update all viewer records
     StreamViewer.query.filter_by(stream_id=stream.id, is_active=True).update({
         'is_active': False,
@@ -3278,11 +3297,20 @@ def api_stop_stream():
     
     db.session.commit()
     
-    return jsonify({
+    response_data = {
         'success': True,
-        'message': f'{stream.streamer_name}\'s stream ended'
-    })
-
+        'message': f'{stream.streamer_name}\'s stream ended',
+        'duration_minutes': duration_minutes
+    }
+    
+    if recording_saved and recording_url:
+        response_data['recording'] = {
+            'saved': True,
+            'url': recording_url,
+            'message': f'Recording saved successfully (Duration: {duration_minutes} minutes)'
+        }
+    
+    return jsonify(response_data)
 @app.route('/api/stream/status')
 @login_required
 def api_stream_status():
