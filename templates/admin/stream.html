@@ -782,6 +782,7 @@ window.toggleCamera = async function() {
         updateStatus(isEnabled ? 'Turning off camera...' : 'Starting camera...');
         
         if (isEnabled) {
+            // Turn off camera
             await room.localParticipant.setCameraEnabled(false);
             clearPreview('main');
             window.streamState.publishers.camera = false;
@@ -789,6 +790,7 @@ window.toggleCamera = async function() {
             updateMediaCard('camera', false);
             showNotification('info', 'Camera turned off');
         } else {
+            // Turn on camera
             const publication = await room.localParticipant.setCameraEnabled(true);
             if (publication) {
                 const track = publication.track;
@@ -801,6 +803,9 @@ window.toggleCamera = async function() {
             updateCameraButton(true);
             updateMediaCard('camera', true, 'Streaming');
             showNotification('success', 'Camera started successfully');
+            
+            // Notify server that media is now being published
+            notifyMediaPublished();
         }
         
         updateStatus('Ready');
@@ -849,6 +854,21 @@ window.toggleMicrophone = async function() {
             showNotification('error', 'Microphone error: ' + error.message);
         }
         updateStatus('Microphone error');
+    }
+
+    if (!isEnabled) {
+        // After successfully enabling microphone
+        const publication = await room.localParticipant.setMicrophoneEnabled(true);
+        if (publication) {
+            window.streamState.localTracks.microphone = publication.track;
+        }
+        window.streamState.publishers.microphone = true;
+        updateMicrophoneButton(true);
+        updateMediaCard('mic', true, 'Broadcasting');
+        showNotification('success', 'Microphone started successfully');
+        
+        // Notify server that media is now being published
+        notifyMediaPublished();
     }
 };
 
@@ -1153,6 +1173,24 @@ window.copyRecordingUrl = function(url) {
 };
 
 // UI Helper Functions
+// Function to notify server that media is published
+function notifyMediaPublished() {
+    const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+    
+    if (userActiveStream && window.WebSocketManager.socket && window.WebSocketManager.isConnected) {
+        // Check if we have at least one media track published
+        if (window.streamState.publishers.camera || window.streamState.publishers.microphone) {
+            console.log('📹 Notifying server that media is published');
+            
+            window.WebSocketManager.socket.emit('media_published', {
+                stream_id: userActiveStream.id,
+                has_video: window.streamState.publishers.camera,
+                has_audio: window.streamState.publishers.microphone
+            });
+        }
+    }
+}
+    
 function updateCameraButton(isActive) {
     const btn = document.getElementById('toggleCameraBtn');
     if (btn) {
