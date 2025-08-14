@@ -1163,14 +1163,13 @@ if socketio:
     def start_livekit_egress_recording(room_name, stream_id, streamer_name):
         """
         Start LiveKit Egress recording with proper error handling
-        Uses LiveKit Cloud Egress API to record to S3
         """
         try:
             import requests
             import base64
             from datetime import datetime
             
-            # Get credentials from environment
+            # Get credentials
             livekit_api_key = app.config.get('LIVEKIT_API_KEY')
             livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
             livekit_url = app.config.get('LIVEKIT_URL')
@@ -1185,9 +1184,7 @@ if socketio:
             print(f"🔹 Starting LiveKit Egress recording")
             print(f"  Room: {room_name}")
             print(f"  Streamer: {streamer_name}")
-            print(f"  S3 Bucket: {s3_bucket}")
             
-            # Validate credentials
             if not all([livekit_api_key, livekit_api_secret, livekit_url]):
                 print("❌ LiveKit credentials missing")
                 return {'success': False, 'error': 'LiveKit credentials not configured'}
@@ -1196,7 +1193,7 @@ if socketio:
                 print("❌ AWS credentials missing")
                 return {'success': False, 'error': 'AWS credentials not configured'}
             
-            # Generate S3 path with proper structure
+            # Generate S3 path
             timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
             date_folder = datetime.utcnow().strftime('%Y/%m/%d')
             filename = f"{streamer_name}-stream-{stream_id}-{timestamp}.mp4"
@@ -1204,16 +1201,22 @@ if socketio:
             
             print(f"📁 Recording will be saved to: s3://{s3_bucket}/{s3_key}")
             
-            # Extract LiveKit Cloud project from URL
+            # Extract API URL
             if '.livekit.cloud' in livekit_url:
-                # Extract project name from URL
                 project = livekit_url.split('//')[1].split('.')[0]
                 api_url = f"https://{project}.livekit.cloud"
             else:
-                # Self-hosted LiveKit
                 api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
             
-            # Create Egress request for Room Composite Recording
+            # Create auth header
+            auth_b64 = base64.b64encode(f"{livekit_api_key}:{livekit_api_secret}".encode()).decode()
+            
+            headers = {
+                "Authorization": f"Basic {auth_b64}",
+                "Content-Type": "application/json"
+            }
+            
+            # CORRECTED: Use the proper LiveKit Cloud Egress API format
             egress_request = {
                 "room_name": room_name,
                 "file": {
@@ -1222,27 +1225,18 @@ if socketio:
                         "access_key": aws_access_key,
                         "secret": aws_secret_key,
                         "region": aws_region,
-                        "bucket": s3_bucket
+                        "bucket": s3_bucket,
+                        "force_path_style": False
                     }
                 },
-                "preset": "HD_30",  # 720p 30fps
-                "custom_base_url": f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com"  # Add this for public URLs
+                "preset": "H264_720P_30"  # Changed from "HD_30" to proper preset
             }
             
-            # Create authentication header
-            auth_string = f"{livekit_api_key}:{livekit_api_secret}"
-            auth_bytes = auth_string.encode('ascii')
-            auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
-            
-            headers = {
-                "Authorization": f"Basic {auth_b64}",
-                "Content-Type": "application/json"
-            }
-            
-            # Make API request to start recording
+            # Make API request
             endpoint = f"{api_url}/twirp/livekit.Egress/StartRoomCompositeEgress"
             
             print(f"🔗 Calling LiveKit Egress API: {endpoint}")
+            print(f"📦 Request payload: {egress_request}")
             
             response = requests.post(
                 endpoint,
@@ -1251,39 +1245,32 @@ if socketio:
                 timeout=10
             )
             
-            print(f"📡 LiveKit API Response Status: {response.status_code}")
+            print(f"📡 Response Status: {response.status_code}")
+            print(f"📡 Response Body: {response.text}")
             
             if response.status_code == 200:
                 data = response.json()
                 egress_id = data.get("egress_id")
                 
-                print(f"✅ Recording started successfully!")
-                print(f"🔑 Egress ID: {egress_id}")
-                print(f"📁 S3 Path: s3://{s3_bucket}/{s3_key}")
-                
-                return {
-                    'success': True,
-                    'egress_id': egress_id,
-                    's3_path': f"s3://{s3_bucket}/{s3_key}",
-                    's3_url': f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}",
-                    'status': 'recording'
-                }
+                if egress_id:
+                    print(f"✅ Recording started successfully!")
+                    print(f"🔑 Egress ID: {egress_id}")
+                    
+                    return {
+                        'success': True,
+                        'egress_id': egress_id,
+                        's3_path': f"s3://{s3_bucket}/{s3_key}",
+                        's3_url': f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}",
+                        'status': 'recording'
+                    }
+                else:
+                    print(f"❌ No egress_id in response: {data}")
+                    return {'success': False, 'error': 'No egress_id returned'}
             else:
                 error_msg = f"API returned {response.status_code}: {response.text}"
                 print(f"❌ LiveKit Egress API error: {error_msg}")
-                return {
-                    'success': False,
-                    'error': error_msg
-                }
+                return {'success': False, 'error': error_msg}
                 
-        except requests.exceptions.Timeout:
-            print("❌ LiveKit API request timed out")
-            return {'success': False, 'error': 'API request timed out'}
-            
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Request error: {e}")
-            return {'success': False, 'error': f'Request failed: {str(e)}'}
-            
         except Exception as e:
             print(f"❌ Unexpected error starting recording: {e}")
             import traceback
