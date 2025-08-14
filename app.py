@@ -1160,123 +1160,6 @@ if socketio:
             emit('error', {'message': 'Failed to join stream'})
     
     
-    def start_livekit_egress_recording(room_name, stream_id, streamer_name):
-        """
-        Start LiveKit Egress recording with proper error handling
-        """
-        try:
-            import requests
-            import base64
-            from datetime import datetime
-            
-            # Get credentials
-            livekit_api_key = app.config.get('LIVEKIT_API_KEY')
-            livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
-            livekit_url = app.config.get('LIVEKIT_URL')
-            
-            # AWS S3 configuration
-            aws_access_key = app.config.get('AWS_ACCESS_KEY_ID')
-            aws_secret_key = app.config.get('AWS_SECRET_ACCESS_KEY')
-            aws_region = app.config.get('AWS_REGION', 'us-east-1')
-            s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
-            prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
-            
-            print(f"🔹 Starting LiveKit Egress recording")
-            print(f"  Room: {room_name}")
-            print(f"  Streamer: {streamer_name}")
-            
-            if not all([livekit_api_key, livekit_api_secret, livekit_url]):
-                print("❌ LiveKit credentials missing")
-                return {'success': False, 'error': 'LiveKit credentials not configured'}
-            
-            if not all([aws_access_key, aws_secret_key, s3_bucket]):
-                print("❌ AWS credentials missing")
-                return {'success': False, 'error': 'AWS credentials not configured'}
-            
-            # Generate S3 path
-            timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
-            date_folder = datetime.utcnow().strftime('%Y/%m/%d')
-            filename = f"{streamer_name}-stream-{stream_id}-{timestamp}.mp4"
-            s3_key = f"{prefix}{streamer_name}/{date_folder}/{filename}"
-            
-            print(f"📁 Recording will be saved to: s3://{s3_bucket}/{s3_key}")
-            
-            # Extract API URL
-            if '.livekit.cloud' in livekit_url:
-                project = livekit_url.split('//')[1].split('.')[0]
-                api_url = f"https://{project}.livekit.cloud"
-            else:
-                api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
-            
-            # Create auth header
-            auth_b64 = base64.b64encode(f"{livekit_api_key}:{livekit_api_secret}".encode()).decode()
-            
-            headers = {
-                "Authorization": f"Basic {auth_b64}",
-                "Content-Type": "application/json"
-            }
-            
-            # CORRECTED: Use the proper LiveKit Cloud Egress API format
-            egress_request = {
-                "room_name": room_name,
-                "file": {
-                    "filepath": s3_key,
-                    "s3": {
-                        "access_key": aws_access_key,
-                        "secret": aws_secret_key,
-                        "region": aws_region,
-                        "bucket": s3_bucket,
-                        "force_path_style": False
-                    }
-                },
-                "preset": "H264_720P_30"  # Changed from "HD_30" to proper preset
-            }
-            
-            # Make API request
-            endpoint = f"{api_url}/twirp/livekit.Egress/StartRoomCompositeEgress"
-            
-            print(f"🔗 Calling LiveKit Egress API: {endpoint}")
-            print(f"📦 Request payload: {egress_request}")
-            
-            response = requests.post(
-                endpoint,
-                json=egress_request,
-                headers=headers,
-                timeout=10
-            )
-            
-            print(f"📡 Response Status: {response.status_code}")
-            print(f"📡 Response Body: {response.text}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                egress_id = data.get("egress_id")
-                
-                if egress_id:
-                    print(f"✅ Recording started successfully!")
-                    print(f"🔑 Egress ID: {egress_id}")
-                    
-                    return {
-                        'success': True,
-                        'egress_id': egress_id,
-                        's3_path': f"s3://{s3_bucket}/{s3_key}",
-                        's3_url': f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}",
-                        'status': 'recording'
-                    }
-                else:
-                    print(f"❌ No egress_id in response: {data}")
-                    return {'success': False, 'error': 'No egress_id returned'}
-            else:
-                error_msg = f"API returned {response.status_code}: {response.text}"
-                print(f"❌ LiveKit Egress API error: {error_msg}")
-                return {'success': False, 'error': error_msg}
-                
-        except Exception as e:
-            print(f"❌ Unexpected error starting recording: {e}")
-            import traceback
-            traceback.print_exc()
-            return {'success': False, 'error': str(e)}
-
     @socketio.on('screen_frame')
     def handle_screen_frame(data):
         """Handle screen sharing frames - LiveKit handles this natively"""
@@ -1433,10 +1316,166 @@ if socketio:
         except Exception as e:
             print(f"❌ Error in disconnect handler: {e}")
 
+def generate_livekit_api_token():
+    """Generate a JWT token for LiveKit API access"""
+    import jwt
+    import time
     
+    livekit_api_key = app.config.get('LIVEKIT_API_KEY')
+    livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+    
+    if not livekit_api_key or not livekit_api_secret:
+        return None
+    
+    # Create JWT payload for API access
+    now = int(time.time())
+    exp = now + 600  # 10 minutes expiry
+    
+    payload = {
+        "iss": livekit_api_key,
+        "exp": exp,
+        "nbf": now,
+        "iat": now,
+        "video": {
+            "roomCreate": True,
+            "roomList": True,
+            "roomRecord": True,
+            "roomAdmin": True,
+            "ingressAdmin": True,
+            "egressAdmin": True
+        }
+    }
+    
+    # Generate JWT token
+    token = jwt.encode(
+        payload,
+        livekit_api_secret,
+        algorithm='HS256'
+    )
+    
+    # Handle both string and bytes return
+    if isinstance(token, bytes):
+        token = token.decode('utf-8')
+    
+    return token
+
+def start_livekit_egress_recording(room_name, stream_id, streamer_name):
+    """
+    Start LiveKit Egress recording with proper Bearer token authentication
+    """
+    try:
+        import requests
+        from datetime import datetime
+        
+        # Generate API token
+        api_token = generate_livekit_api_token()
+        if not api_token:
+            print("❌ Failed to generate API token")
+            return {'success': False, 'error': 'Failed to generate API token'}
+        
+        # Get LiveKit URL
+        livekit_url = app.config.get('LIVEKIT_URL')
+        
+        # AWS S3 configuration
+        aws_access_key = app.config.get('AWS_ACCESS_KEY_ID')
+        aws_secret_key = app.config.get('AWS_SECRET_ACCESS_KEY')
+        aws_region = app.config.get('AWS_REGION', 'us-east-1')
+        s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+        prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
+        
+        print(f"🔹 Starting LiveKit Egress recording")
+        print(f"  Room: {room_name}")
+        print(f"  Streamer: {streamer_name}")
+        
+        if not all([aws_access_key, aws_secret_key, s3_bucket]):
+            print("❌ AWS credentials missing")
+            return {'success': False, 'error': 'AWS credentials not configured'}
+        
+        # Generate S3 path
+        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+        date_folder = datetime.utcnow().strftime('%Y/%m/%d')
+        filename = f"{streamer_name}-stream-{stream_id}-{timestamp}.mp4"
+        s3_key = f"{prefix}{streamer_name}/{date_folder}/{filename}"
+        
+        print(f"📁 Recording will be saved to: s3://{s3_bucket}/{s3_key}")
+        
+        # Extract API URL from WebSocket URL
+        if '.livekit.cloud' in livekit_url:
+            # For LiveKit Cloud: wss://tgfxtradelab-073fad95626o.livekit.cloud
+            # Convert to: https://tgfxtradelab-073fad95626o.livekit.cloud
+            api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'https://')
+        else:
+            api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
+        
+        # Create headers with Bearer token
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Create Egress request
+        egress_request = {
+            "room_name": room_name,
+            "file": {
+                "filepath": s3_key,
+                "s3": {
+                    "access_key": aws_access_key,
+                    "secret": aws_secret_key,
+                    "region": aws_region,
+                    "bucket": s3_bucket
+                }
+            },
+            "preset": "H264_720P_30"  # Valid preset for LiveKit
+        }
+        
+        # Make API request
+        endpoint = f"{api_url}/twirp/livekit.Egress/StartRoomCompositeEgress"
+        
+        print(f"🔗 Calling LiveKit Egress API: {endpoint}")
+        print(f"🔑 Using Bearer token authentication")
+        
+        response = requests.post(
+            endpoint,
+            json=egress_request,
+            headers=headers,
+            timeout=10
+        )
+        
+        print(f"📡 Response Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            egress_id = data.get("egress_id")
+            
+            if egress_id:
+                print(f"✅ Recording started successfully!")
+                print(f"🔑 Egress ID: {egress_id}")
+                print(f"📁 S3 Path: s3://{s3_bucket}/{s3_key}")
+                
+                return {
+                    'success': True,
+                    'egress_id': egress_id,
+                    's3_path': f"s3://{s3_bucket}/{s3_key}",
+                    's3_url': f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}",
+                    'status': 'recording'
+                }
+            else:
+                print(f"❌ No egress_id in response: {data}")
+                return {'success': False, 'error': 'No egress_id returned'}
+        else:
+            error_msg = f"API returned {response.status_code}: {response.text}"
+            print(f"❌ LiveKit Egress API error: {error_msg}")
+            return {'success': False, 'error': error_msg}
+            
+    except Exception as e:
+        print(f"❌ Unexpected error starting recording: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
 def stop_livekit_egress_recording(egress_id):
     """
-    Stop LiveKit Egress recording
+    Stop LiveKit Egress recording with Bearer token authentication
     """
     try:
         if not egress_id:
@@ -1444,40 +1483,63 @@ def stop_livekit_egress_recording(egress_id):
             return {'success': False, 'error': 'No recording to stop'}
         
         import requests
-        import base64
         
-        # Get credentials
-        livekit_api_key = app.config.get('LIVEKIT_API_KEY')
-        livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+        # Generate API token
+        api_token = generate_livekit_api_token()
+        if not api_token:
+            return {'success': False, 'error': 'Failed to generate API token'}
+        
+        # Get LiveKit URL
         livekit_url = app.config.get('LIVEKIT_URL')
-        
-        if not all([livekit_api_key, livekit_api_secret, livekit_url]):
-            return {'success': False, 'error': 'LiveKit credentials not configured'}
         
         # Extract API URL
         if '.livekit.cloud' in livekit_url:
-            project = livekit_url.split('//')[1].split('.')[0]
-            api_url = f"https://{project}.livekit.cloud"
+            api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'https://')
         else:
             api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
         
-        # Create auth header
-        auth_b64 = base64.b64encode(f"{livekit_api_key}:{livekit_api_secret}".encode()).decode()
+        # Create headers with Bearer token
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # First, get the egress info to retrieve the file path
+        info_response = requests.post(
+            f"{api_url}/twirp/livekit.Egress/ListEgress",
+            json={"egress_id": egress_id},
+            headers=headers,
+            timeout=10
+        )
+        
+        recording_url = None
+        if info_response.status_code == 200:
+            egress_list = info_response.json().get('items', [])
+            if egress_list:
+                egress_info = egress_list[0]
+                # Extract the S3 path from the egress info
+                if 'file' in egress_info and 'filepath' in egress_info['file']:
+                    s3_key = egress_info['file']['filepath']
+                    aws_region = app.config.get('AWS_REGION', 'us-east-1')
+                    s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+                    recording_url = f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}"
+                    print(f"📁 Recording file path: {s3_key}")
         
         # Stop recording
         response = requests.post(
             f"{api_url}/twirp/livekit.Egress/StopEgress",
             json={"egress_id": egress_id},
-            headers={
-                "Authorization": f"Basic {auth_b64}",
-                "Content-Type": "application/json"
-            },
+            headers=headers,
             timeout=10
         )
         
         if response.status_code == 200:
             print(f"✅ Recording stopped: {egress_id}")
-            return {'success': True, 'egress_id': egress_id}
+            return {
+                'success': True, 
+                'egress_id': egress_id,
+                'recording_url': recording_url
+            }
         else:
             print(f"❌ Failed to stop recording: {response.status_code} - {response.text}")
             return {'success': False, 'error': f"API error: {response.status_code}"}
@@ -1485,44 +1547,6 @@ def stop_livekit_egress_recording(egress_id):
     except Exception as e:
         print(f"❌ Error stopping recording: {e}")
         return {'success': False, 'error': str(e)}
-
-    # Utility function for debugging
-    @socketio.on('debug_info')
-    def handle_debug_info(data):
-        """Debug endpoint to check user status"""
-        try:
-            client_id = request.sid
-            user_info = active_connections.get(client_id, {})
-            
-            is_authenticated = (
-                hasattr(current_user, 'is_authenticated') and 
-                current_user.is_authenticated
-            )
-            
-            debug_data = {
-                'client_id': client_id,
-                'user_info': user_info,
-                'current_user_authenticated': is_authenticated,
-                'current_user_id': getattr(current_user, 'id', None),
-                'current_user_admin': getattr(current_user, 'is_admin', None),
-                'current_user_can_stream': getattr(current_user, 'can_stream', None),
-                'active_connections_count': len(active_connections),
-                'stream_rooms': {k: {
-                    'stream_id': v['stream_id'],
-                    'admin_client': v['admin_client'],
-                    'viewer_count': len(v['viewers'])
-                } for k, v in stream_rooms.items()},
-                'livekit_url': app.config.get('LIVEKIT_URL'),
-                'livekit_configured': bool(app.config.get('LIVEKIT_API_KEY') and app.config.get('LIVEKIT_API_SECRET'))
-            }
-            
-            print(f"🔍 Debug info for {client_id}: {debug_data}")
-            emit('debug_response', debug_data)
-            
-        except Exception as e:
-            print(f"❌ Error in debug handler: {e}")
-            emit('error', {'message': f'Debug error: {str(e)}'})
-
 
 # Routes (keeping all existing routes but updating stream-related ones)
 @app.route('/')
