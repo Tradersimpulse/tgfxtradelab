@@ -122,6 +122,17 @@
                     </div>
                 </div>
 
+                <!-- Recording Status Display -->
+                <div id="recordingStatusDisplay" class="mb-3" style="display: none;">
+                    <div class="alert alert-info d-flex align-items-center">
+                        <span class="material-symbols-outlined me-2 text-danger pulse">fiber_manual_record</span>
+                        <div class="flex-grow-1">
+                            <strong>Recording Active</strong>
+                            <small class="d-block text-muted">Your stream is being recorded to S3</small>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Enhanced LiveKit Status Display -->
                 <div class="mb-3 p-3 border rounded" style="background: linear-gradient(135deg, #1a1a1a, #2d2d2d);">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -187,7 +198,7 @@
                     
                     <!-- Recording indicator -->
                     <div id="recordingIndicator" class="position-absolute top-0 end-0 m-2" style="display: none;">
-                        <span class="badge bg-danger">
+                        <span class="badge bg-danger pulse">
                             <span class="material-symbols-outlined me-1" style="font-size: 10px;">fiber_manual_record</span>
                             REC
                         </span>
@@ -291,7 +302,7 @@
                     
                     <div class="alert alert-info">
                         <span class="material-symbols-outlined me-2">info</span>
-                        <small>Make sure to allow camera and microphone permissions when prompted</small>
+                        <small>Recording will start automatically when you begin streaming</small>
                     </div>
                     
                     <div class="d-grid">
@@ -368,14 +379,14 @@
     </div>
 </div>
 
-<!-- Recent Streams History -->
+<!-- Recent Streams History with Recording Info -->
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
                     <span class="material-symbols-outlined me-2">history</span>
-                    Recent Streams
+                    Recent Streams & Recordings
                 </h5>
             </div>
             <div class="card-body">
@@ -390,6 +401,7 @@
                                 <th>Duration</th>
                                 <th>Peak Viewers</th>
                                 <th>Started</th>
+                                <th>Recording</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -415,13 +427,35 @@
                                 <td>{{ stream.viewer_count }}</td>
                                 <td>{{ stream.started_at.strftime('%m/%d %I:%M %p') if stream.started_at else '--' }}</td>
                                 <td>
+                                    {% if stream.recording_url %}
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ stream.recording_url }}" target="_blank" class="btn btn-outline-primary" title="View Recording">
+                                            <span class="material-symbols-outlined" style="font-size: 14px;">play_circle</span>
+                                        </a>
+                                        <button class="btn btn-outline-secondary" onclick="copyRecordingUrl('{{ stream.recording_url }}')" title="Copy URL">
+                                            <span class="material-symbols-outlined" style="font-size: 14px;">content_copy</span>
+                                        </button>
+                                    </div>
+                                    {% elif stream.is_recording %}
+                                    <span class="badge bg-danger">
+                                        <span class="material-symbols-outlined" style="font-size: 10px;">fiber_manual_record</span>
+                                        Recording
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">--</span>
+                                    {% endif %}
+                                </td>
+                                <td>
                                     {% if stream.is_active %}
                                     <span class="badge bg-success">Live</span>
                                     {% else %}
                                     <span class="badge bg-secondary">Ended</span>
                                     {% endif %}
                                     {% if stream.recording_url %}
-                                    <span class="badge bg-info ms-1">Saved</span>
+                                    <span class="badge bg-info ms-1">
+                                        <span class="material-symbols-outlined" style="font-size: 10px;">cloud_done</span>
+                                        Saved
+                                    </span>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -443,10 +477,10 @@
 
 {% block scripts %}
 <script>
-// FIXED LIVEKIT ADMIN STREAM CONTROL
+// FIXED LIVEKIT ADMIN STREAM CONTROL WITH RECORDING MANAGEMENT
 // Using correct LiveKit v2.x API methods
 
-console.log('🚀 Loading Fixed LiveKit Admin Control...');
+console.log('🚀 Loading Fixed LiveKit Admin Control with Recording Support...');
 
 // Global streaming state
 window.streamState = {
@@ -471,7 +505,9 @@ window.streamState = {
         startTime: null,
         viewerCount: 0,
         peakViewers: 0,
-        isRecording: false
+        isRecording: false,
+        recordingStartTime: null,
+        recordingUrl: null
     },
     roomData: null
 };
@@ -485,7 +521,7 @@ window.WebSocketManager = {
     currentStreamId: null,
     
     init: function() {
-        console.log('🔌 Initializing WebSocket for LiveKit coordination...');
+        console.log('📌 Initializing WebSocket for LiveKit coordination...');
         
         this.socket = io({
             transports: ['websocket', 'polling'],
@@ -525,7 +561,10 @@ window.WebSocketManager = {
         this.socket.on('recording_started', (data) => {
             console.log('🔴 Recording auto-started:', data);
             window.streamState.stats.isRecording = true;
+            window.streamState.stats.recordingStartTime = new Date();
+            
             document.getElementById('recordingIndicator').style.display = 'block';
+            document.getElementById('recordingStatusDisplay').style.display = 'block';
             
             const btn = document.getElementById('toggleRecordingBtn');
             if (btn) {
@@ -539,6 +578,7 @@ window.WebSocketManager = {
             console.log('⏹️ Recording stopped');
             window.streamState.stats.isRecording = false;
             document.getElementById('recordingIndicator').style.display = 'none';
+            document.getElementById('recordingStatusDisplay').style.display = 'none';
         });
         
         // Stream-specific events
@@ -692,21 +732,17 @@ window.WebSocketManager = {
     },
     
     updateMediaStatus() {
-        // Update media indicators based on published tracks
         const room = window.streamState.room;
         if (!room) return;
         
         const localParticipant = room.localParticipant;
         
-        // Update camera status - FIXED: Use getTrackBySource
         const cameraPublication = localParticipant.getTrackBySource(window.LiveKitClient.Track.Source.Camera);
         updateMediaCard('camera', !!cameraPublication);
         
-        // Update microphone status - FIXED: Use getTrackBySource
         const micPublication = localParticipant.getTrackBySource(window.LiveKitClient.Track.Source.Microphone);
         updateMediaCard('mic', !!micPublication);
         
-        // Update screen share status - FIXED: Use getTrackBySource
         const screenPublication = localParticipant.getTrackBySource(window.LiveKitClient.Track.Source.ScreenShare);
         updateMediaCard('screen', !!screenPublication);
     },
@@ -727,7 +763,7 @@ window.WebSocketManager = {
     }
 };
 
-// FIXED: Enhanced LiveKit Media Functions with correct API usage
+// FIXED: Enhanced LiveKit Media Functions
 window.toggleCamera = async function() {
     if (!window.streamState.isConnected) {
         showNotification('warning', 'Please wait for connection to complete');
@@ -741,39 +777,28 @@ window.toggleCamera = async function() {
         updateStatus(isEnabled ? 'Turning off camera...' : 'Starting camera...');
         
         if (isEnabled) {
-            // Turn off camera - FIXED: Use setCameraEnabled
             await room.localParticipant.setCameraEnabled(false);
-            
-            // Clear preview
             clearPreview('main');
             window.streamState.publishers.camera = false;
             updateCameraButton(false);
             updateMediaCard('camera', false);
-            
             showNotification('info', 'Camera turned off');
-            
         } else {
-            // Turn on camera - FIXED: Use setCameraEnabled
             const publication = await room.localParticipant.setCameraEnabled(true);
-            
             if (publication) {
-                // Show preview
                 const track = publication.track;
                 if (track) {
                     showPreview(track, 'main');
                     window.streamState.localTracks.camera = track;
                 }
             }
-            
             window.streamState.publishers.camera = true;
             updateCameraButton(true);
             updateMediaCard('camera', true, 'Streaming');
-            
             showNotification('success', 'Camera started successfully');
         }
         
         updateStatus('Ready');
-        
     } catch (error) {
         console.error('❌ Camera error:', error);
         showNotification('error', 'Camera error: ' + error.message);
@@ -794,35 +819,25 @@ window.toggleMicrophone = async function() {
         updateStatus(isEnabled ? 'Muting microphone...' : 'Starting microphone...');
         
         if (isEnabled) {
-            // Turn off microphone - FIXED: Use setMicrophoneEnabled
             await room.localParticipant.setMicrophoneEnabled(false);
-            
             window.streamState.publishers.microphone = false;
             updateMicrophoneButton(false);
             updateMediaCard('mic', false);
-            
             showNotification('info', 'Microphone muted');
-            
         } else {
-            // Turn on microphone - FIXED: Use setMicrophoneEnabled
             const publication = await room.localParticipant.setMicrophoneEnabled(true);
-            
             if (publication) {
                 window.streamState.localTracks.microphone = publication.track;
             }
-            
             window.streamState.publishers.microphone = true;
             updateMicrophoneButton(true);
             updateMediaCard('mic', true, 'Broadcasting');
-            
             showNotification('success', 'Microphone started successfully');
         }
         
         updateStatus('Ready');
-        
     } catch (error) {
         console.error('❌ Microphone error:', error);
-        
         if (error.name === 'NotAllowedError') {
             showNotification('error', 'Microphone access denied. Please check your browser permissions.');
         } else {
@@ -845,10 +860,8 @@ window.toggleScreenShare = async function() {
         updateStatus(isEnabled ? 'Stopping screen share...' : 'Starting screen share...');
         
         if (isEnabled) {
-            // Stop screen sharing - FIXED: Use setScreenShareEnabled
             await room.localParticipant.setScreenShareEnabled(false);
             
-            // If camera is on, switch back to camera view
             if (window.streamState.publishers.camera) {
                 const cameraTrack = window.streamState.localTracks.camera;
                 if (cameraTrack) {
@@ -859,20 +872,15 @@ window.toggleScreenShare = async function() {
             }
             
             clearPreview('pip');
-            
             window.streamState.publishers.screen = false;
             updateScreenShareButton(false);
             updateMediaCard('screen', false);
-            
             showNotification('info', 'Screen sharing stopped');
-            
         } else {
-            // Start screen sharing - FIXED: Use setScreenShareEnabled
             try {
                 const publication = await room.localParticipant.setScreenShareEnabled(true);
                 
                 if (publication && publication.track) {
-                    // Show screen share in main view, move camera to PiP if active
                     if (window.streamState.publishers.camera) {
                         const cameraTrack = window.streamState.localTracks.camera;
                         if (cameraTrack) {
@@ -885,12 +893,9 @@ window.toggleScreenShare = async function() {
                     window.streamState.publishers.screen = true;
                     updateScreenShareButton(true);
                     updateMediaCard('screen', true, 'Sharing');
-                    
                     showNotification('success', 'Screen sharing started successfully');
                 }
-                
             } catch (error) {
-                // Handle user cancellation or other errors
                 if (error.name === 'NotAllowedError' || error.message.includes('Permission denied')) {
                     showNotification('info', 'Screen sharing was cancelled');
                 } else {
@@ -905,7 +910,6 @@ window.toggleScreenShare = async function() {
         }
         
         updateStatus('Ready');
-        
     } catch (error) {
         console.error('❌ Screen share error:', error);
         
@@ -918,23 +922,19 @@ window.toggleScreenShare = async function() {
     }
 };
 
-// Helper function to show preview
+// Show preview
 window.showPreview = function(track, location = 'main') {
     const container = location === 'main' ? document.getElementById('mainPreview') : document.getElementById('pipPreview');
     if (!container) return;
     
-    // Clear existing content
     container.innerHTML = '';
     
     if (track) {
         let videoElement;
         
-        // Check if it's a LiveKit track with attach method
         if (track.attach && typeof track.attach === 'function') {
-            // LiveKit track - use attach method
             videoElement = track.attach();
         } else if (track instanceof MediaStreamTrack) {
-            // Native MediaStreamTrack
             videoElement = document.createElement('video');
             videoElement.srcObject = new MediaStream([track]);
             videoElement.autoplay = true;
@@ -947,7 +947,7 @@ window.showPreview = function(track, location = 'main') {
         videoElement.style.width = '100%';
         videoElement.style.height = '100%';
         videoElement.style.objectFit = location === 'main' ? 'contain' : 'cover';
-        videoElement.muted = true; // Prevent echo
+        videoElement.muted = true;
         
         container.appendChild(videoElement);
         
@@ -972,51 +972,6 @@ window.clearPreview = function(location = 'main') {
     } else {
         container.innerHTML = '';
         container.style.display = 'none';
-    }
-};
-
-window.toggleRecording = async function() {
-    const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
-    if (!userActiveStream) {
-        showNotification('error', 'No active stream found');
-        return;
-    }
-    
-    const isRecording = window.streamState.stats.isRecording;
-    
-    try {
-        updateStatus(isRecording ? 'Stopping recording...' : 'Starting recording...');
-        
-        const endpoint = isRecording ? '/api/stream/recording/stop' : '/api/stream/recording/start';
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stream_id: userActiveStream.id })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            window.streamState.stats.isRecording = !isRecording;
-            updateRecordingButton(!isRecording);
-            
-            if (!isRecording) {
-                showNotification('success', 'Recording started - Your stream is being saved');
-                document.getElementById('recordingIndicator').style.display = 'block';
-            } else {
-                showNotification('info', 'Recording stopped and saved');
-                document.getElementById('recordingIndicator').style.display = 'none';
-            }
-        } else {
-            throw new Error(data.error || 'Recording operation failed');
-        }
-        
-        updateStatus('Ready');
-        
-    } catch (error) {
-        console.error('❌ Recording error:', error);
-        showNotification('error', 'Recording error: ' + error.message);
-        updateStatus('Recording error');
     }
 };
 
@@ -1050,7 +1005,10 @@ window.handleStartUserStream = async function(e) {
         if (data.success) {
             showNotification('success', 'Stream started successfully! Preparing your streaming studio...');
             
-            // Store stream data
+            if (data.stream.is_recording) {
+                showNotification('info', '🔴 Recording will start automatically when you join');
+            }
+            
             window.WebSocketManager.currentStreamId = data.stream.id;
             window.streamState.roomData = {
                 token: data.stream.livekit_token,
@@ -1072,25 +1030,22 @@ window.handleStartUserStream = async function(e) {
     }
 };
 
-// In stream.html, update the stopUserStream function:
+// Enhanced Stop Stream with Recording Management
 window.stopUserStream = async function() {
-    if (!confirm('Are you sure you want to end your stream? This will disconnect all viewers.')) {
+    if (!confirm('Are you sure you want to end your stream? This will disconnect all viewers and save the recording.')) {
         return;
     }
     
     try {
-        updateStatus('Ending stream...');
+        updateStatus('Ending stream and saving recording...');
         
-        // First notify viewers through WebSocket BEFORE disconnecting
         const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
         if (userActiveStream && window.WebSocketManager.socket && window.WebSocketManager.isConnected) {
-            // Emit stream ending notification
             window.WebSocketManager.socket.emit('admin_ending_stream', { 
                 stream_id: userActiveStream.id,
                 message: 'Stream is ending...'
             });
             
-            // Give viewers a moment to receive the notification
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
@@ -1098,21 +1053,14 @@ window.stopUserStream = async function() {
         if (window.streamState.room) {
             const room = window.streamState.room;
             
-            // Disable all tracks
             await room.localParticipant.setCameraEnabled(false);
             await room.localParticipant.setMicrophoneEnabled(false);
             await room.localParticipant.setScreenShareEnabled(false);
             
-            // Disconnect from the room
             room.disconnect();
         }
         
-        // Stop recording if active
-        if (window.streamState.stats.isRecording) {
-            await toggleRecording();
-        }
-        
-        // Call backend to end stream (this will emit 'stream_ended' to all viewers)
+        // Call backend to end stream and handle recording
         const response = await fetch('/api/stream/stop', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1122,8 +1070,20 @@ window.stopUserStream = async function() {
         const data = await response.json();
         
         if (data.success) {
-            showNotification('success', 'Stream ended successfully');
-            setTimeout(() => window.location.reload(), 1500);
+            let message = 'Stream ended successfully';
+            
+            // Check if recording was saved
+            if (data.recording && data.recording.saved) {
+                message = `Stream ended! ${data.recording.message}`;
+                
+                // Show recording saved notification with URL
+                showRecordingSavedNotification(data.recording.url, data.duration_minutes);
+            } else {
+                showNotification('success', message);
+            }
+            
+            // Delay reload to show recording notification
+            setTimeout(() => window.location.reload(), data.recording ? 4000 : 1500);
         } else {
             throw new Error(data.error || 'Failed to stop stream');
         }
@@ -1132,6 +1092,59 @@ window.stopUserStream = async function() {
         console.error('❌ Stop stream error:', error);
         showNotification('error', 'Error stopping stream: ' + error.message);
     }
+};
+
+// Recording Management Functions
+function showRecordingSavedNotification(recordingUrl, duration) {
+    const notification = document.createElement('div');
+    notification.className = 'alert alert-success position-fixed shadow-lg';
+    notification.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 450px; max-width: 500px; font-size: 14px; border-radius: 8px;';
+    notification.innerHTML = `
+        <div class="d-flex align-items-start">
+            <span class="material-symbols-outlined me-3 text-success" style="font-size: 28px;">cloud_done</span>
+            <div class="flex-grow-1">
+                <h6 class="mb-1 fw-bold">Recording Saved Successfully!</h6>
+                <p class="mb-2">
+                    <span class="badge bg-success me-2">Duration: ${duration} minutes</span>
+                    <span class="badge bg-info">Saved to S3</span>
+                </p>
+                <div class="mb-2">
+                    <small class="d-block text-muted mb-1">Recording URL:</small>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control bg-light" value="${recordingUrl}" readonly id="recordingUrlInput" style="font-size: 11px;">
+                        <button class="btn btn-outline-secondary" onclick="copyRecordingUrl('${recordingUrl}')" title="Copy URL">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">content_copy</span>
+                        </button>
+                        <a href="${recordingUrl}" target="_blank" class="btn btn-outline-primary" title="Open Recording">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">open_in_new</span>
+                        </a>
+                    </div>
+                </div>
+                <small class="text-muted d-block">
+                    <span class="material-symbols-outlined me-1" style="font-size: 12px;">info</span>
+                    Recording is now available for download and playback
+                </small>
+            </div>
+            <button type="button" class="btn-close" onclick="this.parentElement.parentElement.remove()"></button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+}
+
+// Copy recording URL to clipboard
+window.copyRecordingUrl = function(url) {
+    navigator.clipboard.writeText(url).then(() => {
+        showNotification('success', '📋 Recording URL copied to clipboard!');
+    }).catch(() => {
+        // Fallback for older browsers
+        const input = document.getElementById('recordingUrlInput');
+        if (input) {
+            input.select();
+            document.execCommand('copy');
+            showNotification('success', '📋 Recording URL copied!');
+        }
+    });
 };
 
 // UI Helper Functions
@@ -1156,18 +1169,6 @@ function updateScreenShareButton(isActive) {
     if (btn) {
         btn.className = isActive ? 'btn btn-danger btn-sm w-100' : 'btn btn-warning btn-sm w-100';
         btn.innerHTML = `<span class="material-symbols-outlined me-1" style="font-size: 14px;">${isActive ? 'stop_screen_share' : 'screen_share'}</span>${isActive ? 'Stop' : 'Screen'}`;
-    }
-}
-
-function updateRecordingButton(isActive) {
-    const btn = document.getElementById('toggleRecordingBtn');
-    const icon = document.getElementById('recordingIcon');
-    const text = document.getElementById('recordingText');
-    
-    if (btn && icon && text) {
-        btn.className = isActive ? 'btn btn-danger btn-sm w-100' : 'btn btn-outline-info btn-sm w-100';
-        icon.textContent = isActive ? 'stop' : 'fiber_manual_record';
-        text.textContent = isActive ? 'Stop' : 'Record';
     }
 }
 
@@ -1240,14 +1241,15 @@ function showNotification(type, message) {
                       type === 'success' ? 'alert-success' : 
                       type === 'warning' ? 'alert-warning' : 'alert-info';
     
-    notification.className = `alert ${alertClass} position-fixed`;
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; font-size: 14px;';
+    notification.className = `alert ${alertClass} position-fixed shadow`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; font-size: 14px; border-radius: 8px;';
     notification.innerHTML = `
         <div class="d-flex align-items-center">
             <span class="material-symbols-outlined me-2">
                 ${type === 'error' ? 'error' : type === 'success' ? 'check_circle' : type === 'warning' ? 'warning' : 'info'}
             </span>
             ${message}
+            <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
         </div>
     `;
     
@@ -1261,33 +1263,6 @@ function showNotification(type, message) {
 }
 
 // Settings Functions
-function getVideoResolution() {
-    const quality = window.streamState.settings.videoQuality;
-    switch (quality) {
-        case '1080p': return { width: 1920, height: 1080 };
-        case '720p': return { width: 1280, height: 720 };
-        case '480p': return { width: 854, height: 480 };
-        default: return { width: 1280, height: 720 };
-    }
-}
-
-function getVideoEncodingSettings() {
-    const quality = window.streamState.settings.videoQuality;
-    switch (quality) {
-        case '1080p': return { maxBitrate: 3000000, maxFramerate: 30 };
-        case '720p': return { maxBitrate: 2000000, maxFramerate: 30 };
-        case '480p': return { maxBitrate: 1000000, maxFramerate: 30 };
-        default: return { maxBitrate: 2000000, maxFramerate: 30 };
-    }
-}
-
-function getAudioEncodingSettings() {
-    const quality = window.streamState.settings.audioQuality;
-    return quality === 'music' ? 
-        { maxBitrate: 128000 } : 
-        { maxBitrate: 64000 };
-}
-
 window.updateVideoQuality = function() {
     const select = document.getElementById('videoQualitySelect');
     if (select) {
@@ -1330,7 +1305,6 @@ window.testLiveKitSystem = async function() {
         mediaPermissions: {}
     };
     
-    // Test media permissions
     try {
         await navigator.mediaDevices.getUserMedia({ video: true });
         results.mediaPermissions.camera = true;
@@ -1362,7 +1336,6 @@ async function updateStats() {
         const data = await response.json();
         
         if (data.active && data.streams) {
-            // Update other streams viewer counts
             data.streams.forEach(stream => {
                 const element = document.getElementById(`otherStreamViewers-${stream.id}`);
                 if (element) {
@@ -1370,7 +1343,6 @@ async function updateStats() {
                 }
             });
             
-            // Update totals
             const totalViewers = data.streams.reduce((sum, stream) => sum + (stream.viewer_count || 0), 0);
             const activeCount = data.streams.length;
             const recordingCount = data.streams.filter(s => s.is_recording).length;
@@ -1397,6 +1369,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('✅ LiveKit client loaded successfully');
     updateSystemStatus('livekit', true);
+    
+    // Check if recording is already active
+    const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+    if (userActiveStream && userActiveStream.is_recording) {
+        window.streamState.stats.isRecording = true;
+        document.getElementById('recordingIndicator').style.display = 'block';
+        document.getElementById('recordingStatusDisplay').style.display = 'block';
+    }
     
     // Test media permissions
     navigator.mediaDevices.getUserMedia({ audio: true, video: true })
@@ -1428,8 +1408,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateStats, 5000);
     updateStats();
     
-    console.log('✅ Fixed LiveKit Admin Control loaded successfully');
-    showNotification('success', 'Stream control system ready!');
+    console.log('✅ Fixed LiveKit Admin Control with Recording Management loaded successfully');
+    showNotification('success', 'Stream control system ready with recording support!');
 });
 
 // Cleanup on page unload
@@ -1438,106 +1418,6 @@ window.addEventListener('beforeunload', function() {
         window.streamState.room.disconnect();
     }
 });
-
-// ========================================================================
-// FORCE OVERRIDE - This ensures the correct function is always used
-// ========================================================================
-console.log('🔧 Applying LiveKit force override...');
-
-// Wait a bit to ensure all scripts have loaded, then override
-setTimeout(() => {
-    console.log('🔧 Force overriding toggleScreenShare...');
-    
-    window.toggleScreenShare = async function() {
-        if (!window.streamState.isConnected) {
-            showNotification('warning', 'Please wait for connection to complete');
-            return;
-        }
-        
-        const room = window.streamState.room;
-        const isEnabled = window.streamState.publishers.screen;
-        
-        try {
-            updateStatus(isEnabled ? 'Stopping screen share...' : 'Starting screen share...');
-            
-            if (isEnabled) {
-                // Stop screen sharing - Using correct method
-                await room.localParticipant.setScreenShareEnabled(false);
-                
-                if (window.streamState.publishers.camera) {
-                    const cameraTrack = window.streamState.localTracks.camera;
-                    if (cameraTrack) {
-                        showPreview(cameraTrack, 'main');
-                    }
-                } else {
-                    clearPreview('main');
-                }
-                
-                clearPreview('pip');
-                
-                window.streamState.publishers.screen = false;
-                updateScreenShareButton(false);
-                updateMediaCard('screen', false);
-                
-                showNotification('info', 'Screen sharing stopped');
-                
-            } else {
-                // Start screen sharing - Using correct method
-                try {
-                    const publication = await room.localParticipant.setScreenShareEnabled(true);
-                    
-                    if (publication && publication.track) {
-                        if (window.streamState.publishers.camera) {
-                            const cameraTrack = window.streamState.localTracks.camera;
-                            if (cameraTrack) {
-                                showPreview(cameraTrack, 'pip');
-                            }
-                        }
-                        showPreview(publication.track, 'main');
-                        
-                        window.streamState.localTracks.screen = publication.track;
-                        window.streamState.publishers.screen = true;
-                        updateScreenShareButton(true);
-                        updateMediaCard('screen', true, 'Sharing');
-                        
-                        showNotification('success', 'Screen sharing started successfully');
-                    }
-                    
-                } catch (error) {
-                    if (error.name === 'NotAllowedError' || error.message.includes('Permission denied')) {
-                        showNotification('info', 'Screen sharing was cancelled');
-                    } else {
-                        console.error('Screen share error:', error);
-                        showNotification('error', 'Screen sharing error: ' + error.message);
-                    }
-                    
-                    window.streamState.publishers.screen = false;
-                    updateScreenShareButton(false);
-                    updateMediaCard('screen', false);
-                }
-            }
-            
-            updateStatus('Ready');
-            
-        } catch (error) {
-            console.error('❌ Screen share error:', error);
-            
-            if (error.name === 'NotAllowedError') {
-                showNotification('error', 'Screen sharing was denied. Please try again and allow access.');
-            } else {
-                showNotification('error', 'Screen sharing error: ' + error.message);
-            }
-            updateStatus('Screen share error');
-        }
-    };
-    
-    console.log('✅ Force override applied! Function now uses:', 
-        window.toggleScreenShare.toString().includes('setScreenShareEnabled') ? 
-        'setScreenShareEnabled ✅' : 'Unknown method ❌'
-    );
-}, 1000); // Wait 1 second to ensure all scripts have loaded
-
-console.log('⏳ Force override scheduled...');
 </script>
 
 <style>
@@ -1629,7 +1509,7 @@ console.log('⏳ Force override scheduled...');
     backdrop-filter: blur(4px);
 }
 
-#recordingIndicator {
+#recordingIndicator, .pulse {
     animation: pulse 2s infinite;
 }
 
@@ -1667,6 +1547,12 @@ console.log('⏳ Force override scheduled...');
 .spinner-border-sm {
     width: 1rem;
     height: 1rem;
+}
+
+/* Recording Status Styles */
+#recordingStatusDisplay .alert {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.1), rgba(220, 53, 69, 0.2));
+    border: 1px solid rgba(220, 53, 69, 0.3);
 }
 
 /* Mobile responsiveness */
