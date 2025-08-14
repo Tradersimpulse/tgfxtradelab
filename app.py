@@ -2835,6 +2835,7 @@ def stop_livekit_cloud_recording(recording_id):
 @app.route('/api/stream/upload-recording', methods=['POST'])
 @login_required
 def upload_stream_recording():
+    """Handle client-side recording upload to S3"""
     if not current_user.is_admin:
         return jsonify({'error': 'Access denied'}), 403
     
@@ -2846,12 +2847,21 @@ def upload_stream_recording():
         if not video_file:
             return jsonify({'error': 'No video file provided'}), 400
         
-        # Generate S3 key with proper folder structure
+        # Generate S3 key with folder structure
         timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
         s3_key = f"livestream-recordings/{streamer_name}/{streamer_name}-stream-{stream_id}-{timestamp}.webm"
         
+        print(f"📤 Uploading recording to S3: {s3_key}")
+        
+        # Initialize S3 client
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=app.config['AWS_ACCESS_KEY_ID'],
+            aws_secret_access_key=app.config['AWS_SECRET_ACCESS_KEY'],
+            region_name=app.config.get('AWS_REGION', 'us-east-1')
+        )
+        
         # Upload to S3
-        s3_client = init_s3_client()
         s3_client.upload_fileobj(
             video_file,
             app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab'),
@@ -2865,18 +2875,25 @@ def upload_stream_recording():
             }
         )
         
-        # Update stream record
+        s3_url = f"https://{app.config.get('STREAM_RECORDINGS_BUCKET')}.s3.amazonaws.com/{s3_key}"
+        
+        # Update stream record with recording URL
         stream = Stream.query.get(stream_id)
         if stream:
-            stream.recording_url = f"https://{app.config.get('STREAM_RECORDINGS_BUCKET')}.s3.amazonaws.com/{s3_key}"
+            stream.recording_url = s3_url
+            stream.is_recording = False
             db.session.commit()
+        
+        print(f"✅ Recording uploaded successfully: {s3_url}")
         
         return jsonify({
             'success': True,
-            'url': stream.recording_url
+            'url': s3_url,
+            'message': 'Recording saved to S3'
         })
         
     except Exception as e:
+        print(f"❌ Upload error: {e}")
         return jsonify({'error': str(e)}), 500
     
 # Update your existing /api/stream/stop route
