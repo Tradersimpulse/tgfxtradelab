@@ -243,6 +243,11 @@
                     </div>
                 </div>
 
+                <button class="btn btn-outline-info btn-sm" onclick="checkEgressStatus()">
+                    <span class="material-symbols-outlined me-1" style="font-size: 14px;">info</span>
+                    Check Egress
+                </button>
+
                 <!-- Stream Settings -->
                 <div class="mt-3">
                     <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#streamSettings">
@@ -1196,6 +1201,23 @@ function updateMediaCard(type, isActive, status = '') {
             quality.textContent = isActive ? '●' : '';
             quality.className = isActive ? 'quality-indicator active' : 'quality-indicator';
         }
+    }
+}
+
+async function checkEgressStatus() {
+    try {
+        const response = await fetch('/api/admin/check-livekit-egress');
+        const data = await response.json();
+        
+        console.log('LiveKit Egress Status:', data);
+        
+        if (data.success) {
+            alert(`LiveKit Egress Status:\n\nAPI URL: ${data.api_url}\nActive Egresses: ${data.count}\n\nCheck console for details.`);
+        } else {
+            alert(`LiveKit Egress Error:\n\n${data.error}`);
+        }
+    } catch (error) {
+        alert('Error checking egress: ' + error.message);
     }
 }
 
