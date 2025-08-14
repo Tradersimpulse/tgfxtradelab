@@ -976,7 +976,7 @@ if socketio:
 
     @socketio.on('join_stream')
     def handle_join_stream(data):
-        """Enhanced join_stream with recording initialization"""
+        """Handle user joining a stream with automatic admin recording"""
         try:
             client_id = request.sid
             stream_id = data.get('stream_id')
@@ -987,8 +987,9 @@ if socketio:
                 emit('error', {'message': 'Stream ID required'})
                 return
     
-            # Get user info
+            # Get user info from active connections
             user_info = active_connections.get(client_id, {})
+            print(f"📊 User info for {client_id}: {user_info}")
             
             # Verify stream exists and is active
             stream = Stream.query.filter_by(id=stream_id, is_active=True).first()
@@ -998,7 +999,7 @@ if socketio:
     
             room_id = f"stream_{stream_id}"
             
-            # Initialize room if needed
+            # Initialize room if it doesn't exist
             if room_id not in stream_rooms:
                 stream_rooms[room_id] = {
                     'stream_id': stream_id,
@@ -1023,6 +1024,8 @@ if socketio:
             
             is_admin_user = user_info.get('is_admin', False)
             can_stream_user = user_info.get('can_stream', False)
+            
+            # User is stream admin if they own the stream OR are admin with streaming rights
             is_stream_admin = is_stream_owner or (is_admin_user and can_stream_user)
             
             print(f"🔍 Admin check for {client_id}:")
@@ -1037,7 +1040,7 @@ if socketio:
                 emit('admin_joined', {'stream_id': stream_id}, room=room_id)
                 print(f"🎬 Admin joined stream room: {room_id}")
                 
-                # Generate LiveKit token for publisher
+                # Generate LiveKit token for publisher (streamer)
                 participant_identity = f"streamer-{current_user.id}"
                 participant_name = stream.streamer_name or current_user.username
                 
@@ -1048,36 +1051,46 @@ if socketio:
                     is_publisher=True
                 )
                 
-                # Start recording if not already started
-                recording_status = None
-                if not stream.is_recording:
-                    print(f"🔴 Attempting to start recording for admin...")
-                    recording_result = start_livekit_egress_recording(
-                        room_name=stream.room_name,
-                        stream_id=stream_id,
-                        streamer_name=stream.streamer_name
-                    )
+                # START RECORDING AUTOMATICALLY FOR ADMIN
+                # Small delay to ensure room is established
+                import threading
+                def delayed_recording_start():
+                    time.sleep(2)  # Wait 2 seconds for room to be fully established
                     
-                    if recording_result and recording_result.get('success'):
-                        stream.is_recording = True
-                        stream.recording_id = recording_result.get('egress_id')
-                        db.session.commit()
-                        recording_status = {
-                            'is_recording': True,
-                            'egress_id': recording_result.get('egress_id')
-                        }
-                        print(f"✅ Recording started via WebSocket join")
+                    # Only start if not already recording
+                    if not stream.is_recording:
+                        print(f"🔴 Auto-starting recording for admin stream {stream_id}...")
+                        
+                        recording_result = start_livekit_egress_recording(
+                            room_name=stream.room_name,
+                            stream_id=stream_id,
+                            streamer_name=stream.streamer_name
+                        )
+                        
+                        if recording_result and recording_result.get('success'):
+                            stream.is_recording = True
+                            stream.recording_id = recording_result.get('egress_id')
+                            db.session.commit()
+                            
+                            print(f"✅ Recording auto-started for admin!")
+                            print(f"📝 Egress ID: {recording_result.get('egress_id')}")
+                            print(f"📁 S3 Path: {recording_result.get('s3_path')}")
+                            
+                            # Notify all participants that recording has started
+                            socketio.emit('recording_started', {
+                                'stream_id': stream_id,
+                                'message': 'Recording has started',
+                                'egress_id': recording_result.get('egress_id')
+                            }, room=room_id)
+                        else:
+                            print(f"⚠️ Failed to auto-start recording: {recording_result.get('error', 'Unknown error')}")
                     else:
-                        print(f"⚠️ Recording failed to start via WebSocket")
-                        recording_status = {
-                            'is_recording': False,
-                            'error': 'Failed to start recording'
-                        }
-                else:
-                    recording_status = {
-                        'is_recording': True,
-                        'egress_id': stream.recording_id
-                    }
+                        print(f"📹 Recording already active for stream {stream_id}")
+                
+                # Start recording in background thread
+                recording_thread = threading.Thread(target=delayed_recording_start)
+                recording_thread.daemon = True
+                recording_thread.start()
                 
                 emit('admin_status', {
                     'is_admin': True,
@@ -1086,19 +1099,10 @@ if socketio:
                     'livekit_token': livekit_token,
                     'livekit_url': app.config.get('LIVEKIT_URL'),
                     'room_name': stream.room_name,
-                    'participant_identity': participant_identity,
-                    'recording': recording_status
+                    'participant_identity': participant_identity
                 })
-                
-                # Notify room about recording status
-                if recording_status and recording_status.get('is_recording'):
-                    emit('recording_active', {
-                        'stream_id': stream_id,
-                        'message': 'This stream is being recorded'
-                    }, room=room_id)
-                    
             else:
-                # Handle viewer join (existing code)
+                # Handle viewer join
                 if client_id not in stream_rooms[room_id]['viewers']:
                     stream_rooms[room_id]['viewers'].append(client_id)
                 
@@ -1107,8 +1111,9 @@ if socketio:
                     'username': user_info.get('username', 'Anonymous'),
                     'viewer_count': len(stream_rooms[room_id]['viewers'])
                 }, room=room_id)
+                print(f"👥 Viewer joined stream room: {room_id}")
                 
-                # Generate viewer token
+                # Generate LiveKit token for subscriber (viewer)
                 participant_identity = f"viewer-{current_user.id if is_authenticated else 'anon'}-{uuid.uuid4().hex[:8]}"
                 participant_name = user_info.get('username', 'Anonymous')
                 
@@ -1126,11 +1131,10 @@ if socketio:
                     'livekit_token': livekit_token,
                     'livekit_url': app.config.get('LIVEKIT_URL'),
                     'room_name': stream.room_name,
-                    'participant_identity': participant_identity,
-                    'is_recording': stream.is_recording
+                    'participant_identity': participant_identity
                 })
     
-            # Update viewer count
+            # Update database viewer count
             try:
                 stream.viewer_count = len(stream_rooms[room_id]['viewers'])
                 db.session.commit()
@@ -1154,28 +1158,151 @@ if socketio:
             import traceback
             traceback.print_exc()
             emit('error', {'message': 'Failed to join stream'})
-        @socketio.on('audio_chunk')
-        def handle_audio_chunk(data):
-            """Enhanced audio chunk handler - LiveKit handles audio natively"""
-            try:
-                client_id = request.sid
-                stream_id = data.get('stream_id')
+    
+    
+    def start_livekit_egress_recording(room_name, stream_id, streamer_name):
+        """
+        Start LiveKit Egress recording with proper error handling
+        Uses LiveKit Cloud Egress API to record to S3
+        """
+        try:
+            import requests
+            import base64
+            from datetime import datetime
+            
+            # Get credentials from environment
+            livekit_api_key = app.config.get('LIVEKIT_API_KEY')
+            livekit_api_secret = app.config.get('LIVEKIT_API_SECRET')
+            livekit_url = app.config.get('LIVEKIT_URL')
+            
+            # AWS S3 configuration
+            aws_access_key = app.config.get('AWS_ACCESS_KEY_ID')
+            aws_secret_key = app.config.get('AWS_SECRET_ACCESS_KEY')
+            aws_region = app.config.get('AWS_REGION', 'us-east-1')
+            s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+            prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
+            
+            print(f"📹 Starting LiveKit Egress recording")
+            print(f"  Room: {room_name}")
+            print(f"  Streamer: {streamer_name}")
+            print(f"  S3 Bucket: {s3_bucket}")
+            
+            # Validate credentials
+            if not all([livekit_api_key, livekit_api_secret, livekit_url]):
+                print("❌ LiveKit credentials missing")
+                return {'success': False, 'error': 'LiveKit credentials not configured'}
+            
+            if not all([aws_access_key, aws_secret_key, s3_bucket]):
+                print("❌ AWS credentials missing")
+                return {'success': False, 'error': 'AWS credentials not configured'}
+            
+            # Generate S3 path with proper structure
+            timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+            date_folder = datetime.utcnow().strftime('%Y/%m/%d')
+            filename = f"{streamer_name}-stream-{stream_id}-{timestamp}.mp4"
+            s3_key = f"{prefix}{streamer_name}/{date_folder}/{filename}"
+            
+            print(f"📁 Recording will be saved to: s3://{s3_bucket}/{s3_key}")
+            
+            # Extract LiveKit Cloud project from URL
+            # Format: wss://tgfx-trade-lab-lt33xq0x.livekit.cloud
+            if '.livekit.cloud' in livekit_url:
+                # Extract project name from URL
+                project = livekit_url.split('//')[1].split('.')[0]
+                api_url = f"https://{project}.livekit.cloud"
+            else:
+                # Self-hosted LiveKit
+                api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
+            
+            # Create Egress request for Room Composite Recording
+            egress_request = {
+                "room_name": room_name,
+                "layout": "speaker",  # or "grid" for grid layout
+                "audio_only": False,
+                "video_only": False,
+                "file": {
+                    "filepath": s3_key,
+                    "s3": {
+                        "access_key": aws_access_key,
+                        "secret": aws_secret_key,
+                        "region": aws_region,
+                        "bucket": s3_bucket,
+                        "force_path_style": False
+                    }
+                },
+                "preset": "HD_30",  # 720p 30fps
+                "file_outputs": [{
+                    "file_type": "MP4",
+                    "filepath": s3_key,
+                    "s3": {
+                        "access_key": aws_access_key,
+                        "secret": aws_secret_key,
+                        "region": aws_region,
+                        "bucket": s3_bucket
+                    }
+                }]
+            }
+            
+            # Create authentication header
+            auth_string = f"{livekit_api_key}:{livekit_api_secret}"
+            auth_bytes = auth_string.encode('ascii')
+            auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
+            
+            headers = {
+                "Authorization": f"Basic {auth_b64}",
+                "Content-Type": "application/json"
+            }
+            
+            # Make API request to start recording
+            endpoint = f"{api_url}/twirp/livekit.Egress/StartRoomCompositeEgress"
+            
+            print(f"🔗 Calling LiveKit Egress API: {endpoint}")
+            
+            response = requests.post(
+                endpoint,
+                json=egress_request,
+                headers=headers,
+                timeout=10
+            )
+            
+            print(f"📡 LiveKit API Response Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                egress_id = data.get("egress_id")
                 
-                # With LiveKit, audio is handled directly by the SDK
-                # This is mainly for compatibility with existing frontend
-                print(f"🎵 Audio chunk received for stream {stream_id} from {client_id}")
+                print(f"✅ Recording started successfully!")
+                print(f"📝 Egress ID: {egress_id}")
+                print(f"📁 S3 Path: s3://{s3_bucket}/{s3_key}")
                 
-                # You might want to emit this for any custom audio visualizations
-                room_id = f"stream_{stream_id}"
-                if room_id in stream_rooms:
-                    emit('audio_activity', {
-                        'stream_id': stream_id,
-                        'has_audio': True,
-                        'timestamp': time.time()
-                    }, room=room_id, include_self=False)
-                    
-            except Exception as e:
-                print(f"❌ Enhanced audio chunk handler error: {e}")
+                return {
+                    'success': True,
+                    'egress_id': egress_id,
+                    's3_path': f"s3://{s3_bucket}/{s3_key}",
+                    's3_url': f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}",
+                    'status': 'recording'
+                }
+            else:
+                error_msg = f"API returned {response.status_code}: {response.text}"
+                print(f"❌ LiveKit Egress API error: {error_msg}")
+                return {
+                    'success': False,
+                    'error': error_msg
+                }
+                
+        except requests.exceptions.Timeout:
+            print("❌ LiveKit API request timed out")
+            return {'success': False, 'error': 'API request timed out'}
+            
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Request error: {e}")
+            return {'success': False, 'error': f'Request failed: {str(e)}'}
+            
+        except Exception as e:
+            print(f"❌ Unexpected error starting recording: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'error': str(e)}
 
     @socketio.on('screen_frame')
     def handle_screen_frame(data):
@@ -1529,7 +1656,6 @@ def stop_livekit_egress_recording(egress_id):
     except Exception as e:
         print(f"❌ Error stopping recording: {e}")
         return {'success': False, 'error': str(e)}
-
 
     # Utility function for debugging
     @socketio.on('debug_info')
@@ -3250,26 +3376,31 @@ def api_stop_stream():
     if not stream:
         return jsonify({'error': 'No active stream found or access denied'}), 400
     
-    # IMPORTANT: Notify all viewers BEFORE stopping the stream
+    # Stop recording if active
+    if stream.is_recording and stream.recording_id:
+        print(f"⏹️ Stopping recording {stream.recording_id}...")
+        stop_result = stop_livekit_egress_recording(stream.recording_id)
+        if stop_result.get('success'):
+            print(f"✅ Recording stopped successfully")
+        else:
+            print(f"⚠️ Failed to stop recording: {stop_result.get('error')}")
+    
+    # Notify all viewers BEFORE stopping the stream
     room_id = f"stream_{stream.id}"
     if socketio and room_id in stream_rooms:
-        # Send multiple notifications to ensure viewers receive them
         socketio.emit('stream_ending', {
             'stream_id': stream.id,
             'message': 'Stream is ending in 3 seconds...'
         }, room=room_id)
         
-        # Wait a moment
         time.sleep(1)
         
-        # Send final notification
         socketio.emit('stream_ended', {
             'stream_id': stream.id,
             'message': f'{stream.streamer_name} has ended the stream',
-            'redirect': True  # Tell viewers to redirect
+            'redirect': True
         }, room=room_id)
         
-        # Clean up room
         if room_id in stream_rooms:
             del stream_rooms[room_id]
     
@@ -3279,6 +3410,7 @@ def api_stop_stream():
     
     # Update database
     stream.is_active = False
+    stream.is_recording = False
     stream.ended_at = datetime.utcnow()
     
     # Update all viewer records
