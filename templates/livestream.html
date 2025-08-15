@@ -407,7 +407,17 @@
 // FIXED LIVEKIT INTEGRATION FOR VIEWERS
 // Using correct LiveKit v2.x API methods
 
-console.log('🚀 Loading Fixed LiveKit Viewer Integration...');
+// Production mode flag - set to true to reduce console logging
+const IS_PRODUCTION = true;
+
+// Helper function for conditional logging
+function debugLog(...args) {
+    if (!IS_PRODUCTION) {
+        console.log(...args);
+    }
+}
+
+debugLog('🚀 Loading Fixed LiveKit Viewer Integration...');
 
 // Global Configuration
 window.StreamViewerConfig = {
@@ -449,7 +459,7 @@ window.StreamViewerConfig.activeStreams.forEach(stream => {
     });
 });
 
-console.log('📊 Loaded', window.StreamViewerConfig.activeStreams.length, 'active streams');
+debugLog('📊 Loaded', window.StreamViewerConfig.activeStreams.length, 'active streams');
 
 // Enhanced WebSocket Manager with Heartbeat Monitoring
 window.StreamCoordinator = {
@@ -458,10 +468,10 @@ window.StreamCoordinator = {
     reconnectAttempts: 0,
     maxReconnectAttempts: 3,
     heartbeatInterval: null,
-    streamStatusCheckInterval: null, // NEW: For monitoring stream status
+    streamStatusCheckInterval: null,
     
     init() {
-        console.log('📌 Initializing Stream Coordinator...');
+        debugLog('📌 Initializing Stream Coordinator...');
         
         this.socket = io({
             transports: ['websocket', 'polling'],
@@ -474,55 +484,53 @@ window.StreamCoordinator = {
         
         this.setupEventHandlers();
         this.startHeartbeat();
-        this.startStreamStatusMonitoring(); // NEW: Start monitoring stream status
+        this.startStreamStatusMonitoring();
     },
     
     setupEventHandlers() {
-        // Connection events
         this.socket.on('connect', () => {
-            console.log('✅ Stream coordinator connected');
+            debugLog('✅ Stream coordinator connected');
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.updateConnectionStatus(true);
         });
         
         this.socket.on('disconnect', (reason) => {
-            console.log('❌ Stream coordinator disconnected:', reason);
+            debugLog('❌ Stream coordinator disconnected:', reason);
             this.isConnected = false;
             this.updateConnectionStatus(false);
         });
         
         this.socket.on('connect_error', (error) => {
-            console.warn('⚠️ Connection error:', error.message);
+            if (!IS_PRODUCTION) {
+                console.warn('⚠️ Connection error:', error.message);
+            }
             this.handleConnectionError();
         });
         
-        // Viewer events
         this.socket.on('viewer_joined', (data) => {
-            console.log('👥 Viewer joined stream:', data.stream_id);
+            debugLog('👥 Viewer joined stream:', data.stream_id);
             this.updateViewerCount(data.stream_id, data.viewer_count);
         });
         
         this.socket.on('viewer_left', (data) => {
-            console.log('👋 Viewer left stream:', data.stream_id);
+            debugLog('👋 Viewer left stream:', data.stream_id);
             this.updateViewerCount(data.stream_id, data.viewer_count);
         });
         
-        // Stream update events
         this.socket.on('stream_update', (data) => {
-            console.log('📡 Stream update:', data);
+            debugLog('📡 Stream update:', data);
             this.handleStreamUpdate(data);
         });
         
         this.socket.on('new_stream_started', (data) => {
-            console.log('🎬 New stream started:', data);
+            debugLog('🎬 New stream started:', data);
             showNotification('success', `🎬 ${data.streamer_name} just went live!`, 6000);
             setTimeout(() => this.refreshStreamList(), 2000);
         });
         
-        // NEW: Handle admin ending stream warning
         this.socket.on('admin_ending_stream', (data) => {
-            console.log('🔴 Admin is ending stream:', data);
+            debugLog('🔴 Admin is ending stream:', data);
             showNotification('warning', '⚠️ ' + (data.message || 'Stream is ending...'), 2000);
             
             const streamId = data.stream_id;
@@ -538,9 +546,8 @@ window.StreamCoordinator = {
             }
         });
         
-        // Stream ending warning
         this.socket.on('stream_ending', (data) => {
-            console.log('⚠️ Stream ending soon:', data);
+            debugLog('⚠️ Stream ending soon:', data);
             showNotification('warning', '⚠️ ' + data.message, 3000);
             
             const streamId = data.stream_id;
@@ -553,7 +560,6 @@ window.StreamCoordinator = {
                 audioElement.muted = true;
             }
             
-            // Update connection badge to show ending
             const statusBadge = document.getElementById(`connectionBadge-${streamId}`);
             if (statusBadge) {
                 statusBadge.className = 'badge badge-connection bg-warning';
@@ -561,21 +567,21 @@ window.StreamCoordinator = {
             }
         });
         
-        // Stream ended event
         this.socket.on('stream_ended', (data) => {
-            console.log('📺 Stream ended:', data);
+            debugLog('📺 Stream ended:', data);
             showNotification('info', `📺 ${data.message}`, 4000);
             
             const streamId = data.stream_id;
             
-            // Force disconnect if joined
             if (window.StreamViewerConfig.joinedStreams.has(streamId)) {
                 const room = window.StreamViewerConfig.roomConnections.get(streamId);
                 if (room) {
                     try {
                         room.disconnect();
                     } catch (e) {
-                        console.warn('Error disconnecting:', e);
+                        if (!IS_PRODUCTION) {
+                            console.warn('Error disconnecting:', e);
+                        }
                     }
                 }
                 
@@ -584,9 +590,8 @@ window.StreamCoordinator = {
                 
                 this.handleStreamEnd(streamId);
             } else {
-                // Even if not joined, refresh to show updated stream list
                 setTimeout(() => {
-                    console.log('🔄 Refreshing to show updated stream list...');
+                    debugLog('🔄 Refreshing to show updated stream list...');
                     window.location.reload();
                 }, 2000);
             }
@@ -606,153 +611,127 @@ window.StreamCoordinator = {
         }, 30000);
     },
     
-    // NEW: Stream status monitoring with heartbeat
     startStreamStatusMonitoring() {
-    console.log('💓 Starting stream status monitoring...');
-    
-    // Track failed checks to avoid false positives
-    const failedChecks = new Map();
-    
-    // Check stream status every 5 seconds
-    this.streamStatusCheckInterval = setInterval(async () => {
-        // Only check if we have joined streams
-        if (!window.StreamViewerConfig || window.StreamViewerConfig.joinedStreams.size === 0) {
-            return;
-        }
+        debugLog('💓 Starting stream status monitoring...');
         
-        try {
-            const response = await fetch('/api/stream/status');
-            if (!response.ok) {
-                console.warn('Stream status check failed:', response.status);
+        const failedChecks = new Map();
+        
+        this.streamStatusCheckInterval = setInterval(async () => {
+            if (!window.StreamViewerConfig || window.StreamViewerConfig.joinedStreams.size === 0) {
                 return;
             }
             
-            const data = await response.json();
-            console.log('📊 Stream status check:', {
-                active: data.active,
-                streamCount: data.streams ? data.streams.length : 0,
-                streams: data.streams
-            });
-            
-            // Check each joined stream
-            window.StreamViewerConfig.joinedStreams.forEach(joinedStreamId => {
-                // Convert to number for comparison (or use == instead of ===)
-                const streamId = parseInt(joinedStreamId);
-                
-                const streamStillActive = data.active && 
-                    data.streams && 
-                    data.streams.some(s => {
-                        // Use loose equality to handle string/number mismatch
-                        return s.id == streamId || s.id == joinedStreamId;
-                    });
-                
-                if (!streamStillActive) {
-                    // Increment failed check counter
-                    const currentFailCount = failedChecks.get(streamId) || 0;
-                    failedChecks.set(streamId, currentFailCount + 1);
-                    
-                    console.log(`⚠️ Stream ${streamId} not found in active streams (attempt ${currentFailCount + 1}/3)`);
-                    
-                    // Only treat as inactive after 3 consecutive failed checks (15 seconds)
-                    if (failedChecks.get(streamId) >= 3) {
-                        console.log('🔴 Stream confirmed inactive after 3 checks:', streamId);
-                        this.handleInactiveStream(joinedStreamId);
-                        failedChecks.delete(streamId);
+            try {
+                const response = await fetch('/api/stream/status');
+                if (!response.ok) {
+                    if (!IS_PRODUCTION && response.status !== 200) {
+                        console.warn('Stream status check failed:', response.status);
                     }
-                } else {
-                    // Stream is active, reset failed check counter
-                    if (failedChecks.has(streamId)) {
-                        console.log(`✅ Stream ${streamId} confirmed active again`);
-                        failedChecks.delete(streamId);
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                window.StreamViewerConfig.joinedStreams.forEach(joinedStreamId => {
+                    const streamId = parseInt(joinedStreamId);
+                    
+                    const streamStillActive = data.active && 
+                        data.streams && 
+                        data.streams.some(s => {
+                            return s.id == streamId || s.id == joinedStreamId;
+                        });
+                    
+                    if (!streamStillActive) {
+                        const currentFailCount = failedChecks.get(streamId) || 0;
+                        failedChecks.set(streamId, currentFailCount + 1);
+                        
+                        if (failedChecks.get(streamId) >= 3) {
+                            debugLog('🔴 Stream confirmed inactive after 3 checks:', streamId);
+                            this.handleInactiveStream(joinedStreamId);
+                            failedChecks.delete(streamId);
+                        }
+                    } else {
+                        if (failedChecks.has(streamId)) {
+                            failedChecks.delete(streamId);
+                        }
+                    }
+                });
+                
+                const hasActiveStreams = data.active && data.streams && data.streams.length > 0;
+                if (!hasActiveStreams && window.StreamViewerConfig.joinedStreams.size === 0) {
+                    const streamsContainer = document.getElementById('streamsContainer');
+                    if (streamsContainer) {
+                        this.handleNoActiveStreams();
                     }
                 }
-            });
-            
-            // Don't auto-refresh if at least one stream is still active
-            const hasActiveStreams = data.active && data.streams && data.streams.length > 0;
-            if (!hasActiveStreams && window.StreamViewerConfig.joinedStreams.size === 0) {
-                console.log('📺 No active streams and not joined to any, considering refresh...');
-                // Only refresh if we're on the streams page and expecting streams
-                const streamsContainer = document.getElementById('streamsContainer');
-                if (streamsContainer) {
-                    console.log('📺 No active streams found, refreshing page...');
-                    this.handleNoActiveStreams();
+                
+            } catch (error) {
+                if (!IS_PRODUCTION && error.message && !error.message.includes('timeout')) {
+                    console.error('Error checking stream status:', error);
                 }
             }
-            
-        } catch (error) {
-            console.error('Error checking stream status:', error);
-            // Don't treat network errors as stream ending
-        }
-    }, 5000); // Check every 5 seconds
-},
+        }, 5000);
+    },
     
-    // NEW: Handle inactive stream
     handleInactiveStream(streamId) {
-        console.log('🔴 Handling inactive stream:', streamId);
+        debugLog('🔴 Handling inactive stream:', streamId);
         
-        // Disconnect from LiveKit room immediately
         const room = window.StreamViewerConfig.roomConnections.get(streamId);
         if (room) {
             try {
                 room.removeAllListeners();
                 room.disconnect();
-                console.log('✅ Disconnected from inactive stream');
+                debugLog('✅ Disconnected from inactive stream');
             } catch (e) {
-                console.warn('Error disconnecting:', e);
+                if (!IS_PRODUCTION) {
+                    console.warn('Error disconnecting:', e);
+                }
             }
         }
         
-        // Clean up
         window.StreamViewerConfig.roomConnections.delete(streamId);
         window.StreamViewerConfig.joinedStreams.delete(streamId);
         
-        // Show stream ended message
         this.showStreamEndedState(streamId);
         
-        // Refresh after showing message
         setTimeout(() => {
-            console.log('🔄 Refreshing page to show current state...');
+            debugLog('🔄 Refreshing page to show current state...');
             window.location.reload();
         }, 2000);
     },
     
-    // NEW: Handle when no streams are active
     handleNoActiveStreams() {
-        console.log('📺 No active streams detected, cleaning up...');
+        debugLog('📺 No active streams detected, cleaning up...');
         
-        // Disconnect all connections
         if (window.StreamViewerConfig) {
             window.StreamViewerConfig.roomConnections.forEach((room, streamId) => {
                 try {
                     room.removeAllListeners();
                     room.disconnect();
-                    console.log(`✅ Disconnected from stream ${streamId}`);
+                    debugLog(`✅ Disconnected from stream ${streamId}`);
                 } catch (e) {
-                    console.warn('Error disconnecting:', e);
+                    if (!IS_PRODUCTION) {
+                        console.warn('Error disconnecting:', e);
+                    }
                 }
             });
             
-            // Clear all connections
             window.StreamViewerConfig.roomConnections.clear();
             window.StreamViewerConfig.joinedStreams.clear();
         }
         
-        // Show notification
         showNotification('info', 'All streams have ended', 3000);
         
-        // Refresh to show "No Live Streams" page
         setTimeout(() => {
             window.location.reload();
         }, 1500);
     },
     
-    // NEW: Stop monitoring
     stopStreamStatusMonitoring() {
         if (this.streamStatusCheckInterval) {
             clearInterval(this.streamStatusCheckInterval);
             this.streamStatusCheckInterval = null;
-            console.log('💔 Stopped stream status monitoring');
+            debugLog('💔 Stopped stream status monitoring');
         }
     },
     
@@ -820,29 +799,27 @@ window.StreamCoordinator = {
     },
     
     handleStreamEnd(streamId) {
-        console.log('📺 Handling stream end for:', streamId);
+        debugLog('📺 Handling stream end for:', streamId);
         
-        // Disconnect from LiveKit room
         const room = window.StreamViewerConfig.roomConnections.get(streamId);
         if (room) {
             try {
                 room.removeAllListeners();
                 room.disconnect();
             } catch (e) {
-                console.warn('Error disconnecting room:', e);
+                if (!IS_PRODUCTION) {
+                    console.warn('Error disconnecting room:', e);
+                }
             }
             window.StreamViewerConfig.roomConnections.delete(streamId);
         }
         
-        // Clean up state
         window.StreamViewerConfig.joinedStreams.delete(streamId);
         
-        // Show temporary message then refresh
         this.showStreamEndedState(streamId);
         
-        // Auto-refresh after 3 seconds to show "No Live Streams" page
         setTimeout(() => {
-            console.log('🔄 Auto-refreshing to show current stream status...');
+            debugLog('🔄 Auto-refreshing to show current stream status...');
             window.location.reload();
         }, 3000);
     },
@@ -873,10 +850,10 @@ window.StreamCoordinator = {
     handleConnectionError() {
         this.reconnectAttempts++;
         if (this.reconnectAttempts <= this.maxReconnectAttempts) {
-            console.log(`🔄 Reconnection attempt ${this.reconnectAttempts}`);
+            debugLog(`🔄 Reconnection attempt ${this.reconnectAttempts}`);
             setTimeout(() => this.socket.connect(), 2000 * this.reconnectAttempts);
         } else {
-            console.log('❌ Max reconnection attempts reached');
+            debugLog('❌ Max reconnection attempts reached');
             showNotification('error', 'Connection lost. Please refresh the page.', 8000);
         }
     },
@@ -889,27 +866,22 @@ window.StreamCoordinator = {
     },
     
     updateRecordingStatus(streamId, isRecording) {
-        // Update recording indicator if needed
         const recordingIndicator = document.getElementById(`recordingIndicator-${streamId}`);
         if (recordingIndicator) {
             recordingIndicator.style.display = isRecording ? 'inline-block' : 'none';
         }
     },
     
-    // NEW: Clean up everything on destroy
     destroy() {
-        console.log('🧹 Destroying Stream Coordinator...');
+        debugLog('🧹 Destroying Stream Coordinator...');
         
-        // Stop monitoring
         this.stopStreamStatusMonitoring();
         
-        // Clear heartbeat
         if (this.heartbeatInterval) {
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
         }
         
-        // Disconnect socket
         if (this.socket) {
             this.socket.disconnect();
             this.socket = null;
@@ -918,12 +890,11 @@ window.StreamCoordinator = {
         this.isConnected = false;
     }
 };
-    
+
 // Main join stream function
 window.joinStreamFixed = async function(streamId) {
-    console.log('🎬 Joining stream:', streamId);
+    debugLog('🎬 Joining stream:', streamId);
     
-    // Clean up UI first
     const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
     if (loadingStateEl) {
         loadingStateEl.style.display = 'none';
@@ -936,7 +907,6 @@ window.joinStreamFixed = async function(streamId) {
                 el.style.display = 'none';
             }
         });
-        // Remove any error overlays
         container.querySelectorAll('*').forEach(el => {
             if (el.textContent && (el.textContent.includes('Connection Issue') || 
                 el.textContent.includes('Unable to connect'))) {
@@ -968,7 +938,7 @@ window.joinStreamFixed = async function(streamId) {
         
         showConnectingAnimation(streamId, streamData.streamer_name);
         
-        console.log('📊 Connecting with:', {
+        debugLog('📊 Connecting with:', {
             streamId,
             roomName: tokenData.room_name,
             participantIdentity: tokenData.participant_identity,
@@ -979,7 +949,7 @@ window.joinStreamFixed = async function(streamId) {
             adaptiveStream: true,
             dynacast: true,
             videoCaptureDefaults: {
-                resolution: { width: 1920, height: 1080 }, // Request 1080p
+                resolution: { width: 1920, height: 1080 },
                 facingMode: 'user'
             },
             audioCaptureDefaults: {
@@ -987,13 +957,12 @@ window.joinStreamFixed = async function(streamId) {
                 echoCancellation: true,
                 noiseSuppression: true
             },
-            // Request higher quality video
             videoCodec: 'h264',
             preferredCodec: 'h264'
         });
         
         room.on(window.LiveKitClient.RoomEvent.Connected, () => {
-            console.log('✅ Connected to stream:', streamId);
+            debugLog('✅ Connected to stream:', streamId);
             
             removeConnectingAnimation(streamId);
             
@@ -1026,18 +995,18 @@ window.joinStreamFixed = async function(streamId) {
         });
         
         room.on(window.LiveKitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-            console.log('📺 Track subscribed:', track.kind, 'from', participant.identity);
+            debugLog('📺 Track subscribed:', track.kind, 'from', participant.identity);
             handleTrackSubscription(streamId, track, publication, participant);
         });
         
         room.on(window.LiveKitClient.RoomEvent.Disconnected, (reason) => {
-            console.log('👋 Disconnected from stream:', streamId, reason);
+            debugLog('👋 Disconnected from stream:', streamId, reason);
             handleStreamDisconnection(streamId, reason);
             updateHeaderButtonToJoin(streamId);
         });
         
         await room.connect(livekitUrl, tokenData.token);
-        console.log('✅ Successfully joined stream:', streamId);
+        debugLog('✅ Successfully joined stream:', streamId);
         
     } catch (error) {
         console.error('❌ Failed to join stream:', error);
@@ -1064,7 +1033,7 @@ function handleTrackSubscription(streamId, track, publication, participant) {
     container.style.cssText = 'display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;';
     
     if (track.kind === 'video') {
-        console.log('📹 Adding video track');
+        debugLog('📹 Adding video track');
         
         const videoElement = track.attach();
         videoElement.id = `video-${streamId}`;
@@ -1074,7 +1043,7 @@ function handleTrackSubscription(streamId, track, publication, participant) {
         container.appendChild(videoElement);
         
         videoElement.addEventListener('loadeddata', () => {
-            console.log('✅ Video loaded');
+            debugLog('✅ Video loaded');
             removeConnectingAnimation(streamId);
             const loadingStateEl = document.getElementById(`loadingState-${streamId}`);
             if (loadingStateEl) {
@@ -1083,12 +1052,12 @@ function handleTrackSubscription(streamId, track, publication, participant) {
         });
         
         videoElement.play().catch(e => {
-            console.log('Autoplay blocked, adding play button');
+            debugLog('Autoplay blocked, adding play button');
             addPlayButton(streamId, videoElement);
         });
         
     } else if (track.kind === 'audio') {
-        console.log('🔊 Adding audio track');
+        debugLog('🔊 Adding audio track');
         
         const audioElement = track.attach();
         audioElement.id = `audio-${streamId}`;
@@ -1099,20 +1068,20 @@ function handleTrackSubscription(streamId, track, publication, participant) {
         container.appendChild(audioElement);
         
         audioElement.play().then(() => {
-            console.log('✅ Audio playing');
+            debugLog('✅ Audio playing');
             showAudioIndicator(streamId, true);
         }).catch(e => {
-            console.log('Audio will play on interaction');
+            debugLog('Audio will play on interaction');
         });
     }
 }
 
 // Leave stream
 window.leaveStream = function(streamId) {
-    console.log('👋 Leaving stream:', streamId);
+    debugLog('👋 Leaving stream:', streamId);
     
     if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
-        console.log('Not connected to this stream');
+        debugLog('Not connected to this stream');
         return;
     }
     
@@ -1149,13 +1118,11 @@ window.leaveStream = function(streamId) {
     
     updateHeaderButtonToJoin(streamId);
     showNotification('info', 'Left stream successfully');
-    console.log('✅ Successfully left stream:', streamId);
+    debugLog('✅ Successfully left stream:', streamId);
 };
 
-// Toggle audio
-w// Toggle audio - FIXED VERSION
+// Toggle audio - FIXED VERSION
 window.toggleStreamAudio = function(streamId) {
-    // Check if stream is joined first
     if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
         showNotification('warning', 'Please join the stream first');
         return;
@@ -1165,7 +1132,6 @@ window.toggleStreamAudio = function(streamId) {
     const audioState = window.StreamViewerConfig.audioStates.get(streamId);
     
     if (!audioElement || !audioState) {
-        // Silently return instead of logging
         return;
     }
     
@@ -1177,6 +1143,7 @@ window.toggleStreamAudio = function(streamId) {
     
     const message = newAudioEnabled ? 'Audio unmuted' : 'Audio muted';
     showNotification('info', message);
+};
 
 // Toggle fullscreen
 window.toggleFullscreen = function(streamId) {
@@ -1203,7 +1170,7 @@ window.toggleFullscreen = function(streamId) {
 
 // Retry connection
 window.retryConnection = function(streamId) {
-    console.log('🔄 Retrying connection for stream:', streamId);
+    debugLog('🔄 Retrying connection for stream:', streamId);
     
     const container = document.getElementById(`videoContainer-${streamId}`);
     if (container) {
@@ -1221,7 +1188,9 @@ window.retryConnection = function(streamId) {
         try {
             existingRoom.disconnect();
         } catch (e) {
-            console.warn('Error disconnecting:', e);
+            if (!IS_PRODUCTION) {
+                console.warn('Error disconnecting:', e);
+            }
         }
         window.StreamViewerConfig.roomConnections.delete(streamId);
     }
@@ -1445,7 +1414,7 @@ function addPlayButton(streamId, videoElement) {
     playButton.onclick = () => {
         videoElement.play().then(() => {
             playButton.remove();
-            console.log('✅ Video started');
+            debugLog('✅ Video started');
         });
         
         const audioElement = document.getElementById(`audio-${streamId}`);
@@ -1453,7 +1422,7 @@ function addPlayButton(streamId, videoElement) {
             audioElement.muted = false;
             audioElement.volume = 1.0;
             audioElement.play().then(() => {
-                console.log('✅ Audio started');
+                debugLog('✅ Audio started');
             });
         }
     };
@@ -1517,7 +1486,7 @@ function handleStreamDisconnection(streamId, reason) {
     }
     
     showNotification('info', message);
-    console.log('Stream disconnected:', streamId, reason);
+    debugLog('Stream disconnected:', streamId, reason);
 }
 
 function showNotification(type, message, duration = 4000) {
@@ -1563,7 +1532,7 @@ function showNotification(type, message, duration = 4000) {
     }, duration);
 }
 
-// Audio visualization
+// Audio visualization functions
 function startAudioVisualization(streamId) {
     const visualizer = document.getElementById(`audioVisualizer-${streamId}`);
     if (!visualizer) return;
@@ -1658,27 +1627,29 @@ window.enableNotifications = function() {
 };
 
 window.debugStreamInfo = function(streamId) {
-    console.log('=== 🔍 STREAM DEBUG INFO ===');
-    console.log('Stream ID:', streamId);
-    console.log('Stream Config:', window.StreamViewerConfig);
-    console.log('Stream State:', window.StreamViewerConfig.streamStates.get(streamId));
-    console.log('Audio State:', window.StreamViewerConfig.audioStates.get(streamId));
-    console.log('Room Connection:', window.StreamViewerConfig.roomConnections.get(streamId));
-    console.log('WebSocket Connected:', window.StreamCoordinator.isConnected);
-    console.log('LiveKit Available:', typeof window.LiveKitClient !== 'undefined');
-    
-    const room = window.StreamViewerConfig.roomConnections.get(streamId);
-    if (room) {
-        console.log('Room State:', room.state);
-        console.log('Participants:', room.participants.size);
-        console.log('Remote Participants:', room.remoteParticipants.size);
+    if (!IS_PRODUCTION) {
+        console.log('=== 🔍 STREAM DEBUG INFO ===');
+        console.log('Stream ID:', streamId);
+        console.log('Stream Config:', window.StreamViewerConfig);
+        console.log('Stream State:', window.StreamViewerConfig.streamStates.get(streamId));
+        console.log('Audio State:', window.StreamViewerConfig.audioStates.get(streamId));
+        console.log('Room Connection:', window.StreamViewerConfig.roomConnections.get(streamId));
+        console.log('WebSocket Connected:', window.StreamCoordinator.isConnected);
+        console.log('LiveKit Available:', typeof window.LiveKitClient !== 'undefined');
+        
+        const room = window.StreamViewerConfig.roomConnections.get(streamId);
+        if (room) {
+            console.log('Room State:', room.state);
+            console.log('Participants:', room.participants.size);
+            console.log('Remote Participants:', room.remoteParticipants.size);
+        }
     }
     
     showNotification('info', '🔍 Debug information logged to console (Press F12)');
 };
 
 window.testConnectionSystem = async function() {
-    console.log('🔧 Testing connection system...');
+    debugLog('🔧 Testing connection system...');
     
     const results = {
         livekitClient: typeof window.LiveKitClient !== 'undefined',
@@ -1689,7 +1660,7 @@ window.testConnectionSystem = async function() {
         notificationPermission: 'Notification' in window ? Notification.permission : 'not supported'
     };
     
-    console.log('🔧 Connection test results:', results);
+    debugLog('🔧 Connection test results:', results);
     
     const allGood = results.livekitClient && results.webSocket && results.livekitUrl;
     const message = allGood ? 
@@ -1727,7 +1698,9 @@ async function updateStreamStatistics() {
             }
         }
     } catch (error) {
-        console.error('Error updating stream statistics:', error);
+        if (!IS_PRODUCTION) {
+            console.error('Error updating stream statistics:', error);
+        }
     }
 }
 
@@ -1738,7 +1711,7 @@ window.setupConnectionMonitoring = function() {
     function checkConnections() {
         window.StreamViewerConfig.roomConnections.forEach((room, streamId) => {
             if (room.state === 'disconnected' || room.state === 'reconnecting') {
-                console.log('🔄 Auto-recovery for stream:', streamId);
+                debugLog('🔄 Auto-recovery for stream:', streamId);
                 retryConnection(streamId);
             }
         });
@@ -1755,8 +1728,8 @@ window.setupConnectionMonitoring = function() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📱 Fixed LiveKit Viewer Integration Loading...');
-    console.log(`📊 Configured for ${window.StreamViewerConfig.activeStreams.length} active streams`);
+    debugLog('📱 Fixed LiveKit Viewer Integration Loading...');
+    debugLog(`📊 Configured for ${window.StreamViewerConfig.activeStreams.length} active streams`);
     
     if (typeof window.LiveKitClient === 'undefined') {
         console.error('❌ LiveKit client not loaded');
@@ -1764,14 +1737,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    console.log('✅ LiveKit client loaded successfully');
+    debugLog('✅ LiveKit client loaded successfully');
     
-    // Initialize header buttons for all streams
     window.StreamViewerConfig.activeStreams.forEach(stream => {
         addJoinStreamButtonToHeader(stream.id);
     });
     
-    // Hide the big join buttons in loading overlays
     window.StreamViewerConfig.activeStreams.forEach(stream => {
         const loadingState = document.getElementById(`loadingState-${stream.id}`);
         if (loadingState && !window.StreamViewerConfig.joinedStreams.has(stream.id)) {
@@ -1792,7 +1763,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Remove any lingering error overlays
     document.querySelectorAll('.stream-video-container').forEach(container => {
         container.querySelectorAll('*').forEach(el => {
             if (el.textContent && (el.textContent.includes('Connection Issue') || 
@@ -1802,17 +1772,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Initialize stream coordinator
     window.StreamCoordinator.init();
-    
-    // Set up connection monitoring
     setupConnectionMonitoring();
     
-    // Start periodic updates
     setInterval(updateStreamStatistics, 10000);
     updateStreamStatistics();
     
-    console.log('✅ Fixed LiveKit integration ready!');
+    debugLog('✅ Fixed LiveKit integration ready!');
     showNotification('success', '🚀 Streaming system ready!', 3000);
 });
 
@@ -1833,34 +1799,32 @@ document.addEventListener('visibilitychange', () => {
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
-    console.log('🧹 Cleaning up connections before page unload...');
+    debugLog('🧹 Cleaning up connections before page unload...');
     
-    // Force disconnect all rooms immediately
     window.StreamViewerConfig.roomConnections.forEach((room, streamId) => {
         try {
             room.disconnect();
-            console.log(`✅ Disconnected from stream ${streamId}`);
+            debugLog(`✅ Disconnected from stream ${streamId}`);
         } catch (error) {
-            console.error('Error disconnecting room:', streamId, error);
+            if (!IS_PRODUCTION) {
+                console.error('Error disconnecting room:', streamId, error);
+            }
         }
     });
     
-    // Clear all connections
     window.StreamViewerConfig.roomConnections.clear();
     window.StreamViewerConfig.joinedStreams.clear();
     
-    // Disconnect socket
     if (window.StreamCoordinator.socket) {
         window.StreamCoordinator.socket.disconnect();
     }
     
-    // Clear intervals
     if (window.StreamCoordinator.heartbeatInterval) {
         clearInterval(window.StreamCoordinator.heartbeatInterval);
     }
 });
 
-console.log('💡 Fixed LiveKit viewer integration loaded successfully!');
+debugLog('💡 Fixed LiveKit viewer integration loaded successfully!');
 </script>
 
 <style>
