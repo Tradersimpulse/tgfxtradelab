@@ -835,6 +835,53 @@ window.toggleCamera = async function() {
         updateStatus('Camera error');
     }
 };
+
+window.toggleMicrophone = async function() {
+    if (!window.streamState.isConnected) {
+        showNotification('warning', 'Please wait for connection to complete');
+        return;
+    }
+    
+    const room = window.streamState.room;
+    const isEnabled = window.streamState.publishers.microphone;
+    
+    try {
+        updateStatus(isEnabled ? 'Muting microphone...' : 'Starting microphone...');
+        
+        if (isEnabled) {
+            // Turn off microphone
+            await room.localParticipant.setMicrophoneEnabled(false);
+            window.streamState.publishers.microphone = false;
+            updateMicrophoneButton(false);
+            updateMediaCard('mic', false);
+            showNotification('info', 'Microphone muted');
+        } else {
+            // Turn on microphone
+            const publication = await room.localParticipant.setMicrophoneEnabled(true);
+            if (publication) {
+                window.streamState.localTracks.microphone = publication.track;
+            }
+            window.streamState.publishers.microphone = true;
+            updateMicrophoneButton(true);
+            updateMediaCard('mic', true, 'Broadcasting');
+            showNotification('success', 'Microphone started successfully');
+            
+            // Notify server that media is now being published
+            notifyMediaPublished();
+        }
+        
+        updateStatus('Ready');
+    } catch (error) {
+        console.error('❌ Microphone error:', error);
+        if (error.name === 'NotAllowedError') {
+            showNotification('error', 'Microphone access denied. Please check your browser permissions.');
+        } else {
+            showNotification('error', 'Microphone error: ' + error.message);
+        }
+        updateStatus('Microphone error');
+    }
+};
+    
 window.toggleScreenShare = async function() {
     if (!window.streamState.isConnected) {
         showNotification('warning', 'Please wait for connection to complete');
