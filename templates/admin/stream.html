@@ -785,7 +785,7 @@ window.toggleCamera = async function() {
     const isEnabled = window.streamState.publishers.camera;
     
     try {
-        updateStatus(isEnabled ? 'Turning off camera...' : 'Starting camera in 1080p...');
+        updateStatus(isEnabled ? 'Turning off camera...' : 'Starting camera...');
         
         if (isEnabled) {
             // Turn off camera
@@ -796,11 +796,16 @@ window.toggleCamera = async function() {
             updateMediaCard('camera', false);
             showNotification('info', 'Camera turned off');
         } else {
-            // Turn on camera with 1080p settings
+            // Get quality settings
+            const resolution = getVideoResolution();
+            const qualityText = window.streamState.settings.videoQuality === '1080p' ? 'Full HD' :
+                              window.streamState.settings.videoQuality === '720p' ? 'HD' : 'SD';
+            
+            // Turn on camera with quality settings
             const publication = await room.localParticipant.setCameraEnabled(true, {
                 resolution: {
-                    width: 1920,
-                    height: 1080,
+                    width: resolution.width,
+                    height: resolution.height,
                     frameRate: 30
                 },
                 facingMode: 'user'
@@ -816,8 +821,8 @@ window.toggleCamera = async function() {
             
             window.streamState.publishers.camera = true;
             updateCameraButton(true);
-            updateMediaCard('camera', true, 'Streaming 1080p');
-            showNotification('success', 'Camera started in 1080p!');
+            updateMediaCard('camera', true, `Streaming ${qualityText}`);
+            showNotification('success', `Camera started in ${qualityText}!`);
             
             // Notify server that media is now being published
             notifyMediaPublished();
@@ -830,63 +835,6 @@ window.toggleCamera = async function() {
         updateStatus('Camera error');
     }
 };
-
-window.toggleMicrophone = async function() {
-    if (!window.streamState.isConnected) {
-        showNotification('warning', 'Please wait for connection to complete');
-        return;
-    }
-    
-    const room = window.streamState.room;
-    const isEnabled = window.streamState.publishers.microphone;
-    
-    try {
-        updateStatus(isEnabled ? 'Muting microphone...' : 'Starting microphone...');
-        
-        if (isEnabled) {
-            await room.localParticipant.setMicrophoneEnabled(false);
-            window.streamState.publishers.microphone = false;
-            updateMicrophoneButton(false);
-            updateMediaCard('mic', false);
-            showNotification('info', 'Microphone muted');
-        } else {
-            const publication = await room.localParticipant.setMicrophoneEnabled(true);
-            if (publication) {
-                window.streamState.localTracks.microphone = publication.track;
-            }
-            window.streamState.publishers.microphone = true;
-            updateMicrophoneButton(true);
-            updateMediaCard('mic', true, 'Broadcasting');
-            showNotification('success', 'Microphone started successfully');
-        }
-        
-        updateStatus('Ready');
-    } catch (error) {
-        console.error('❌ Microphone error:', error);
-        if (error.name === 'NotAllowedError') {
-            showNotification('error', 'Microphone access denied. Please check your browser permissions.');
-        } else {
-            showNotification('error', 'Microphone error: ' + error.message);
-        }
-        updateStatus('Microphone error');
-    }
-
-    if (!isEnabled) {
-        // After successfully enabling microphone
-        const publication = await room.localParticipant.setMicrophoneEnabled(true);
-        if (publication) {
-            window.streamState.localTracks.microphone = publication.track;
-        }
-        window.streamState.publishers.microphone = true;
-        updateMicrophoneButton(true);
-        updateMediaCard('mic', true, 'Broadcasting');
-        showNotification('success', 'Microphone started successfully');
-        
-        // Notify server that media is now being published
-        notifyMediaPublished();
-    }
-};
-
 window.toggleScreenShare = async function() {
     if (!window.streamState.isConnected) {
         showNotification('warning', 'Please wait for connection to complete');
@@ -897,11 +845,13 @@ window.toggleScreenShare = async function() {
     const isEnabled = window.streamState.publishers.screen;
     
     try {
-        updateStatus(isEnabled ? 'Stopping screen share...' : 'Starting screen share...');
+        updateStatus(isEnabled ? 'Stopping screen share...' : 'Starting screen share in HD...');
         
         if (isEnabled) {
+            // Stop screen sharing
             await room.localParticipant.setScreenShareEnabled(false);
             
+            // Restore camera to main preview if it was active
             if (window.streamState.publishers.camera) {
                 const cameraTrack = window.streamState.localTracks.camera;
                 if (cameraTrack) {
@@ -911,38 +861,80 @@ window.toggleScreenShare = async function() {
                 clearPreview('main');
             }
             
+            // Clear picture-in-picture
             clearPreview('pip');
             window.streamState.publishers.screen = false;
             updateScreenShareButton(false);
             updateMediaCard('screen', false);
             showNotification('info', 'Screen sharing stopped');
+            
         } else {
+            // Start screen sharing with quality settings
             try {
-                const publication = await room.localParticipant.setScreenShareEnabled(true);
+                // Get current quality settings
+                const resolution = getVideoResolution();
+                const encodingSettings = getVideoEncodingSettings();
+                
+                // Start screen share with enhanced settings
+                const publication = await room.localParticipant.setScreenShareEnabled(true, {
+                    resolution: {
+                        width: resolution.width,
+                        height: resolution.height,
+                        frameRate: 30
+                    },
+                    // Screen share specific settings for better quality
+                    screenShareEncoding: {
+                        maxBitrate: encodingSettings.maxBitrate * 1.5, // 50% more bitrate for screen
+                        maxFramerate: encodingSettings.maxFramerate
+                    },
+                    // Browser-specific capture options
+                    displaySurface: 'monitor', // Prefer full screen capture
+                    logicalSurface: false,     // Capture at native resolution
+                    cursor: 'always',           // Always show cursor
+                    selfBrowserSurface: 'exclude' // Don't capture our own tab
+                });
                 
                 if (publication && publication.track) {
+                    // Move camera to picture-in-picture if active
                     if (window.streamState.publishers.camera) {
                         const cameraTrack = window.streamState.localTracks.camera;
                         if (cameraTrack) {
                             showPreview(cameraTrack, 'pip');
                         }
                     }
+                    
+                    // Show screen share in main preview
                     showPreview(publication.track, 'main');
                     
+                    // Save track reference
                     window.streamState.localTracks.screen = publication.track;
                     window.streamState.publishers.screen = true;
+                    
+                    // Update UI
                     updateScreenShareButton(true);
-                    updateMediaCard('screen', true, 'Sharing');
-                    showNotification('success', 'Screen sharing started successfully');
+                    updateMediaCard('screen', true, `Sharing ${window.streamState.settings.videoQuality}`);
+                    
+                    // Show quality-specific notification
+                    const qualityText = window.streamState.settings.videoQuality === '1080p' ? 'Full HD' :
+                                      window.streamState.settings.videoQuality === '720p' ? 'HD' : 'SD';
+                    showNotification('success', `Screen sharing started in ${qualityText}!`);
+                    
+                    // Notify that media is published (for recording)
+                    notifyMediaPublished();
                 }
+                
             } catch (error) {
+                // Handle user cancellation or errors
                 if (error.name === 'NotAllowedError' || error.message.includes('Permission denied')) {
                     showNotification('info', 'Screen sharing was cancelled');
+                } else if (error.message.includes('getDisplayMedia')) {
+                    showNotification('error', 'Your browser does not support screen sharing');
                 } else {
                     console.error('Screen share error:', error);
                     showNotification('error', 'Screen sharing error: ' + error.message);
                 }
                 
+                // Reset state on error
                 window.streamState.publishers.screen = false;
                 updateScreenShareButton(false);
                 updateMediaCard('screen', false);
@@ -950,14 +942,20 @@ window.toggleScreenShare = async function() {
         }
         
         updateStatus('Ready');
+        
     } catch (error) {
         console.error('❌ Screen share error:', error);
         
         if (error.name === 'NotAllowedError') {
             showNotification('error', 'Screen sharing was denied. Please try again and allow access.');
+        } else if (error.name === 'NotFoundError') {
+            showNotification('error', 'No screens available to share');
+        } else if (error.name === 'NotReadableError') {
+            showNotification('error', 'Screen is not readable. Another application may be blocking access.');
         } else {
             showNotification('error', 'Screen sharing error: ' + error.message);
         }
+        
         updateStatus('Screen share error');
     }
 };
@@ -1256,6 +1254,100 @@ function updateMediaCard(type, isActive, status = '') {
         }
     }
 }
+
+    // Video quality helper functions
+window.getVideoResolution = function() {
+    const quality = window.streamState.settings.videoQuality || '1080p';
+    switch (quality) {
+        case '1080p': 
+            return { width: 1920, height: 1080 };
+        case '720p': 
+            return { width: 1280, height: 720 };
+        case '480p': 
+            return { width: 854, height: 480 };
+        default: 
+            return { width: 1920, height: 1080 }; // Default to 1080p
+    }
+};
+
+window.getVideoEncodingSettings = function() {
+    const quality = window.streamState.settings.videoQuality || '1080p';
+    switch (quality) {
+        case '1080p': 
+            return { 
+                maxBitrate: 4000000,  // 4 Mbps for 1080p
+                maxFramerate: 30 
+            };
+        case '720p': 
+            return { 
+                maxBitrate: 2000000,  // 2 Mbps for 720p
+                maxFramerate: 30 
+            };
+        case '480p': 
+            return { 
+                maxBitrate: 1000000,  // 1 Mbps for 480p
+                maxFramerate: 30 
+            };
+        default: 
+            return { 
+                maxBitrate: 4000000, 
+                maxFramerate: 30 
+            };
+    }
+};
+
+// Initialize with 1080p as default
+ = '1080p';
+
+// Function to dynamically update quality
+window.updateVideoQuality = function() {
+    const select = document.getElementById('videoQualitySelect');
+    if (select) {
+        const newQuality = select.value;
+        window.streamState.settings.videoQuality = newQuality;
+        
+        // Get quality text for notification
+        const qualityText = newQuality === '1080p' ? 'Full HD (1080p)' :
+                          newQuality === '720p' ? 'HD (720p)' : 'SD (480p)';
+        
+        showNotification('info', `Video quality set to ${qualityText}`);
+        
+        // Log the new settings
+        console.log('📹 Video quality updated:', {
+            quality: newQuality,
+            resolution: getVideoResolution(),
+            encoding: getVideoEncodingSettings()
+        });
+        
+        // If currently streaming, notify user they may need to restart
+        if (window.streamState.publishers.camera || window.streamState.publishers.screen) {
+            showNotification('warning', 'Quality change will apply to new streams. Restart camera/screen to apply now.');
+        }
+    }
+};
+
+// Function to notify server when media is published (if not already present)
+window.notifyMediaPublished = function() {
+    const userActiveStream = {{ user_active_stream_dict|tojson if user_active_stream_dict else 'null' }};
+    
+    if (userActiveStream && window.WebSocketManager.socket && window.WebSocketManager.isConnected) {
+        // Check if we have at least one media track published
+        if (window.streamState.publishers.camera || 
+            window.streamState.publishers.microphone || 
+            window.streamState.publishers.screen) {
+            
+            console.log('📹 Notifying server that media is published');
+            
+            window.WebSocketManager.socket.emit('media_published', {
+                stream_id: userActiveStream.id,
+                has_video: window.streamState.publishers.camera,
+                has_audio: window.streamState.publishers.microphone,
+                has_screen: window.streamState.publishers.screen,
+                quality: window.streamState.settings.videoQuality
+            });
+        }
+    }
+};
 
 async function checkEgressStatus() {
     try {
