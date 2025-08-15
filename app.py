@@ -1773,6 +1773,92 @@ def get_video_completion_stats():
 
 # NEW SETTINGS ROUTE
 
+@app.route('/api/admin/add-past-recordings-to-courses', methods=['POST'])
+@login_required
+def add_past_recordings_to_courses():
+    """Add all past stream recordings to the course library"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        # Get all streams with recording URLs that aren't in the video table
+        streams_with_recordings = Stream.query.filter(
+            Stream.recording_url.isnot(None),
+            Stream.recording_url != ''
+        ).all()
+        
+        # Get or create Live Trading Sessions category
+        live_sessions_category = Category.query.filter_by(
+            name='Live Trading Sessions'
+        ).first()
+        
+        if not live_sessions_category:
+            live_sessions_category = Category(
+                name='Live Trading Sessions',
+                description='Recorded live trading sessions from our professional traders',
+                order_index=1
+            )
+            db.session.add(live_sessions_category)
+            db.session.flush()
+        
+        added_count = 0
+        skipped_count = 0
+        
+        for stream in streams_with_recordings:
+            # Check if video already exists with this URL
+            existing_video = Video.query.filter_by(
+                s3_url=stream.recording_url
+            ).first()
+            
+            if existing_video:
+                skipped_count += 1
+                continue
+            
+            # Calculate duration
+            duration_seconds = 0
+            if stream.started_at and stream.ended_at:
+                duration = stream.ended_at - stream.started_at
+                duration_seconds = int(duration.total_seconds())
+            
+            # Create video entry
+            video_date = stream.started_at.strftime('%B %d, %Y') if stream.started_at else 'Unknown Date'
+            video_title = f"{stream.streamer_name} - {video_date}"
+            
+            new_video = Video(
+                title=video_title,
+                description=f"Live trading session with {stream.streamer_name}\nOriginal stream: {stream.title}",
+                s3_url=stream.recording_url,
+                duration=duration_seconds,
+                is_free=False,
+                category_id=live_sessions_category.id,
+                created_at=stream.created_at
+            )
+            db.session.add(new_video)
+            db.session.flush()
+            
+            # Add tags
+            trader_tag = get_or_create_tag(stream.streamer_name)
+            live_tag = get_or_create_tag('Live Session')
+            new_video.tags.append(trader_tag)
+            new_video.tags.append(live_tag)
+            
+            added_count += 1
+            print(f"✅ Added video: {video_title}")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Added {added_count} recordings to course library',
+            'added': added_count,
+            'skipped': skipped_count,
+            'total_checked': len(streams_with_recordings)
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/stream/join', methods=['POST'])
 @login_required
 def api_stream_join():
