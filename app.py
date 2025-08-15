@@ -1114,9 +1114,6 @@ def handle_media_published(data):
     except Exception as e:
         print(f"❌ Error handling media published: {e}")
                 
-                # START RECORDING AUTOMATICALLY FOR ADMIN
-                # Small delay to ensure room is established
-                import threading
                 def delayed_recording_start():
                     time.sleep(2)  # Wait 2 seconds for room to be fully established
                     
