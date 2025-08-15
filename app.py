@@ -1488,7 +1488,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
                     "bucket": s3_bucket
                 }
             },
-            "preset": "H264_720P_30"  # Valid preset for LiveKit
+            "preset": "H264_1080P_30"  # Valid preset for LiveKit
         }
         
         # Make API request
