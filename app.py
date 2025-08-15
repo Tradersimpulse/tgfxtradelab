@@ -1502,6 +1502,121 @@ def stop_livekit_egress_recording(egress_id):
         print(f"❌ Error stopping recording: {e}")
         return {'success': False, 'error': str(e)}
 
+def get_egress_info(egress_id):
+    """Get information about a specific egress"""
+    try:
+        import requests
+        
+        # Generate API token
+        api_token = generate_livekit_api_token()
+        if not api_token:
+            return None
+        
+        livekit_url = app.config.get('LIVEKIT_URL')
+        
+        # Extract API URL
+        if '.livekit.cloud' in livekit_url:
+            api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'https://')
+        else:
+            api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
+        
+        # Create headers with Bearer token
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Get egress info
+        response = requests.post(
+            f"{api_url}/twirp/livekit.Egress/ListEgress",
+            json={"egress_id": egress_id},
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            egresses = data.get('items', [])
+            
+            if egresses:
+                egress = egresses[0]
+                print(f"📊 Egress info: {egress}")
+                
+                # Extract recording URL if available
+                recording_url = None
+                if 'file' in egress and 'filepath' in egress['file']:
+                    s3_key = egress['file']['filepath']
+                    aws_region = app.config.get('AWS_REGION', 'us-east-1')
+                    s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+                    recording_url = f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}"
+                
+                return {
+                    'egress_id': egress.get('egress_id'),
+                    'room_name': egress.get('room_name'),
+                    'status': egress.get('status'),
+                    'started_at': egress.get('started_at'),
+                    'recording_url': recording_url,
+                    'filepath': egress.get('file', {}).get('filepath')
+                }
+        
+        return None
+        
+    except Exception as e:
+        print(f"Error getting egress info: {e}")
+        return None
+
+def get_or_create_tag(tag_name):
+    """Helper function to get or create a tag"""
+    import re
+    
+    if not tag_name:
+        return None
+        
+    # Create slug from tag name
+    slug = re.sub(r'[^a-zA-Z0-9\s-]', '', tag_name.lower())
+    slug = re.sub(r'\s+', '-', slug.strip())
+    
+    # Try to find existing tag
+    tag = Tag.query.filter_by(slug=slug).first()
+    if not tag:
+        # Create new tag
+        tag = Tag(
+            name=tag_name.strip().title(),
+            slug=slug,
+            color='#10B981'
+        )
+        db.session.add(tag)
+        db.session.flush()
+    
+    return tag
+
+def broadcast_notification(title, message, notification_type, target_users='all'):
+    """Send notification to multiple users"""
+    try:
+        if target_users == 'all':
+            users = User.query.all()
+        elif target_users == 'premium':
+            users = User.query.filter_by(has_subscription=True).all()
+        elif target_users == 'free':
+            users = User.query.filter_by(has_subscription=False).all()
+        else:
+            users = []
+        
+        for user in users:
+            notification = Notification(
+                user_id=user.id,
+                title=title,
+                message=message,
+                notification_type=notification_type
+            )
+            db.session.add(notification)
+        
+        db.session.flush()
+        print(f"📢 Sent notification to {len(users)} users: {title}")
+        
+    except Exception as e:
+        print(f"Error sending notifications: {e}")
+
 # Routes (keeping all existing routes but updating stream-related ones)
 @app.route('/')
 def index():
