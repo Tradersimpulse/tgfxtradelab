@@ -262,9 +262,9 @@
                             <div class="col-6">
                                 <label class="form-label text-white">Video Quality</label>
                                 <select class="form-select form-select-sm" id="videoQualitySelect" onchange="updateVideoQuality()">
-                                    <option value="720p">720p (Recommended)</option>
-                                    <option value="1080p">1080p (High)</option>
-                                    <option value="480p">480p (Low bandwidth)</option>
+                                    <option value="1080p" selected>1080p (Full HD - Recommended)</option>
+                                    <option value="720p">720p (HD - Lower bandwidth)</option>
+                                    <option value="480p">480p (SD - Minimum bandwidth)</option>
                                 </select>
                             </div>
                             <div class="col-6">
@@ -785,7 +785,7 @@ window.toggleCamera = async function() {
     const isEnabled = window.streamState.publishers.camera;
     
     try {
-        updateStatus(isEnabled ? 'Turning off camera...' : 'Starting camera...');
+        updateStatus(isEnabled ? 'Turning off camera...' : 'Starting camera in 1080p...');
         
         if (isEnabled) {
             // Turn off camera
@@ -796,8 +796,16 @@ window.toggleCamera = async function() {
             updateMediaCard('camera', false);
             showNotification('info', 'Camera turned off');
         } else {
-            // Turn on camera
-            const publication = await room.localParticipant.setCameraEnabled(true);
+            // Turn on camera with 1080p settings
+            const publication = await room.localParticipant.setCameraEnabled(true, {
+                resolution: {
+                    width: 1920,
+                    height: 1080,
+                    frameRate: 30
+                },
+                facingMode: 'user'
+            });
+            
             if (publication) {
                 const track = publication.track;
                 if (track) {
@@ -805,10 +813,11 @@ window.toggleCamera = async function() {
                     window.streamState.localTracks.camera = track;
                 }
             }
+            
             window.streamState.publishers.camera = true;
             updateCameraButton(true);
-            updateMediaCard('camera', true, 'Streaming');
-            showNotification('success', 'Camera started successfully');
+            updateMediaCard('camera', true, 'Streaming 1080p');
+            showNotification('success', 'Camera started in 1080p!');
             
             // Notify server that media is now being published
             notifyMediaPublished();
