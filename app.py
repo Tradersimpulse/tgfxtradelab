@@ -3241,39 +3241,137 @@ def api_stop_stream():
     
     recording_url = None
     recording_saved = False
+    video_created = False
     
-    # Stop recording if active
+    # Get recording URL before stopping
     if stream.is_recording and stream.recording_id:
-        print(f"🔴 Stopping recording {stream.recording_id}...")
+        print(f"🔴 Getting recording info for egress {stream.recording_id}...")
+        
+        # First, get the recording URL from egress info
+        recording_info = get_egress_info(stream.recording_id)
+        if recording_info and recording_info.get('recording_url'):
+            recording_url = recording_info['recording_url']
+            print(f"📁 Retrieved recording URL: {recording_url}")
+        
+        # Now stop the recording
+        print(f"⏹️ Stopping recording {stream.recording_id}...")
         stop_result = stop_livekit_egress_recording(stream.recording_id)
         
         if stop_result.get('success'):
             print(f"✅ Recording stopped successfully")
             
-            # Generate the S3 URL for the recording
-            timestamp = stream.started_at.strftime('%Y%m%d-%H%M%S') if stream.started_at else datetime.utcnow().strftime('%Y%m%d-%H%M%S')
-            date_folder = stream.started_at.strftime('%Y/%m/%d') if stream.started_at else datetime.utcnow().strftime('%Y/%m/%d')
-            
-            aws_region = app.config.get('AWS_REGION', 'us-east-1')
-            s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
-            prefix = app.config.get('STREAM_RECORDINGS_PREFIX', 'livestream-recordings/')
-            
-            # Build the S3 URL
-            s3_key = f"{prefix}{stream.streamer_name}/{date_folder}/{stream.streamer_name}-stream-{stream.id}-{timestamp}.mp4"
-            recording_url = f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}"
+            # Use URL from stop result if available, otherwise use the one we got earlier
+            if stop_result.get('recording_url'):
+                recording_url = stop_result['recording_url']
+            elif not recording_url and recording_info and recording_info.get('filepath'):
+                # Build URL from filepath
+                s3_key = recording_info['filepath']
+                aws_region = app.config.get('AWS_REGION', 'us-east-1')
+                s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+                recording_url = f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}"
             
             # Save the recording URL to the database
             stream.recording_url = recording_url
             recording_saved = True
             
-            print(f"📁 Recording saved to: {recording_url}")
-        else:
-            print(f"⚠️ Failed to stop recording properly: {stop_result.get('error')}")
+            print(f"💾 Saving recording URL to database: {recording_url}")
+    
+    # Calculate stream duration before updating ended_at
+    duration_minutes = 0
+    if stream.started_at:
+        stream.ended_at = datetime.utcnow()
+        duration = stream.ended_at - stream.started_at
+        duration_minutes = int(duration.total_seconds() / 60)
+    
+    # AUTO-ADD TO LIVE TRADING SESSIONS COURSE
+    if recording_saved and recording_url:
+        try:
+            # Find or create the Live Trading Sessions category
+            live_sessions_category = Category.query.filter_by(
+                name='Live Trading Sessions'
+            ).first()
+            
+            if not live_sessions_category:
+                # Create the category if it doesn't exist
+                live_sessions_category = Category(
+                    name='Live Trading Sessions',
+                    description='Recorded live trading sessions from our professional traders',
+                    order_index=1  # Put it at the top
+                )
+                db.session.add(live_sessions_category)
+                db.session.flush()
+                print(f"📁 Created Live Trading Sessions category")
+            
+            # Create video title with trader name and date
+            video_date = stream.started_at.strftime('%B %d, %Y')  # August 15, 2025
+            video_title = f"{stream.streamer_name} - {video_date}"
+            
+            # Create description
+            video_description = f"Live trading session with {stream.streamer_name}\n"
+            video_description += f"Duration: {duration_minutes} minutes\n"
+            video_description += f"Stream Type: {stream.stream_type}\n"
+            if stream.description:
+                video_description += f"\n{stream.description}"
+            
+            # Get the next order index for this category
+            max_order = db.session.query(db.func.max(Video.order_index)).filter_by(
+                category_id=live_sessions_category.id
+            ).scalar() or 0
+            
+            # Create the video entry
+            new_video = Video(
+                title=video_title,
+                description=video_description,
+                s3_url=recording_url,
+                thumbnail_url=None,  # You could generate a thumbnail later
+                duration=duration_minutes * 60,  # Store in seconds
+                is_free=False,  # Set to True if you want free access
+                order_index=max_order + 1,
+                category_id=live_sessions_category.id,
+                created_at=datetime.utcnow()
+            )
+            db.session.add(new_video)
+            db.session.flush()
+            
+            # Add tags for the video
+            trader_tag = get_or_create_tag(stream.streamer_name)
+            live_tag = get_or_create_tag('Live Session')
+            trading_tag = get_or_create_tag('Live Trading')
+            
+            new_video.tags.append(trader_tag)
+            new_video.tags.append(live_tag)
+            new_video.tags.append(trading_tag)
+            
+            # Add date tag (e.g., "August 2025")
+            month_year_tag = get_or_create_tag(stream.started_at.strftime('%B %Y'))
+            new_video.tags.append(month_year_tag)
+            
+            # Add stream type tag
+            if stream.stream_type:
+                type_tag = get_or_create_tag(stream.stream_type.replace('_', ' ').title())
+                new_video.tags.append(type_tag)
+            
+            video_created = True
+            print(f"📹 Created video entry: {video_title}")
+            print(f"📺 Video ID: {new_video.id}")
+            print(f"🔗 Video URL: {recording_url}")
+            
+            # Create notification for users
+            broadcast_notification(
+                'New Live Session Recording Available!',
+                f"{stream.streamer_name}'s live trading session from {video_date} is now available to watch.",
+                'new_video',
+                target_users='all'
+            )
+            
+        except Exception as e:
+            print(f"❌ Error creating video entry: {e}")
+            db.session.rollback()
+            video_created = False
     
     # Notify all viewers BEFORE stopping the stream
     room_id = f"stream_{stream.id}"
     if socketio and room_id in stream_rooms:
-        # Send recording info if available
         end_message = {
             'stream_id': stream.id,
             'message': f'{stream.streamer_name} has ended the stream',
@@ -3282,7 +3380,7 @@ def api_stop_stream():
         
         if recording_url:
             end_message['recording_url'] = recording_url
-            end_message['recording_message'] = 'Recording has been saved'
+            end_message['recording_message'] = 'Recording has been saved and added to courses'
         
         socketio.emit('stream_ending', {
             'stream_id': stream.id,
@@ -3303,13 +3401,6 @@ def api_stop_stream():
     # Update database
     stream.is_active = False
     stream.is_recording = False
-    stream.ended_at = datetime.utcnow()
-    
-    # Calculate stream duration
-    duration_minutes = 0
-    if stream.started_at and stream.ended_at:
-        duration = stream.ended_at - stream.started_at
-        duration_minutes = int(duration.total_seconds() / 60)
     
     # Update all viewer records
     StreamViewer.query.filter_by(stream_id=stream.id, is_active=True).update({
@@ -3317,7 +3408,9 @@ def api_stop_stream():
         'left_at': datetime.utcnow()
     })
     
+    # Commit all changes
     db.session.commit()
+    print(f"✅ Stream {stream.id} ended. Recording URL saved: {recording_url}")
     
     response_data = {
         'success': True,
@@ -3329,10 +3422,12 @@ def api_stop_stream():
         response_data['recording'] = {
             'saved': True,
             'url': recording_url,
-            'message': f'Recording saved successfully (Duration: {duration_minutes} minutes)'
+            'message': f'Recording saved and added to course library (Duration: {duration_minutes} minutes)',
+            'video_created': video_created
         }
     
     return jsonify(response_data)
+    
 @app.route('/api/stream/status')
 @login_required
 def api_stream_status():
