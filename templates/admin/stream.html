@@ -924,7 +924,7 @@ window.toggleScreenShare = async function() {
     const isEnabled = window.streamState.publishers.screen;
     
     try {
-        updateStatus(isEnabled ? 'Stopping screen share...' : 'Starting screen share in HD...');
+        updateStatus(isEnabled ? 'Stopping screen share...' : 'Starting screen share...');
         
         if (isEnabled) {
             // Stop screen sharing
@@ -948,66 +948,139 @@ window.toggleScreenShare = async function() {
             showNotification('info', 'Screen sharing stopped');
             
         } else {
-            // Start screen sharing with quality settings
+            // Start screen sharing with better error handling
             try {
+                // Show browser's screen selection dialog with timeout handling
+                updateStatus('Please select a screen to share...');
+                
                 // Get current quality settings
                 const resolution = getVideoResolution();
                 const encodingSettings = getVideoEncodingSettings();
                 
-                // Start screen share with enhanced settings
-                const publication = await room.localParticipant.setScreenShareEnabled(true, {
-                    resolution: {
-                        width: resolution.width,
-                        height: resolution.height,
-                        frameRate: 30
+                // Create screen share options with more compatible settings
+                const screenShareOptions = {
+                    // Video settings
+                    video: {
+                        displaySurface: 'monitor', // Prefer full screen
+                        logicalSurface: true,
+                        cursor: 'always',
+                        width: { ideal: resolution.width, max: resolution.width },
+                        height: { ideal: resolution.height, max: resolution.height },
+                        frameRate: { ideal: 30, max: 30 }
                     },
-                    // Screen share specific settings for better quality
-                    screenShareEncoding: {
-                        maxBitrate: encodingSettings.maxBitrate * 1.5, // 50% more bitrate for screen
-                        maxFramerate: encodingSettings.maxFramerate
+                    // Audio settings (optional screen audio)
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
                     },
-                    // Browser-specific capture options
-                    displaySurface: 'monitor', // Prefer full screen capture
-                    logicalSurface: false,     // Capture at native resolution
-                    cursor: 'always',           // Always show cursor
-                    selfBrowserSurface: 'exclude' // Don't capture our own tab
-                });
+                    // System audio preference
+                    systemAudio: 'include',
+                    selfBrowserSurface: 'exclude'
+                };
                 
-                if (publication && publication.track) {
-                    // Move camera to picture-in-picture if active
-                    if (window.streamState.publishers.camera) {
-                        const cameraTrack = window.streamState.localTracks.camera;
-                        if (cameraTrack) {
-                            showPreview(cameraTrack, 'pip');
-                        }
+                // First try to get screen share media stream directly
+                let screenStream = null;
+                try {
+                    // Use navigator.mediaDevices.getDisplayMedia with timeout
+                    const getDisplayMediaPromise = navigator.mediaDevices.getDisplayMedia(screenShareOptions);
+                    
+                    // Add timeout for getDisplayMedia (30 seconds)
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('Screen selection timeout')), 30000);
+                    });
+                    
+                    screenStream = await Promise.race([getDisplayMediaPromise, timeoutPromise]);
+                    
+                } catch (mediaError) {
+                    // If first attempt fails, try with simpler options
+                    console.log('First screen share attempt failed, trying simplified options...');
+                    
+                    const simplifiedOptions = {
+                        video: true,
+                        audio: false
+                    };
+                    
+                    try {
+                        screenStream = await navigator.mediaDevices.getDisplayMedia(simplifiedOptions);
+                    } catch (secondError) {
+                        throw secondError; // Use the second error if both attempts fail
                     }
+                }
+                
+                // If we got a stream, now share it via LiveKit
+                if (screenStream) {
+                    // Stop the local stream first (we'll use LiveKit's handling)
+                    screenStream.getTracks().forEach(track => track.stop());
                     
-                    // Show screen share in main preview
-                    showPreview(publication.track, 'main');
+                    // Now use LiveKit's screen share with proven settings
+                    const publication = await room.localParticipant.setScreenShareEnabled(true, {
+                        // Resolution based on quality setting
+                        resolution: {
+                            width: resolution.width,
+                            height: resolution.height,
+                            frameRate: 30
+                        },
+                        // Encoding settings
+                        screenShareEncoding: {
+                            maxBitrate: encodingSettings.maxBitrate * 1.5,
+                            maxFramerate: encodingSettings.maxFramerate
+                        }
+                    });
                     
-                    // Save track reference
-                    window.streamState.localTracks.screen = publication.track;
-                    window.streamState.publishers.screen = true;
-                    
-                    // Update UI
-                    updateScreenShareButton(true);
-                    updateMediaCard('screen', true, `Sharing ${window.streamState.settings.videoQuality}`);
-                    
-                    // Show quality-specific notification
-                    const qualityText = window.streamState.settings.videoQuality === '1080p' ? 'Full HD' :
-                                      window.streamState.settings.videoQuality === '720p' ? 'HD' : 'SD';
-                    showNotification('success', `Screen sharing started in ${qualityText}!`);
-                    
-                    // Notify that media is published (for recording)
-                    notifyMediaPublished();
+                    if (publication && publication.track) {
+                        // Move camera to picture-in-picture if active
+                        if (window.streamState.publishers.camera) {
+                            const cameraTrack = window.streamState.localTracks.camera;
+                            if (cameraTrack) {
+                                showPreview(cameraTrack, 'pip');
+                            }
+                        }
+                        
+                        // Show screen share in main preview
+                        showPreview(publication.track, 'main');
+                        
+                        // Save track reference
+                        window.streamState.localTracks.screen = publication.track;
+                        window.streamState.publishers.screen = true;
+                        
+                        // Update UI
+                        updateScreenShareButton(true);
+                        updateMediaCard('screen', true, `Sharing ${window.streamState.settings.videoQuality}`);
+                        
+                        // Show quality-specific notification
+                        const qualityText = window.streamState.settings.videoQuality === '1080p' ? 'Full HD' :
+                                          window.streamState.settings.videoQuality === '720p' ? 'HD' : 'SD';
+                        showNotification('success', `Screen sharing started in ${qualityText}!`);
+                        
+                        // Notify that media is published (for recording)
+                        notifyMediaPublished();
+                        
+                        // Listen for screen share ending (user clicks browser's stop sharing)
+                        publication.track.on('ended', () => {
+                            console.log('Screen share ended by user');
+                            // Clean up if user stops sharing via browser UI
+                            window.toggleScreenShare();
+                        });
+                    }
+                } else {
+                    throw new Error('No screen stream obtained');
                 }
                 
             } catch (error) {
-                // Handle user cancellation or errors
+                // Handle specific error types
                 if (error.name === 'NotAllowedError' || error.message.includes('Permission denied')) {
                     showNotification('info', 'Screen sharing was cancelled');
+                } else if (error.name === 'AbortError' || error.message.includes('Timeout')) {
+                    showNotification('error', 'Screen sharing timed out. Please try again and select a screen quickly.');
+                } else if (error.name === 'NotFoundError') {
+                    showNotification('error', 'No screens available to share');
+                } else if (error.name === 'NotReadableError' || error.message.includes('Could not start video source')) {
+                    showNotification('error', 'Screen is busy or locked. Please close any exclusive apps and try again.');
                 } else if (error.message.includes('getDisplayMedia')) {
                     showNotification('error', 'Your browser does not support screen sharing');
+                } else if (error.message.includes('Screen selection timeout')) {
+                    showNotification('warning', 'Screen selection timed out. Please select a screen within 30 seconds.');
                 } else {
                     console.error('Screen share error:', error);
                     showNotification('error', 'Screen sharing error: ' + error.message);
@@ -1017,6 +1090,8 @@ window.toggleScreenShare = async function() {
                 window.streamState.publishers.screen = false;
                 updateScreenShareButton(false);
                 updateMediaCard('screen', false);
+                updateStatus('Ready');
+                return; // Exit early on error
             }
         }
         
@@ -1025,16 +1100,23 @@ window.toggleScreenShare = async function() {
     } catch (error) {
         console.error('❌ Screen share error:', error);
         
+        // Additional error handling for outer try-catch
         if (error.name === 'NotAllowedError') {
-            showNotification('error', 'Screen sharing was denied. Please try again and allow access.');
+            showNotification('error', 'Screen sharing permission was denied. Please allow access and try again.');
         } else if (error.name === 'NotFoundError') {
             showNotification('error', 'No screens available to share');
         } else if (error.name === 'NotReadableError') {
-            showNotification('error', 'Screen is not readable. Another application may be blocking access.');
+            showNotification('error', 'Screen is not accessible. Another application may be using it exclusively.');
+        } else if (error.name === 'AbortError') {
+            showNotification('error', 'Screen sharing was aborted. Please try again.');
         } else {
             showNotification('error', 'Screen sharing error: ' + error.message);
         }
         
+        // Ensure state is reset
+        window.streamState.publishers.screen = false;
+        updateScreenShareButton(false);
+        updateMediaCard('screen', false);
         updateStatus('Screen share error');
     }
 };
