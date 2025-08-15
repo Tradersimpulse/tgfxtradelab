@@ -624,7 +624,7 @@ window.WebSocketManager = {
         }
         
         try {
-            console.log('🎬 Connecting to LiveKit room...');
+            console.log('🎬 Connecting to LiveKit room with 1080p...');
             updateStatus('Connecting to streaming room...');
             
             const room = new window.LiveKitClient.Room({
@@ -633,11 +633,17 @@ window.WebSocketManager = {
                 publishDefaults: {
                     simulcast: true,
                     videoEncoding: {
-                        maxBitrate: 2000000, // 2 Mbps max
+                        maxBitrate: 4000000, // Increased from 2 Mbps to 4 Mbps for 1080p
                         maxFramerate: 30
                     },
                     audioEncoding: {
-                        maxBitrate: 64000 // 64 kbps
+                        maxBitrate: 128000 // Increased to 128 kbps for better audio
+                    },
+                    videoResolution: {
+                        width: 1920,  // 1080p width
+                        height: 1080, // 1080p height
+                        frameRate: 30,
+                        aspectRatio: 16/9
                     }
                 }
             });
