@@ -979,14 +979,17 @@ window.joinStreamFixed = async function(streamId) {
             adaptiveStream: true,
             dynacast: true,
             videoCaptureDefaults: {
-                resolution: { width: 1280, height: 720 },
+                resolution: { width: 1920, height: 1080 }, // Request 1080p
                 facingMode: 'user'
             },
             audioCaptureDefaults: {
                 autoGainControl: true,
                 echoCancellation: true,
                 noiseSuppression: true
-            }
+            },
+            // Request higher quality video
+            videoCodec: 'h264',
+            preferredCodec: 'h264'
         });
         
         room.on(window.LiveKitClient.RoomEvent.Connected, () => {
