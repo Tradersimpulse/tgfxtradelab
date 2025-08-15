@@ -478,6 +478,10 @@
         </div>
     </div>
 </div>
+<button class="btn btn-info btn-sm" onclick="addPastRecordingsToCorses()">
+    <span class="material-symbols-outlined me-1" style="font-size: 14px;">video_library</span>
+    Add Past Recordings to Courses
+</button>
 {% endblock %}
 
 {% block scripts %}
@@ -741,6 +745,34 @@ window.WebSocketManager = {
             viewerElement.textContent = count;
         }
     },
+
+    async function addPastRecordingsToCourses() {
+    if (!confirm('This will add all past recordings to the course library. Continue?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/add-past-recordings-to-courses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('success', data.message);
+            if (data.added > 0) {
+                setTimeout(() => {
+                    window.location.href = '/courses';
+                }, 2000);
+            }
+        } else {
+            showNotification('error', data.error || 'Failed to add recordings');
+        }
+    } catch (error) {
+        showNotification('error', 'Error: ' + error.message);
+    }
+}
     
     updateMediaStatus() {
         const room = window.streamState.room;
