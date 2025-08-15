@@ -1153,12 +1153,19 @@ window.leaveStream = function(streamId) {
 };
 
 // Toggle audio
+w// Toggle audio - FIXED VERSION
 window.toggleStreamAudio = function(streamId) {
+    // Check if stream is joined first
+    if (!window.StreamViewerConfig.joinedStreams.has(streamId)) {
+        showNotification('warning', 'Please join the stream first');
+        return;
+    }
+    
     const audioElement = document.getElementById(`audio-${streamId}`);
     const audioState = window.StreamViewerConfig.audioStates.get(streamId);
     
     if (!audioElement || !audioState) {
-        console.log('No audio element found');
+        // Silently return instead of logging
         return;
     }
     
@@ -1170,8 +1177,6 @@ window.toggleStreamAudio = function(streamId) {
     
     const message = newAudioEnabled ? 'Audio unmuted' : 'Audio muted';
     showNotification('info', message);
-    console.log(`🔊 Audio ${newAudioEnabled ? 'unmuted' : 'muted'} for stream:`, streamId);
-};
 
 // Toggle fullscreen
 window.toggleFullscreen = function(streamId) {
