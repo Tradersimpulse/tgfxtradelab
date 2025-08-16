@@ -288,7 +288,7 @@
 
 {% block scripts %}
 <script>
-// Add smooth animations
+// Add smooth animations - Modified to not interfere with overlays
 document.addEventListener('DOMContentLoaded', function() {
     const cards = document.querySelectorAll('.course-card');
     cards.forEach((card, index) => {
@@ -296,92 +296,114 @@ document.addEventListener('DOMContentLoaded', function() {
         card.style.transform = 'translateY(20px)';
         
         setTimeout(() => {
-            card.style.transition = 'all 0.5s ease';
+            card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
             card.style.opacity = '1';
             card.style.transform = 'translateY(0)';
         }, index * 100);
     });
+    
+    // Ensure overlays maintain their styling after animations
+    setTimeout(() => {
+        const overlays = document.querySelectorAll('.video-thumbnail-overlay');
+        overlays.forEach(overlay => {
+            // Force overlay styles to be applied
+            overlay.style.cssText = overlay.style.cssText;
+        });
+    }, 1000);
 });
 </script>
 
 <style>
-/* Video Thumbnail Overlay Styles */
+/* Video Thumbnail Overlay Styles - Higher specificity */
+.course-card .video-thumbnail,
 .video-thumbnail {
     position: relative;
     overflow: hidden;
     border-radius: 8px;
 }
 
-.video-thumbnail-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+.course-card .video-thumbnail .video-thumbnail-overlay,
+.video-thumbnail .video-thumbnail-overlay {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
     background: linear-gradient(
         135deg,
         rgba(0, 0, 0, 0.7) 0%,
         rgba(0, 0, 0, 0.4) 50%,
         rgba(0, 0, 0, 0.7) 100%
-    );
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 0.75rem;
-    opacity: 1;
-    transition: background 0.3s ease;
+    ) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 0.75rem !important;
+    opacity: 1 !important;
+    transition: background 0.3s ease !important;
+    z-index: 1 !important;
 }
 
+.course-card .video-thumbnail:hover .video-thumbnail-overlay,
 .video-thumbnail:hover .video-thumbnail-overlay {
     background: linear-gradient(
         135deg,
         rgba(0, 0, 0, 0.8) 0%,
         rgba(0, 0, 0, 0.5) 50%,
         rgba(0, 0, 0, 0.8) 100%
-    );
+    ) !important;
 }
 
 .video-category-label {
-    display: none;
+    display: none !important;
 }
 
+.course-card .video-thumbnail .video-title-overlay,
 .video-title-overlay {
-    color: white;
-    font-size: 1.1rem;
-    font-weight: 900;
-    line-height: 1.2;
-    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
-    text-align: center;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
+    color: white !important;
+    font-size: 1.1rem !important;
+    font-weight: 900 !important;
+    line-height: 1.2 !important;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9) !important;
+    text-align: center !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 3 !important;
+    -webkit-box-orient: vertical !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+    z-index: 2 !important;
 }
 
 /* Course overlay variant */
+.course-card .video-thumbnail .course-overlay .video-title-overlay,
 .course-overlay .video-title-overlay {
-    font-size: 1.2rem;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    font-size: 1.2rem !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
 }
 
-/* Responsive adjustments */
+/* Responsive adjustments - Higher specificity */
 @media (max-width: 768px) {
+    .course-card .video-thumbnail .video-title-overlay,
     .video-title-overlay {
-        font-size: 1rem;
-        font-weight: 900;
+        font-size: 1rem !important;
+        font-weight: 900 !important;
     }
     
-    .video-thumbnail-overlay {
-        padding: 0.5rem;
+    .course-card .video-thumbnail .video-thumbnail-overlay,
+    .video-thumbnail .video-thumbnail-overlay {
+        padding: 0.5rem !important;
     }
     
+    .course-card .video-thumbnail .course-overlay .video-title-overlay,
     .course-overlay .video-title-overlay {
-        font-size: 1.1rem;
+        font-size: 1.1rem !important;
     }
 }
 
