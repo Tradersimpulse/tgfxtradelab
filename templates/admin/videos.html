@@ -248,7 +248,7 @@ document.getElementById('confirmDelete').addEventListener('click', async functio
     videoToDelete = null;
 });
 
-// Add smooth animations
+// Add smooth animations - Modified to not interfere with overlays
 document.addEventListener('DOMContentLoaded', function() {
     const rows = document.querySelectorAll('tbody tr');
     rows.forEach((row, index) => {
@@ -256,11 +256,20 @@ document.addEventListener('DOMContentLoaded', function() {
         row.style.transform = 'translateY(20px)';
         
         setTimeout(() => {
-            row.style.transition = 'all 0.5s ease';
+            row.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
             row.style.opacity = '1';
             row.style.transform = 'translateY(0)';
         }, index * 50);
     });
+    
+    // Ensure admin overlays maintain their styling after animations
+    setTimeout(() => {
+        const overlays = document.querySelectorAll('.admin-thumbnail-overlay');
+        overlays.forEach(overlay => {
+            // Force overlay styles to be applied
+            overlay.style.cssText = overlay.style.cssText;
+        });
+    }, 1000);
 });
 </script>
 
