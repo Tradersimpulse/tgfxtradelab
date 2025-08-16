@@ -183,7 +183,8 @@ class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False, index=True)
     description = db.Column(db.Text, nullable=True)
-    image_url = db.Column(db.String(500), nullable=True)
+    image_url = db.Column(db.String(500), nullable=True)  # Keep this for category icon
+    background_image_url = db.Column(db.String(500), nullable=True)  # NEW: For video thumbnails
     order_index = db.Column(db.Integer, default=0, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     
@@ -414,7 +415,8 @@ class VideoFormWithTags(VideoForm):
 class CategoryForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
     description = TextAreaField('Description')
-    image_url = StringField('Category Image URL', validators=[Optional()])
+    image_url = StringField('Category Icon URL', validators=[Optional()])
+    background_image_url = StringField('Background Image URL (for video thumbnails)', validators=[Optional()])
     order_index = IntegerField('Order', default=0)
 
 class TagForm(FlaskForm):
@@ -552,6 +554,151 @@ def init_s3_client():
         return s3_client
     except (NoCredentialsError, KeyError):
         return None
+
+def generate_thumbnail(category_background_url, category_name, video_title, output_width=1280, output_height=720):
+    """
+    Generate a thumbnail by overlaying text on category background
+    """
+    try:
+        # Download background image
+        if category_background_url:
+            response = requests.get(category_background_url)
+            background = Image.open(BytesIO(response.content))
+        else:
+            # Create default background if none provided
+            background = Image.new('RGB', (output_width, output_height), color='#1a1a1a')
+        
+        # Resize background to fit dimensions
+        background = background.resize((output_width, output_height), Image.Resampling.LANCZOS)
+        
+        # Create drawing context
+        draw = ImageDraw.Draw(background)
+        
+        # Try to load Poppins Bold font, fallback to default
+        try:
+            # You'll need to upload Poppins-Bold.ttf to your server
+            font_large = ImageFont.truetype('/app/static/fonts/Poppins-Bold.ttf', 72)
+            font_medium = ImageFont.truetype('/app/static/fonts/Poppins-Bold.ttf', 48)
+        except:
+            # Fallback to default font
+            font_large = ImageFont.load_default()
+            font_medium = ImageFont.load_default()
+        
+        # Add semi-transparent overlay for better text readability
+        overlay = Image.new('RGBA', (output_width, output_height), (0, 0, 0, 128))
+        background = Image.alpha_composite(background.convert('RGBA'), overlay)
+        draw = ImageDraw.Draw(background)
+        
+        # Wrap and draw category name (top)
+        category_wrapped = textwrap.fill(category_name.upper(), width=20)
+        category_bbox = draw.multiline_textbbox((0, 0), category_wrapped, font=font_medium)
+        category_width = category_bbox[2] - category_bbox[0]
+        category_height = category_bbox[3] - category_bbox[1]
+        category_x = (output_width - category_width) // 2
+        category_y = output_height // 4
+        
+        # Draw category name with outline for better visibility
+        for dx in [-2, -1, 0, 1, 2]:
+            for dy in [-2, -1, 0, 1, 2]:
+                draw.multiline_text((category_x + dx, category_y + dy), category_wrapped, 
+                                  fill='black', font=font_medium, align='center')
+        draw.multiline_text((category_x, category_y), category_wrapped, 
+                          fill='white', font=font_medium, align='center')
+        
+        # Wrap and draw video title (center)
+        video_wrapped = textwrap.fill(video_title, width=30)
+        video_bbox = draw.multiline_textbbox((0, 0), video_wrapped, font=font_large)
+        video_width = video_bbox[2] - video_bbox[0]
+        video_height = video_bbox[3] - video_bbox[1]
+        video_x = (output_width - video_width) // 2
+        video_y = (output_height - video_height) // 2
+        
+        # Draw video title with outline
+        for dx in [-3, -2, -1, 0, 1, 2, 3]:
+            for dy in [-3, -2, -1, 0, 1, 2, 3]:
+                draw.multiline_text((video_x + dx, video_y + dy), video_wrapped, 
+                                  fill='black', font=font_large, align='center')
+        draw.multiline_text((video_x, video_y), video_wrapped, 
+                          fill='white', font=font_large, align='center')
+        
+        # Convert back to RGB for JPEG saving
+        if background.mode != 'RGB':
+            background = background.convert('RGB')
+        
+        return background
+        
+    except Exception as e:
+        print(f"Error generating thumbnail: {e}")
+        # Return a default thumbnail
+        default = Image.new('RGB', (output_width, output_height), color='#10B981')
+        draw = ImageDraw.Draw(default)
+        draw.text((output_width//2, output_height//2), f"{category_name}\n{video_title}", 
+                 fill='white', anchor='mm')
+        return default
+
+def upload_thumbnail_to_s3(image, video_id, video_title):
+    """
+    Upload generated thumbnail to S3
+    """
+    try:
+        s3_client = init_s3_client()
+        if not s3_client:
+            return None
+        
+        # Create filename
+        safe_title = re.sub(r'[^a-zA-Z0-9\s-]', '', video_title)
+        safe_title = re.sub(r'\s+', '-', safe_title.strip())
+        filename = f"thumbnails/video-{video_id}-{safe_title[:30]}.jpg"
+        
+        # Save image to bytes
+        img_buffer = BytesIO()
+        image.save(img_buffer, format='JPEG', quality=90, optimize=True)
+        img_buffer.seek(0)
+        
+        # Upload to S3
+        bucket = app.config.get('AWS_S3_BUCKET', 'tgfx-tradelab')
+        s3_client.upload_fileobj(
+            img_buffer,
+            bucket,
+            filename,
+            ExtraArgs={
+                'ContentType': 'image/jpeg',
+                'ServerSideEncryption': 'AES256'
+            }
+        )
+        
+        # Return S3 URL
+        return f"https://{bucket}.s3.amazonaws.com/{filename}"
+        
+    except Exception as e:
+        print(f"Error uploading thumbnail to S3: {e}")
+        return None
+
+def get_trader_defaults(user):
+    """
+    Get default trading pair and name for auto-fill
+    """
+    if not user:
+        return "Trader", "EURUSD"
+    
+    # Map users to their default trading pairs
+    trader_defaults = {
+        'jordan': ('Jordan', 'XAUUSD'),
+        'jwill24': ('Jordan', 'XAUUSD'),
+        'admin': ('Ray', 'EURUSD'),
+        'ray': ('Ray', 'EURUSD')
+    }
+    
+    username = user.username.lower()
+    return trader_defaults.get(username, (user.display_name or user.username, 'EURUSD'))
+
+def auto_fill_live_session_title(user):
+    """
+    Generate auto-filled title for live trading sessions
+    """
+    trader_name, trading_pair = get_trader_defaults(user)
+    current_date = datetime.now().strftime('%m-%d-%y')
+    return f"{trader_name} - {current_date} {trading_pair}"
 
 def user_can_access_video(video):
     if video.is_free:
