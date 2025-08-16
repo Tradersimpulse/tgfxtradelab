@@ -1868,21 +1868,6 @@ def dashboard():
                          recent_activity=recent_activity,
                          notifications=notifications)
 
-# API route for auto-fill title
-@app.route('/api/admin/auto-fill-title', methods=['POST'])
-@login_required
-def api_auto_fill_title():
-    if not current_user.is_admin:
-        return jsonify({'error': 'Access denied'}), 403
-    
-    try:
-        auto_title = auto_fill_live_session_title(current_user)
-        return jsonify({
-            'success': True,
-            'title': auto_title
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 # API route for regenerating single thumbnail
 @app.route('/api/admin/regenerate-thumbnail', methods=['POST'])
