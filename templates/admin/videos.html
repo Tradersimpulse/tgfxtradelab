@@ -61,8 +61,7 @@
                                                 border-radius: 4px;">
                                         {% if video.category.background_image_url or video.thumbnail_url %}
                                         <div class="admin-thumbnail-overlay">
-                                            <div class="admin-category-label">{{ video.category.name[:3] }}</div>
-                                            <div class="admin-video-title">{{ video.title[:15] }}{% if video.title|length > 15 %}...{% endif %}</div>
+                                            <div class="admin-video-title">{{ video.title[:20] }}{% if video.title|length > 20 %}...{% endif %}</div>
                                         </div>
                                         {% else %}
                                         <div class="bg-gradient-primary d-flex align-items-center justify-content-center" 
