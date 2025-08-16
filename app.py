@@ -2662,6 +2662,119 @@ def donate():
     return render_template('donate.html', stripe_key=stripe_key)
 
 # API Routes
+
+@app.route('/admin/tags')
+@login_required
+def admin_tags():
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    tags = Tag.query.order_by(Tag.name).all()
+    
+    tag_stats = []
+    for tag in tags:
+        video_count = len(tag.videos)
+        tag_stats.append({
+            'tag': tag,
+            'video_count': video_count,
+            'free_videos': len([v for v in tag.videos if v.is_free]),
+            'premium_videos': len([v for v in tag.videos if not v.is_free])
+        })
+    
+    return render_template('admin/tags.html', tags=tags, tag_stats=tag_stats)
+
+@app.route('/admin/tag/add', methods=['GET', 'POST'])
+@login_required
+def admin_add_tag():
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    form = TagForm()
+    
+    if form.validate_on_submit():
+        slug = re.sub(r'[^a-zA-Z0-9\s-]', '', form.name.data.lower())
+        slug = re.sub(r'\s+', '-', slug.strip())
+        
+        if Tag.query.filter_by(slug=slug).first():
+            flash('A tag with this name already exists', 'error')
+            return render_template('admin/tag_form.html', form=form, title='Add Tag')
+        
+        tag = Tag(
+            name=form.name.data.strip().title(),
+            slug=slug,
+            description=form.description.data,
+            color=form.color.data or '#10B981'
+        )
+        db.session.add(tag)
+        db.session.commit()
+        flash('Tag added successfully!', 'success')
+        return redirect(url_for('admin_tags'))
+    
+    return render_template('admin/tag_form.html', form=form, title='Add Tag')
+
+@app.route('/admin/tag/edit/<int:tag_id>', methods=['GET', 'POST'])
+@login_required
+def admin_edit_tag(tag_id):
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    tag = Tag.query.get_or_404(tag_id)
+    form = TagForm(obj=tag)
+    
+    if form.validate_on_submit():
+        slug = re.sub(r'[^a-zA-Z0-9\s-]', '', form.name.data.lower())
+        slug = re.sub(r'\s+', '-', slug.strip())
+        
+        existing_tag = Tag.query.filter_by(slug=slug).first()
+        if existing_tag and existing_tag.id != tag.id:
+            flash('A tag with this name already exists', 'error')
+            return render_template('admin/tag_form.html', form=form, tag=tag, title='Edit Tag')
+        
+        tag.name = form.name.data.strip().title()
+        tag.slug = slug
+        tag.description = form.description.data
+        tag.color = form.color.data or '#10B981'
+        
+        db.session.commit()
+        flash('Tag updated successfully!', 'success')
+        return redirect(url_for('admin_tags'))
+    
+    return render_template('admin/tag_form.html', form=form, tag=tag, title='Edit Tag')
+
+# ALSO ADD THIS API ROUTE:
+@app.route('/api/admin/auto-fill-title', methods=['POST'])
+@login_required
+def api_auto_fill_title():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        # Get trader defaults
+        trader_defaults = {
+            'jordan': ('Jordan', 'XAUUSD'),
+            'jwill24': ('Jordan', 'XAUUSD'),
+            'admin': ('Ray', 'EURUSD'),
+            'ray': ('Ray', 'EURUSD')
+        }
+        
+        username = current_user.username.lower()
+        trader_name, trading_pair = trader_defaults.get(username, (current_user.display_name or current_user.username, 'EURUSD'))
+        
+        # Generate title with current date
+        from datetime import datetime
+        current_date = datetime.now().strftime('%m-%d-%y')
+        auto_title = f"{trader_name} - {current_date} {trading_pair}"
+        
+        return jsonify({
+            'success': True,
+            'title': auto_title
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        
 @app.route('/api/video/progress', methods=['POST'])
 @login_required
 def update_progress():
