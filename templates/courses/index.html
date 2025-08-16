@@ -110,8 +110,7 @@
                         </div>
                         {% else %}
                         <div class="video-thumbnail-overlay course-overlay">
-                            <div class="video-category-label">{{ category.name }}</div>
-                            <div class="video-title-overlay">{{ videos|length }} Video{{ 's' if videos|length != 1 else '' }}</div>
+                            <div class="video-title-overlay">{{ category.name }}</div>
                         </div>
                         {% endif %}
                     </div>
@@ -322,52 +321,52 @@ document.addEventListener('DOMContentLoaded', function() {
     background: linear-gradient(
         135deg,
         rgba(0, 0, 0, 0.7) 0%,
-        rgba(0, 0, 0, 0.3) 50%,
-        rgba(0, 0, 0, 0.8) 100%
+        rgba(0, 0, 0, 0.4) 50%,
+        rgba(0, 0, 0, 0.7) 100%
     );
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: center;
+    align-items: center;
     padding: 0.75rem;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    opacity: 1;
+    transition: background 0.3s ease;
 }
 
 .video-thumbnail:hover .video-thumbnail-overlay {
-    opacity: 1;
+    background: linear-gradient(
+        135deg,
+        rgba(0, 0, 0, 0.8) 0%,
+        rgba(0, 0, 0, 0.5) 50%,
+        rgba(0, 0, 0, 0.8) 100%
+    );
 }
 
 .video-category-label {
-    color: #10B981;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    align-self: flex-start;
+    display: none;
 }
 
 .video-title-overlay {
     color: white;
     font-size: 0.9rem;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.2;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
-    align-self: flex-end;
-    text-align: right;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    text-align: center;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
 }
 
 /* Course overlay variant */
 .course-overlay .video-title-overlay {
-    text-align: left;
-    align-self: flex-start;
-    font-size: 0.85rem;
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 /* Fallback for missing images */
