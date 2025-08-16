@@ -394,15 +394,16 @@ document.addEventListener('DOMContentLoaded', function() {
     bottom: 0 !important;
     background: linear-gradient(
         135deg,
-        rgba(0, 0, 0, 0.7) 0%,
-        rgba(0, 0, 0, 0.4) 50%,
-        rgba(0, 0, 0, 0.7) 100%
+        rgba(0, 0, 0, 0.4) 0%,
+        rgba(0, 0, 0, 0.2) 50%,
+        rgba(0, 0, 0, 0.4) 100%
     ) !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
     align-items: center !important;
-    padding: 0.75rem !important;
+    padding: 0 !important;
+    margin: 0 !important;
     opacity: 1 !important;
     transition: background 0.3s ease !important;
     z-index: 1 !important;
@@ -413,9 +414,9 @@ document.addEventListener('DOMContentLoaded', function() {
 .video-thumbnail:hover .video-thumbnail-overlay {
     background: linear-gradient(
         135deg,
-        rgba(0, 0, 0, 0.8) 0%,
-        rgba(0, 0, 0, 0.5) 50%,
-        rgba(0, 0, 0, 0.8) 100%
+        rgba(0, 0, 0, 0.5) 0%,
+        rgba(0, 0, 0, 0.3) 50%,
+        rgba(0, 0, 0, 0.5) 100%
     ) !important;
 }
 
@@ -430,7 +431,7 @@ document.addEventListener('DOMContentLoaded', function() {
     font-size: 1.1rem !important;
     font-weight: 900 !important;
     line-height: 1.2 !important;
-    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9) !important;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.9), 1px 1px 4px rgba(0, 0, 0, 0.8) !important;
     text-align: center !important;
     max-width: 100% !important;
     overflow: hidden !important;
@@ -439,9 +440,12 @@ document.addEventListener('DOMContentLoaded', function() {
     -webkit-line-clamp: 3 !important;
     -webkit-box-orient: vertical !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 0.5rem !important;
     position: relative !important;
     z-index: 2 !important;
+    width: 100% !important;
+    height: auto !important;
+    box-sizing: border-box !important;
 }
 
 /* List view specific adjustments */
