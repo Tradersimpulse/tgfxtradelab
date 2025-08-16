@@ -4361,6 +4361,11 @@ def inject_user_timezone():
         return dict(user_timezone=current_user.timezone or 'America/Chicago')
     return dict(user_timezone='America/Chicago')
 
+@app.context_processor
+def inject_datetime():
+    """Make datetime available in all templates"""
+    return dict(datetime=datetime)
+
 # Initialize configuration
 config_class.init_app(app)
 
