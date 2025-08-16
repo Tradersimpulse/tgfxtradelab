@@ -53,6 +53,27 @@
                         <div class="form-text">Choose a clear, descriptive title for your video</div>
                     </div>
                     
+                    <!-- Category (moved under title) -->
+                    <div class="mb-4">
+                        {{ form.category_id.label(class="form-label") }}
+                        {{ form.category_id(class="form-select") }}
+                        {% if form.category_id.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.category_id.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="form-text">Select the category for this video</div>
+                        
+                        <!-- Auto-fill notification -->
+                        <div id="autoFillNotification" class="alert alert-info mt-2" style="display: none;">
+                            <span class="material-symbols-outlined me-2">auto_fix_high</span>
+                            <strong>Auto-fill activated!</strong> Title has been automatically filled for Live Trading Session.
+                            <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="clearAutoFill()">
+                                Clear & Use Custom Title
+                            </button>
+                        </div>
+                    </div>
+                    
                     <!-- Description -->
                     <div class="mb-4">
                         {{ form.description.label(class="form-label") }}
@@ -88,6 +109,8 @@
                                 <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Technical Analysis">Technical Analysis</button>
                                 <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Chart Patterns">Chart Patterns</button>
                                 <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Trading Strategies">Trading Strategies</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Live Session">Live Session</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary tag-suggestion" data-tag="Live Trading">Live Trading</button>
                             </div>
                         </div>
                         
@@ -107,29 +130,36 @@
                         <div class="form-text">Direct link to the video file stored in AWS S3</div>
                     </div>
                     
-                    <!-- Thumbnail URL -->
+                    <!-- Thumbnail URL (now auto-generated info) -->
                     <div class="mb-4">
-                        {{ form.thumbnail_url.label(class="form-label") }}
-                        {{ form.thumbnail_url(class="form-control", placeholder="https://your-bucket.s3.region.amazonaws.com/thumbnail.jpg") }}
-                        {% if form.thumbnail_url.errors %}
-                        <div class="text-danger small mt-1">
-                            {% for error in form.thumbnail_url.errors %}{{ error }}{% endfor %}
+                        <label class="form-label">Thumbnail Generation</label>
+                        <div class="alert alert-info">
+                            <span class="material-symbols-outlined me-2">auto_awesome</span>
+                            <strong>Automatic Thumbnail:</strong> 
+                            Thumbnails will be automatically generated using the category background image with overlaid text.
+                            No manual thumbnail URL needed!
                         </div>
-                        {% endif %}
-                        <div class="form-text">Optional: Thumbnail image for the video</div>
+                        
+                        <!-- Hidden field for thumbnail URL -->
+                        {{ form.thumbnail_url(type="hidden") }}
+                        
+                        <!-- Manual thumbnail override (optional) -->
+                        <div class="collapse" id="manualThumbnailCollapse">
+                            <label class="form-label">Manual Thumbnail Override (Optional)</label>
+                            <input type="url" class="form-control" id="manualThumbnailUrl" 
+                                   placeholder="https://your-bucket.s3.region.amazonaws.com/custom-thumbnail.jpg">
+                            <div class="form-text">Only use this if you want to override the auto-generated thumbnail</div>
+                        </div>
+                        
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" 
+                                data-bs-toggle="collapse" data-bs-target="#manualThumbnailCollapse">
+                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">settings</span>
+                            Manual Thumbnail Override
+                        </button>
                     </div>
                     
-                    <!-- Category and Settings -->
+                    <!-- Settings Row -->
                     <div class="row mb-4">
-                        <div class="col-md-6">
-                            {{ form.category_id.label(class="form-label") }}
-                            {{ form.category_id(class="form-select") }}
-                            {% if form.category_id.errors %}
-                            <div class="text-danger small mt-1">
-                                {% for error in form.category_id.errors %}{{ error }}{% endfor %}
-                            </div>
-                            {% endif %}
-                        </div>
                         <div class="col-md-6">
                             {{ form.order_index.label(class="form-label") }}
                             {{ form.order_index(class="form-control", placeholder="0") }}
@@ -140,15 +170,12 @@
                             {% endif %}
                             <div class="form-text">Lower numbers appear first</div>
                         </div>
-                    </div>
-                    
-                    <!-- Free Video Checkbox -->
-                    <div class="mb-4">
-                        <div class="form-check">
-                            {{ form.is_free(class="form-check-input") }}
-                            {{ form.is_free.label(class="form-check-label") }}
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div class="form-check">
+                                {{ form.is_free(class="form-check-input") }}
+                                {{ form.is_free.label(class="form-check-label") }}
+                            </div>
                         </div>
-                        <div class="form-text">Check this box if the video should be available to all users</div>
                     </div>
                     
                     <!-- Submit Buttons -->
@@ -189,8 +216,9 @@
                         <img src="{{ video.thumbnail_url }}" alt="Thumbnail" class="img-fluid rounded">
                         {% else %}
                         <div class="placeholder-thumbnail">
-                            <span class="material-symbols-outlined">image</span>
-                            <p class="small mt-2">Thumbnail Preview</p>
+                            <span class="material-symbols-outlined">auto_awesome</span>
+                            <p class="small mt-2">Auto-Generated Thumbnail</p>
+                            <p class="small text-muted">Will be created with category background + overlaid text</p>
                         </div>
                         {% endif %}
                     </div>
@@ -219,6 +247,45 @@
             </div>
         </div>
         
+        <!-- Live Trading Session Helper -->
+        <div class="card mb-4" id="liveSessionHelper" style="display: none;">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">live_tv</span>
+                    Live Trading Session Helper
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label small">Trader:</label>
+                    <div class="d-flex gap-2 mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-success trader-btn" data-trader="Ray" data-pair="EURUSD">
+                            Ray (EURUSD)
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary trader-btn" data-trader="Jordan" data-pair="XAUUSD">
+                            Jordan (XAUUSD)
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label small">Date:</label>
+                    <input type="date" class="form-control form-control-sm" id="sessionDate" 
+                           value="{{ datetime.now().strftime('%Y-%m-%d') }}">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label small">Trading Pair:</label>
+                    <input type="text" class="form-control form-control-sm" id="tradingPair" placeholder="EURUSD">
+                </div>
+                
+                <button type="button" class="btn btn-sm btn-primary w-100" onclick="generateLiveSessionTitle()">
+                    <span class="material-symbols-outlined me-1" style="font-size: 16px;">auto_fix_high</span>
+                    Generate Title
+                </button>
+            </div>
+        </div>
+        
         <!-- Video Guidelines -->
         <div class="card mb-4">
             <div class="card-header">
@@ -235,43 +302,41 @@
                     </li>
                     <li class="mb-2">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Use descriptive titles and detailed descriptions</small>
+                        <small>Thumbnails are auto-generated from category backgrounds</small>
+                    </li>
+                    <li class="mb-2">
+                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
+                        <small>Live Trading Sessions have auto-fill titles</small>
                     </li>
                     <li class="mb-2">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
                         <small>Add relevant tags to improve discoverability</small>
                     </li>
-                    <li class="mb-2">
-                        <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Set proper order within categories</small>
-                    </li>
                     <li class="mb-0">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Include high-quality thumbnails when possible</small>
+                        <small>Set proper order within categories</small>
                     </li>
                 </ul>
             </div>
         </div>
         
-        <!-- Existing Tags -->
-        <div class="card">
+        <!-- Category Background Preview -->
+        <div class="card" id="categoryBackgroundCard" style="display: none;">
             <div class="card-header">
                 <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">label</span>
-                    Popular Tags
+                    <span class="material-symbols-outlined me-2">image</span>
+                    Category Background
                 </h6>
             </div>
             <div class="card-body">
-                <div class="d-flex flex-wrap gap-2">
-                    <!-- This would be populated with existing tags from the database -->
-                    <span class="badge bg-primary">Market Structure</span>
-                    <span class="badge bg-success">Support & Resistance</span>
-                    <span class="badge bg-warning">Price Action</span>
-                    <span class="badge bg-info">Risk Management</span>
-                    <span class="badge bg-secondary">Psychology</span>
+                <div id="categoryBackgroundPreview" class="text-center">
+                    <div class="placeholder-thumbnail">
+                        <span class="material-symbols-outlined">image</span>
+                        <p class="small mt-2">Category Background</p>
+                    </div>
                 </div>
                 <p class="text-muted small mt-2 mb-0">
-                    Click any tag above to add it to your video.
+                    This background will be used to generate the video thumbnail with overlaid text.
                 </p>
             </div>
         </div>
@@ -281,95 +346,223 @@
 
 {% block scripts %}
 <script>
-// Form submission with loading state and URL cleaning
+// Global variables
+let isAutoFilled = false;
+let originalTitle = '';
+
+// Auto-fill functionality for Live Trading Sessions
+document.addEventListener('DOMContentLoaded', function() {
+    const categorySelect = document.querySelector('[name="category_id"]');
+    const titleInput = document.querySelector('[name="title"]');
+    
+    // Store original title
+    originalTitle = titleInput.value;
+    
+    // Check if Live Trading Sessions is initially selected
+    checkForLiveSession();
+    
+    // Listen for category changes
+    categorySelect.addEventListener('change', function() {
+        checkForLiveSession();
+        updateCategoryBackgroundPreview();
+    });
+    
+    // Initialize preview
+    updateTagsPreview();
+    updateCategoryBackgroundPreview();
+    
+    // Auto-suggest order index
+    const orderInput = document.querySelector('[name="order_index"]');
+    if (orderInput && !orderInput.value) {
+        orderInput.value = 0;
+    }
+});
+
+function checkForLiveSession() {
+    const categorySelect = document.querySelector('[name="category_id"]');
+    const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+    const categoryName = selectedOption.text;
+    const titleInput = document.querySelector('[name="title"]');
+    const notification = document.getElementById('autoFillNotification');
+    const helper = document.getElementById('liveSessionHelper');
+    
+    if (categoryName.includes('Live Trading Sessions') || categoryName.includes('Live Session')) {
+        // Show helper
+        helper.style.display = 'block';
+        
+        // Auto-fill title if not already auto-filled and field is empty or default
+        if (!isAutoFilled && (titleInput.value === '' || titleInput.value === originalTitle)) {
+            generateAutoFillTitle();
+        }
+    } else {
+        // Hide helper
+        helper.style.display = 'none';
+        
+        // If was auto-filled, clear it
+        if (isAutoFilled) {
+            clearAutoFill();
+        }
+    }
+}
+
+async function generateAutoFillTitle() {
+    try {
+        const response = await fetch('/api/admin/auto-fill-title', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({})
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const titleInput = document.querySelector('[name="title"]');
+            titleInput.value = data.title;
+            isAutoFilled = true;
+            
+            // Show notification
+            const notification = document.getElementById('autoFillNotification');
+            notification.style.display = 'block';
+            
+            // Update preview
+            updateTitlePreview();
+            
+            // Auto-add tags
+            const tagsInput = document.querySelector('[name="tags"]');
+            const currentTags = tagsInput.value;
+            const newTags = 'Live Session, Live Trading';
+            
+            if (!currentTags.includes('Live Session')) {
+                if (currentTags.trim()) {
+                    tagsInput.value = currentTags + ', ' + newTags;
+                } else {
+                    tagsInput.value = newTags;
+                }
+                updateTagsPreview();
+            }
+        }
+    } catch (error) {
+        console.error('Error generating auto-fill title:', error);
+    }
+}
+
+function generateLiveSessionTitle() {
+    const trader = document.querySelector('.trader-btn.active')?.dataset.trader || 'Trader';
+    const date = document.getElementById('sessionDate').value;
+    const pair = document.getElementById('tradingPair').value || 'EURUSD';
+    
+    if (date) {
+        const dateObj = new Date(date);
+        const formattedDate = String(dateObj.getMonth() + 1).padStart(2, '0') + '-' + 
+                             String(dateObj.getDate()).padStart(2, '0') + '-' + 
+                             String(dateObj.getFullYear()).slice(-2);
+        
+        const title = `${trader} - ${formattedDate} ${pair}`;
+        document.querySelector('[name="title"]').value = title;
+        isAutoFilled = true;
+        
+        // Show notification
+        document.getElementById('autoFillNotification').style.display = 'block';
+        updateTitlePreview();
+    }
+}
+
+function clearAutoFill() {
+    const titleInput = document.querySelector('[name="title"]');
+    titleInput.value = '';
+    isAutoFilled = false;
+    
+    // Hide notification
+    const notification = document.getElementById('autoFillNotification');
+    notification.style.display = 'none';
+    
+    updateTitlePreview();
+}
+
+function updateCategoryBackgroundPreview() {
+    const categorySelect = document.querySelector('[name="category_id"]');
+    const selectedCategoryId = categorySelect.value;
+    const card = document.getElementById('categoryBackgroundCard');
+    
+    if (selectedCategoryId) {
+        // You would fetch category background info here
+        // For now, just show the card
+        card.style.display = 'block';
+    } else {
+        card.style.display = 'none';
+    }
+}
+
+// Trader selection for live sessions
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('trader-btn')) {
+        // Remove active from all
+        document.querySelectorAll('.trader-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Add active to clicked
+        e.target.classList.add('active');
+        
+        // Update trading pair
+        document.getElementById('tradingPair').value = e.target.dataset.pair;
+    }
+});
+
+// Form submission with thumbnail generation
 document.getElementById('videoForm').addEventListener('submit', function(e) {
-    // Clean the thumbnail URL before submission
-    const thumbnailInput = document.querySelector('[name="thumbnail_url"]');
-    if (thumbnailInput.value) {
-        thumbnailInput.value = cleanThumbnailUrl(thumbnailInput.value);
+    // Set manual thumbnail if provided
+    const manualThumbnail = document.getElementById('manualThumbnailUrl');
+    const hiddenThumbnail = document.querySelector('[name="thumbnail_url"]');
+    
+    if (manualThumbnail && manualThumbnail.value) {
+        hiddenThumbnail.value = manualThumbnail.value;
     }
     
     const submitBtn = this.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving & Generating Thumbnail...';
 });
 
 // Live preview updates
 const titleInput = document.querySelector('[name="title"]');
 const descriptionInput = document.querySelector('[name="description"]');
-const thumbnailInput = document.querySelector('[name="thumbnail_url"]');
 const categorySelect = document.querySelector('[name="category_id"]');
 const freeCheckbox = document.querySelector('[name="is_free"]');
 const tagsInput = document.querySelector('[name="tags"]');
 
-titleInput.addEventListener('input', function() {
-    document.getElementById('titlePreview').textContent = this.value || 'Video Title';
-});
+titleInput.addEventListener('input', updateTitlePreview);
+descriptionInput.addEventListener('input', updateDescriptionPreview);
+categorySelect.addEventListener('change', updateCategoryPreview);
+freeCheckbox.addEventListener('change', updateTypePreview);
+tagsInput.addEventListener('input', updateTagsPreview);
 
-descriptionInput.addEventListener('input', function() {
-    const preview = document.getElementById('descriptionPreview');
-    const text = this.value || 'Video description will appear here...';
-    preview.textContent = text.length > 100 ? text.substring(0, 100) + '...' : text;
-});
-
-// Helper function to clean and validate URLs
-function cleanThumbnailUrl(url) {
-    if (!url) return '';
-    
-    // Remove any leading/trailing whitespace
-    url = url.trim();
-    
-    // Replace + with %20 for proper URL encoding
-    url = url.replace(/\+/g, '%20');
-    
-    // Basic URL validation
-    try {
-        new URL(url);
-        return url;
-    } catch (e) {
-        return '';
-    }
+function updateTitlePreview() {
+    document.getElementById('titlePreview').textContent = titleInput.value || 'Video Title';
 }
 
-thumbnailInput.addEventListener('input', function() {
-    const preview = document.getElementById('thumbnailPreview');
-    const cleanUrl = cleanThumbnailUrl(this.value);
-    
-    if (cleanUrl) {
-        // Create a new image element to test if the URL is valid
-        const testImg = new Image();
-        testImg.onload = function() {
-            preview.innerHTML = `<img src="${cleanUrl}" alt="Thumbnail" class="img-fluid rounded">`;
-        };
-        testImg.onerror = function() {
-            preview.innerHTML = '<div class="placeholder-thumbnail"><span class="material-symbols-outlined">broken_image</span><p class="small mt-2">Invalid Image URL</p></div>';
-        };
-        testImg.src = cleanUrl;
-    } else {
-        preview.innerHTML = '<div class="placeholder-thumbnail"><span class="material-symbols-outlined">image</span><p class="small mt-2">Thumbnail Preview</p></div>';
-    }
-});
+function updateDescriptionPreview() {
+    const preview = document.getElementById('descriptionPreview');
+    const text = descriptionInput.value || 'Video description will appear here...';
+    preview.textContent = text.length > 100 ? text.substring(0, 100) + '...' : text;
+}
 
-categorySelect.addEventListener('change', function() {
-    const selectedOption = this.options[this.selectedIndex];
+function updateCategoryPreview() {
+    const selectedOption = categorySelect.options[categorySelect.selectedIndex];
     document.getElementById('categoryPreview').textContent = selectedOption.text || 'Category';
-});
+}
 
-freeCheckbox.addEventListener('change', function() {
+function updateTypePreview() {
     const preview = document.getElementById('typePreview');
-    if (this.checked) {
+    if (freeCheckbox.checked) {
         preview.textContent = 'Free';
         preview.className = 'badge bg-success';
     } else {
         preview.textContent = 'Premium';
         preview.className = 'badge bg-warning';
     }
-});
-
-// Tags functionality
-tagsInput.addEventListener('input', function() {
-    updateTagsPreview();
-});
+}
 
 function updateTagsPreview() {
     const tagsPreview = document.getElementById('tagsPreview');
@@ -415,36 +608,6 @@ document.querySelectorAll('.tag-suggestion').forEach(button => {
     });
 });
 
-// Popular tags click handler
-document.querySelectorAll('.badge').forEach(badge => {
-    badge.addEventListener('click', function() {
-        const tag = this.textContent;
-        const currentTags = tagsInput.value;
-        
-        const tagsList = currentTags.split(',').map(t => t.trim());
-        if (!tagsList.includes(tag)) {
-            if (currentTags.trim()) {
-                tagsInput.value = currentTags + ', ' + tag;
-            } else {
-                tagsInput.value = tag;
-            }
-            updateTagsPreview();
-        }
-    });
-});
-
-// Initialize preview
-document.addEventListener('DOMContentLoaded', function() {
-    updateTagsPreview();
-    
-    // Auto-suggest order index
-    const orderInput = document.querySelector('[name="order_index"]');
-    if (orderInput && !orderInput.value) {
-        // You could fetch the next order index via AJAX here
-        orderInput.value = 0;
-    }
-});
-
 // Character counters
 titleInput.addEventListener('input', function() {
     const maxLength = 200;
@@ -456,20 +619,6 @@ titleInput.addEventListener('input', function() {
         formText.className = currentLength > maxLength ? 'form-text text-danger' : 'form-text text-warning';
     } else {
         formText.textContent = 'Choose a clear, descriptive title for your video';
-        formText.className = 'form-text';
-    }
-});
-
-descriptionInput.addEventListener('input', function() {
-    const maxLength = 1000;
-    const currentLength = this.value.length;
-    const formText = this.parentElement.querySelector('.form-text');
-    
-    if (currentLength > maxLength - 100) {
-        formText.textContent = `${currentLength}/${maxLength} characters`;
-        formText.className = currentLength > maxLength ? 'form-text text-danger' : 'form-text text-warning';
-    } else {
-        formText.textContent = 'Provide a detailed description of the video content';
         formText.className = 'form-text';
     }
 });
@@ -513,14 +662,29 @@ descriptionInput.addEventListener('input', function() {
     transform: translateY(-1px);
 }
 
-.badge {
-    cursor: pointer;
-    transition: all 0.2s ease;
+.trader-btn.active {
+    background: var(--gradient-primary);
+    color: white;
+    border-color: var(--primary-color);
 }
 
-.badge:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+.alert-info {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: var(--primary-color);
+}
+
+#liveSessionHelper {
+    border-left: 4px solid var(--primary-color);
+}
+
+#autoFillNotification {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .card:hover {
@@ -529,24 +693,6 @@ descriptionInput.addEventListener('input', function() {
 
 .btn:hover {
     transform: translateY(-1px);
-}
-
-/* Form validation styling */
-.form-control.is-invalid,
-.form-select.is-invalid {
-    border-color: #dc3545;
-}
-
-.form-control.is-valid,
-.form-select.is-valid {
-    border-color: #28a745;
-}
-
-/* Tags preview styling */
-#tagsPreview .badge {
-    font-size: 0.75rem;
-    margin-right: 0.25rem;
-    margin-bottom: 0.25rem;
 }
 </style>
 {% endblock %}
