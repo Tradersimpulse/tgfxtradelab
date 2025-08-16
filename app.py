@@ -56,6 +56,8 @@ print("✓ Using manual LiveKit token generation")
 # Initialize Flask app
 app = Flask(__name__)
 
+APP_UPDATE_DISCORD_WEBHOOK_URL = app.config.get('APP_UPDATE_DISCORD_WEBHOOK_URL')
+
 # FIXED: Load configuration with better error handling
 try:
     config_class = get_config()
@@ -550,6 +552,230 @@ def migrate_category_background_images():
         db.session.rollback()
         print(f"❌ Error migrating category background images: {e}")
         return False
+
+def send_discord_webhook(title, description, color=5814783, fields=None, thumbnail_url=None):
+    """
+    Send a Discord webhook notification
+    """
+    try:
+        if not APP_UPDATE_DISCORD_WEBHOOK_URL:
+            print("⚠️ Discord webhook URL not configured")
+            return False
+        
+        embed = {
+            "title": title,
+            "description": description,
+            "color": color,
+            "timestamp": datetime.utcnow().isoformat(),
+            "footer": {
+                "text": "TGFX Trade Lab",
+                "icon_url": "https://tgfx-tradelab.s3.amazonaws.com/logo.png"
+            }
+        }
+        
+        if fields:
+            embed["fields"] = fields
+            
+        if thumbnail_url:
+            embed["thumbnail"] = {"url": thumbnail_url}
+        
+        webhook_data = {
+            "embeds": [embed],
+            "username": "TGFX Trade Lab",
+            "avatar_url": "https://tgfx-tradelab.s3.amazonaws.com/logo.png"
+        }
+        
+        response = requests.post(
+            APP_UPDATE_DISCORD_WEBHOOK_URL,
+            json=webhook_data,
+            headers={"Content-Type": "application/json"},
+            timeout=10
+        )
+        
+        if response.status_code == 204:
+            print(f"✅ Discord webhook sent: {title}")
+            return True
+        else:
+            print(f"❌ Discord webhook failed: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Discord webhook error: {e}")
+        return False
+
+def send_new_video_webhook(video, category):
+    """Send Discord notification for new video"""
+    fields = [
+        {
+            "name": "📁 Category",
+            "value": category.name,
+            "inline": True
+        },
+        {
+            "name": "🎯 Access",
+            "value": "Free" if video.is_free else "Premium",
+            "inline": True
+        },
+        {
+            "name": "⏱️ Duration",
+            "value": f"{video.duration // 60} minutes" if video.duration else "Unknown",
+            "inline": True
+        }
+    ]
+    
+    # Add tags if available
+    if hasattr(video, 'tags') and video.tags:
+        tag_names = [tag.name for tag in video.tags[:3]]  # Show first 3 tags
+        fields.append({
+            "name": "🏷️ Tags",
+            "value": ", ".join(tag_names),
+            "inline": True
+        })
+    
+    description = f"🎥 **New video available in {category.name}**\n\n"
+    if video.description:
+        # Limit description to 150 characters for Discord
+        desc_preview = video.description[:150] + "..." if len(video.description) > 150 else video.description
+        description += f"{desc_preview}\n\n"
+    
+    description += f"{'🆓 **Free Access**' if video.is_free else '💎 **Premium Content**'}"
+    
+    send_discord_webhook(
+        title=f"📹 {video.title}",
+        description=description,
+        color=3447003,  # Blue color for videos
+        fields=fields,
+        thumbnail_url=video.thumbnail_url
+    )
+
+def send_live_stream_webhook(stream, action="started"):
+    """Send Discord notification for live stream events"""
+    if action == "started":
+        emoji = "🔴"
+        color = 15158332  # Red color for live streams
+        title = f"{emoji} {stream.streamer_name} is now LIVE!"
+        description = f"**{stream.title}**\n\n"
+        
+        if stream.description:
+            desc_preview = stream.description[:150] + "..." if len(stream.description) > 150 else stream.description
+            description += f"{desc_preview}\n\n"
+        
+        description += "🎮 **Join the live stream now!**"
+        
+        fields = [
+            {
+                "name": "👤 Streamer",
+                "value": stream.streamer_name,
+                "inline": True
+            },
+            {
+                "name": "📺 Type",
+                "value": stream.stream_type.replace('_', ' ').title(),
+                "inline": True
+            },
+            {
+                "name": "⏰ Started",
+                "value": stream.started_at.strftime("%I:%M %p UTC") if stream.started_at else "Now",
+                "inline": True
+            }
+        ]
+        
+        if stream.is_recording:
+            fields.append({
+                "name": "📹 Recording",
+                "value": "✅ Yes",
+                "inline": True
+            })
+    
+    elif action == "ended":
+        emoji = "⏹️"
+        color = 9807270  # Gray color for ended streams
+        title = f"{emoji} {stream.streamer_name}'s stream has ended"
+        description = f"**{stream.title}**\n\n"
+        
+        # Calculate duration
+        if stream.started_at and stream.ended_at:
+            duration = stream.ended_at - stream.started_at
+            duration_minutes = int(duration.total_seconds() / 60)
+            description += f"⏱️ **Duration:** {duration_minutes} minutes\n"
+        
+        if stream.recording_url:
+            description += "📼 **Recording saved and added to course library**"
+        
+        fields = [
+            {
+                "name": "👤 Streamer",
+                "value": stream.streamer_name,
+                "inline": True
+            },
+            {
+                "name": "👥 Peak Viewers",
+                "value": str(stream.viewer_count),
+                "inline": True
+            }
+        ]
+    
+    send_discord_webhook(
+        title=title,
+        description=description,
+        color=color,
+        fields=fields
+    )
+
+def send_new_course_webhook(category):
+    """Send Discord notification for new course/category"""
+    description = f"🎓 **New course category added**\n\n"
+    
+    if category.description:
+        desc_preview = category.description[:200] + "..." if len(category.description) > 200 else category.description
+        description += f"{desc_preview}\n\n"
+    
+    description += "📚 **Start learning with our latest content!**"
+    
+    fields = [
+        {
+            "name": "📁 Category",
+            "value": category.name,
+            "inline": True
+        },
+        {
+            "name": "📊 Order",
+            "value": str(category.order_index),
+            "inline": True
+        }
+    ]
+    
+    send_discord_webhook(
+        title=f"📚 New Course: {category.name}",
+        description=description,
+        color=10181046,  # Purple color for courses
+        fields=fields,
+        thumbnail_url=category.image_url
+    )
+
+# Test webhook function
+def test_discord_webhook():
+    """Test Discord webhook with a sample message"""
+    test_fields = [
+        {
+            "name": "🧪 Test Field",
+            "value": "This is a test notification",
+            "inline": True
+        },
+        {
+            "name": "⚡ Status",
+            "value": "Integration Working",
+            "inline": True
+        }
+    ]
+    
+    return send_discord_webhook(
+        title="🎉 Discord Integration Test",
+        description="**Discord webhooks are now active!**\n\nYou'll receive notifications for:\n• 📹 New videos\n• 🔴 Live streams\n• 📚 New courses",
+        color=5763719,  # Gold color
+        fields=test_fields
+    )
+
 
 
 # Manual LiveKit token generation (works perfectly without SDK)
@@ -3067,6 +3293,13 @@ def admin_add_video():
         
         db.session.commit()
         
+        # 🆕 DISCORD WEBHOOK: Send Discord notification for new video
+        try:
+            category = Category.query.get(form.category_id.data)
+            send_new_video_webhook(video, category)
+        except Exception as e:
+            print(f"Failed to send Discord webhook for new video: {e}")
+        
         # Broadcast notification about new video
         broadcast_notification(
             'New Video Available!',
@@ -3199,10 +3432,18 @@ def admin_add_category():
             name=form.name.data,
             description=form.description.data,
             image_url=form.image_url.data,
+            background_image_url=form.background_image_url.data,
             order_index=form.order_index.data
         )
         db.session.add(category)
         db.session.commit()
+        
+        # 🆕 DISCORD WEBHOOK: Send Discord notification for new course
+        try:
+            send_new_course_webhook(category)
+        except Exception as e:
+            print(f"Failed to send Discord webhook for new category: {e}")
+        
         flash('Category added successfully!', 'success')
         return redirect(url_for('admin_categories'))
     
@@ -3543,7 +3784,6 @@ def api_delete_video(video_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-# Update your existing /api/stream/start route to include WebSocket notification
 @app.route('/api/stream/start', methods=['POST'])
 @login_required
 def api_start_stream():
@@ -3617,12 +3857,10 @@ def api_start_stream():
         try:
             print(f"🎬 Attempting auto-recording for {streamer_name}'s stream...")
             
-            # Call the function WITHOUT s3_key parameter
             recording_info = start_livekit_cloud_recording(
                 room_name=room_name,
                 stream_id=stream.id,
                 streamer_name=streamer_name
-                # REMOVED s3_key parameter
             )
             
             if recording_info and recording_info.get('recording_id'):
@@ -3637,6 +3875,12 @@ def api_start_stream():
         except Exception as e:
             print(f"⚠️ Auto-recording failed: {e}")
             # Continue with stream even if recording fails
+    
+    # 🆕 DISCORD WEBHOOK: Send Discord notification for new live stream
+    try:
+        send_live_stream_webhook(stream, action="started")
+    except Exception as e:
+        print(f"Failed to send Discord webhook for live stream: {e}")
     
     # Broadcast notification about new stream via WebSocket
     if socketio:
@@ -3669,7 +3913,7 @@ def api_start_stream():
             'is_recording': recording_started
         }
     })
-
+    
 def start_livekit_cloud_recording(room_name, stream_id, streamer_name):
     """Actually start LiveKit Cloud Recording with S3 output"""
     try:
@@ -3860,6 +4104,48 @@ def upload_stream_recording():
     except Exception as e:
         print(f"❌ Upload error: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/test-discord-webhook', methods=['POST'])
+@login_required
+def api_test_discord_webhook():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        test_fields = [
+            {
+                "name": "🧪 Test Field",
+                "value": "This is a test notification",
+                "inline": True
+            },
+            {
+                "name": "⚡ Status",
+                "value": "Integration Working",
+                "inline": True
+            }
+        ]
+        
+        success = send_discord_webhook(
+            title="🎉 Discord Integration Test",
+            description="**Discord webhooks are now active!**\n\nYou'll receive notifications for:\n• 📹 New videos\n• 🔴 Live streams\n• 📚 New courses",
+            color=5763719,  # Gold color
+            fields=test_fields
+        )
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Discord webhook test sent successfully!'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Discord webhook test failed. Check console for errors.'
+            })
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        
     
 @app.route('/api/stream/stop', methods=['POST'])
 @login_required
