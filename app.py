@@ -2035,6 +2035,59 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
+@app.route('/admin/tags')
+@login_required
+def admin_tags():
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    tags = Tag.query.order_by(Tag.name).all()
+    
+    tag_stats = []
+    for tag in tags:
+        video_count = len(tag.videos)
+        tag_stats.append({
+            'tag': tag,
+            'video_count': video_count,
+            'free_videos': len([v for v in tag.videos if v.is_free]),
+            'premium_videos': len([v for v in tag.videos if not v.is_free])
+        })
+    
+    return render_template('admin/tags.html', tags=tags, tag_stats=tag_stats)
+
+# ALSO ADD THIS MISSING ROUTE:
+
+@app.route('/admin/tag/add', methods=['GET', 'POST'])
+@login_required
+def admin_add_tag():
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    form = TagForm()
+    
+    if form.validate_on_submit():
+        slug = re.sub(r'[^a-zA-Z0-9\s-]', '', form.name.data.lower())
+        slug = re.sub(r'\s+', '-', slug.strip())
+        
+        if Tag.query.filter_by(slug=slug).first():
+            flash('A tag with this name already exists', 'error')
+            return render_template('admin/tag_form.html', form=form, title='Add Tag')
+        
+        tag = Tag(
+            name=form.name.data.strip().title(),
+            slug=slug,
+            description=form.description.data,
+            color=form.color.data or '#10B981'
+        )
+        db.session.add(tag)
+        db.session.commit()
+        flash('Tag added successfully!', 'success')
+        return redirect(url_for('admin_tags'))
+    
+    return render_template('admin/tag_form.html', form=form, title='Add Tag')
+
 @app.route('/api/admin/video-stats')
 @login_required
 def get_video_completion_stats():
