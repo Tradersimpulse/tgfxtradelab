@@ -37,7 +37,7 @@
                         controls 
                         class="w-100"
                         style="max-height: 500px;"
-                        poster="{{ video.thumbnail_url or '' }}"
+                        poster="{{ video.category.background_image_url or video.thumbnail_url or '' }}"
                         preload="metadata">
                         <source src="{{ video.s3_url }}" type="video/mp4">
                         Your browser does not support the video tag.
@@ -312,6 +312,314 @@
         </div>
     </div>
 </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let videoPlayer;
+let progressUpdateInterval;
+let lastProgressUpdate = 0;
+let isCompleted = {{ 'true' if progress.completed else 'false' }};
+
+document.addEventListener('DOMContentLoaded', function() {
+    videoPlayer = document.getElementById('videoPlayer');
+    
+    if (videoPlayer) {
+        // Set initial time if there's previous progress and video is not completed
+        {% if progress.watched_duration > 0 and video.duration and not progress.completed %}
+        videoPlayer.currentTime = {{ progress.watched_duration }};
+        {% endif %}
+        
+        // Start progress tracking
+        videoPlayer.addEventListener('play', startProgressTracking);
+        videoPlayer.addEventListener('pause', stopProgressTracking);
+        videoPlayer.addEventListener('ended', stopProgressTracking);
+        
+        // Update progress on time change
+        videoPlayer.addEventListener('timeupdate', updateVisualProgress);
+        
+        // Handle video completion (90% watched)
+        videoPlayer.addEventListener('timeupdate', checkAutoCompletion);
+        
+        // Handle video ended
+        videoPlayer.addEventListener('ended', function() {
+            updateProgress(videoPlayer.duration, videoPlayer.duration, true);
+        });
+    }
+    
+    // Update completion UI based on current status
+    updateCompletionUI();
+});
+
+function startProgressTracking() {
+    progressUpdateInterval = setInterval(function() {
+        if (videoPlayer && !videoPlayer.paused) {
+            const currentTime = Math.floor(videoPlayer.currentTime);
+            const duration = Math.floor(videoPlayer.duration) || 0;
+            
+            // Update progress every 5 seconds or if significantly different
+            if (currentTime - lastProgressUpdate >= 5 || Math.abs(currentTime - lastProgressUpdate) > 10) {
+                updateProgress(currentTime, duration);
+                lastProgressUpdate = currentTime;
+            }
+        }
+    }, 1000);
+}
+
+function stopProgressTracking() {
+    if (progressUpdateInterval) {
+        clearInterval(progressUpdateInterval);
+        progressUpdateInterval = null;
+    }
+    
+    // Final progress update
+    if (videoPlayer) {
+        const currentTime = Math.floor(videoPlayer.currentTime);
+        const duration = Math.floor(videoPlayer.duration) || 0;
+        updateProgress(currentTime, duration);
+    }
+}
+
+function updateProgress(watchedDuration, totalDuration, forceComplete = false) {
+    fetch('/api/video/progress', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            video_id: {{ video.id }},
+            watched_duration: watchedDuration,
+            total_duration: totalDuration,
+            force_complete: forceComplete
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.completed && !isCompleted) {
+            isCompleted = true;
+            updateCompletionUI();
+            showToast('Video completed! 🎉', 'success');
+        }
+    })
+    .catch(error => console.error('Error updating progress:', error));
+}
+
+function updateVisualProgress() {
+    if (videoPlayer && videoPlayer.duration > 0) {
+        const progress = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        
+        if (progressBar) {
+            progressBar.style.width = progress + '%';
+        }
+        
+        if (progressText && !isCompleted) {
+            const minutes = Math.floor(videoPlayer.currentTime / 60);
+            const seconds = Math.floor(videoPlayer.currentTime % 60);
+            progressText.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} watched`;
+        }
+    }
+}
+
+function checkAutoCompletion() {
+    if (videoPlayer && videoPlayer.duration > 0 && !isCompleted) {
+        const progress = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+        if (progress >= 90) {
+            // Auto-complete when 90% watched
+            const currentTime = Math.floor(videoPlayer.currentTime);
+            const duration = Math.floor(videoPlayer.duration);
+            updateProgress(currentTime, duration, true);
+        }
+    }
+}
+
+async function toggleCompletion() {
+    const btn = document.getElementById('completionBtn');
+    const icon = document.getElementById('completionBtnIcon');
+    const text = document.getElementById('completionBtnText');
+    
+    // Add loading state
+    btn.disabled = true;
+    btn.classList.add('loading');
+    
+    try {
+        const response = await fetch('/api/video/completion', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                video_id: {{ video.id }},
+                completed: !isCompleted
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            isCompleted = data.completed;
+            updateCompletionUI();
+            
+            if (isCompleted) {
+                showToast('Video marked as complete! ✅', 'success');
+                // Update progress bar to 100%
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+                if (progressBar) progressBar.style.width = '100%';
+                if (progressText) progressText.textContent = 'Completed';
+            } else {
+                showToast('Video marked as incomplete', 'info');
+                updateVisualProgress(); // Restore actual progress
+            }
+        } else {
+            showToast('Error updating completion status', 'error');
+        }
+    } catch (error) {
+        console.error('Error toggling completion:', error);
+        showToast('Error updating completion status', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('loading');
+    }
+}
+
+function updateCompletionUI() {
+    const btn = document.getElementById('completionBtn');
+    const icon = document.getElementById('completionBtnIcon');
+    const text = document.getElementById('completionBtnText');
+    const badge = document.getElementById('completionBadge');
+    const badgeIcon = badge?.querySelector('.completion-icon');
+    
+    if (isCompleted) {
+        // Update button
+        btn.classList.remove('btn-primary');
+        btn.classList.add('completed');
+        icon.textContent = 'check_circle';
+        text.textContent = 'Mark as Incomplete';
+        
+        // Update badge
+        if (badge) {
+            badge.classList.remove('in-progress');
+            badge.classList.add('completed');
+            badge.innerHTML = '<span class="material-symbols-outlined me-1 completion-icon">check_circle</span>Completed';
+        }
+    } else {
+        // Update button
+        btn.classList.remove('completed');
+        btn.classList.add('btn-primary');
+        icon.textContent = 'radio_button_unchecked';
+        text.textContent = 'Mark as Complete';
+        
+        // Update badge
+        if (badge) {
+            badge.classList.remove('completed');
+            badge.classList.add('in-progress');
+            badge.innerHTML = '<span class="material-symbols-outlined me-1 completion-icon">radio_button_unchecked</span>In Progress';
+        }
+    }
+}
+
+async function resetProgress() {
+    if (!confirm('Are you sure you want to reset your progress for this video? This will set your watch time back to 0 and mark the video as incomplete.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/video/reset-progress', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ video_id: {{ video.id }} })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Reset video player to beginning
+            if (videoPlayer) {
+                videoPlayer.currentTime = 0;
+            }
+            
+            // Reset progress UI
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            if (progressBar) progressBar.style.width = '0%';
+            if (progressText) progressText.textContent = 'Not started';
+            
+            // Mark as incomplete
+            isCompleted = false;
+            updateCompletionUI();
+            
+            showToast('Progress reset successfully', 'success');
+            
+            // Reload page to update reset button visibility
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('Error resetting progress', 'error');
+        }
+    } catch (error) {
+        console.error('Error resetting progress:', error);
+        showToast('Error resetting progress', 'error');
+    }
+}
+
+async function toggleFavorite() {
+    try {
+        const response = await fetch('/api/video/favorite', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ video_id: {{ video.id }} })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const icon = document.getElementById('favoriteIcon');
+            const btn = document.getElementById('favoriteBtn');
+            
+            if (data.is_favorited) {
+                icon.textContent = 'favorite';
+                btn.classList.remove('btn-outline-danger');
+                btn.classList.add('btn-danger', 'favorited');
+                showToast('Added to favorites', 'success');
+            } else {
+                icon.textContent = 'favorite_border';
+                btn.classList.remove('btn-danger', 'favorited');
+                btn.classList.add('btn-outline-danger');
+                showToast('Removed from favorites', 'info');
+            }
+        }
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+        showToast('Error updating favorite', 'error');
+    }
+}
+
+function shareVideo() {
+    if (navigator.share) {
+        navigator.share({
+            title: '{{ video.title }}',
+            text: 'Check out this video from TGFX Trade Lab',
+            url: window.location.href
+        });
+    } else {
+        // Fallback to clipboard
+        navigator.clipboard.writeText(window.location.href).then(function() {
+            showToast('Video link copied to clipboard', 'success');
+        });
+    }
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', function() {
+    stopProgressTracking();
+});
+</script>
 
 <style>
 /* Responsive improvements */
@@ -677,312 +985,4 @@
     100% { left: 100%; }
 }
 </style>
-
-{% endblock %}
-
-{% block scripts %}
-<script>
-let videoPlayer;
-let progressUpdateInterval;
-let lastProgressUpdate = 0;
-let isCompleted = {{ 'true' if progress.completed else 'false' }};
-
-document.addEventListener('DOMContentLoaded', function() {
-    videoPlayer = document.getElementById('videoPlayer');
-    
-    if (videoPlayer) {
-        // Set initial time if there's previous progress and video is not completed
-        {% if progress.watched_duration > 0 and video.duration and not progress.completed %}
-        videoPlayer.currentTime = {{ progress.watched_duration }};
-        {% endif %}
-        
-        // Start progress tracking
-        videoPlayer.addEventListener('play', startProgressTracking);
-        videoPlayer.addEventListener('pause', stopProgressTracking);
-        videoPlayer.addEventListener('ended', stopProgressTracking);
-        
-        // Update progress on time change
-        videoPlayer.addEventListener('timeupdate', updateVisualProgress);
-        
-        // Handle video completion (90% watched)
-        videoPlayer.addEventListener('timeupdate', checkAutoCompletion);
-        
-        // Handle video ended
-        videoPlayer.addEventListener('ended', function() {
-            updateProgress(videoPlayer.duration, videoPlayer.duration, true);
-        });
-    }
-    
-    // Update completion UI based on current status
-    updateCompletionUI();
-});
-
-function startProgressTracking() {
-    progressUpdateInterval = setInterval(function() {
-        if (videoPlayer && !videoPlayer.paused) {
-            const currentTime = Math.floor(videoPlayer.currentTime);
-            const duration = Math.floor(videoPlayer.duration) || 0;
-            
-            // Update progress every 5 seconds or if significantly different
-            if (currentTime - lastProgressUpdate >= 5 || Math.abs(currentTime - lastProgressUpdate) > 10) {
-                updateProgress(currentTime, duration);
-                lastProgressUpdate = currentTime;
-            }
-        }
-    }, 1000);
-}
-
-function stopProgressTracking() {
-    if (progressUpdateInterval) {
-        clearInterval(progressUpdateInterval);
-        progressUpdateInterval = null;
-    }
-    
-    // Final progress update
-    if (videoPlayer) {
-        const currentTime = Math.floor(videoPlayer.currentTime);
-        const duration = Math.floor(videoPlayer.duration) || 0;
-        updateProgress(currentTime, duration);
-    }
-}
-
-function updateProgress(watchedDuration, totalDuration, forceComplete = false) {
-    fetch('/api/video/progress', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            video_id: {{ video.id }},
-            watched_duration: watchedDuration,
-            total_duration: totalDuration,
-            force_complete: forceComplete
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success && data.completed && !isCompleted) {
-            isCompleted = true;
-            updateCompletionUI();
-            showToast('Video completed! 🎉', 'success');
-        }
-    })
-    .catch(error => console.error('Error updating progress:', error));
-}
-
-function updateVisualProgress() {
-    if (videoPlayer && videoPlayer.duration > 0) {
-        const progress = (videoPlayer.currentTime / videoPlayer.duration) * 100;
-        const progressBar = document.getElementById('progressBar');
-        const progressText = document.getElementById('progressText');
-        
-        if (progressBar) {
-            progressBar.style.width = progress + '%';
-        }
-        
-        if (progressText && !isCompleted) {
-            const minutes = Math.floor(videoPlayer.currentTime / 60);
-            const seconds = Math.floor(videoPlayer.currentTime % 60);
-            progressText.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} watched`;
-        }
-    }
-}
-
-function checkAutoCompletion() {
-    if (videoPlayer && videoPlayer.duration > 0 && !isCompleted) {
-        const progress = (videoPlayer.currentTime / videoPlayer.duration) * 100;
-        if (progress >= 90) {
-            // Auto-complete when 90% watched
-            const currentTime = Math.floor(videoPlayer.currentTime);
-            const duration = Math.floor(videoPlayer.duration);
-            updateProgress(currentTime, duration, true);
-        }
-    }
-}
-
-async function toggleCompletion() {
-    const btn = document.getElementById('completionBtn');
-    const icon = document.getElementById('completionBtnIcon');
-    const text = document.getElementById('completionBtnText');
-    
-    // Add loading state
-    btn.disabled = true;
-    btn.classList.add('loading');
-    
-    try {
-        const response = await fetch('/api/video/completion', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                video_id: {{ video.id }},
-                completed: !isCompleted
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            isCompleted = data.completed;
-            updateCompletionUI();
-            
-            if (isCompleted) {
-                showToast('Video marked as complete! ✅', 'success');
-                // Update progress bar to 100%
-                const progressBar = document.getElementById('progressBar');
-                const progressText = document.getElementById('progressText');
-                if (progressBar) progressBar.style.width = '100%';
-                if (progressText) progressText.textContent = 'Completed';
-            } else {
-                showToast('Video marked as incomplete', 'info');
-                updateVisualProgress(); // Restore actual progress
-            }
-        } else {
-            showToast('Error updating completion status', 'error');
-        }
-    } catch (error) {
-        console.error('Error toggling completion:', error);
-        showToast('Error updating completion status', 'error');
-    } finally {
-        btn.disabled = false;
-        btn.classList.remove('loading');
-    }
-}
-
-function updateCompletionUI() {
-    const btn = document.getElementById('completionBtn');
-    const icon = document.getElementById('completionBtnIcon');
-    const text = document.getElementById('completionBtnText');
-    const badge = document.getElementById('completionBadge');
-    const badgeIcon = badge?.querySelector('.completion-icon');
-    
-    if (isCompleted) {
-        // Update button
-        btn.classList.remove('btn-primary');
-        btn.classList.add('completed');
-        icon.textContent = 'check_circle';
-        text.textContent = 'Mark as Incomplete';
-        
-        // Update badge
-        if (badge) {
-            badge.classList.remove('in-progress');
-            badge.classList.add('completed');
-            badge.innerHTML = '<span class="material-symbols-outlined me-1 completion-icon">check_circle</span>Completed';
-        }
-    } else {
-        // Update button
-        btn.classList.remove('completed');
-        btn.classList.add('btn-primary');
-        icon.textContent = 'radio_button_unchecked';
-        text.textContent = 'Mark as Complete';
-        
-        // Update badge
-        if (badge) {
-            badge.classList.remove('completed');
-            badge.classList.add('in-progress');
-            badge.innerHTML = '<span class="material-symbols-outlined me-1 completion-icon">radio_button_unchecked</span>In Progress';
-        }
-    }
-}
-
-async function resetProgress() {
-    if (!confirm('Are you sure you want to reset your progress for this video? This will set your watch time back to 0 and mark the video as incomplete.')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/video/reset-progress', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ video_id: {{ video.id }} })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            // Reset video player to beginning
-            if (videoPlayer) {
-                videoPlayer.currentTime = 0;
-            }
-            
-            // Reset progress UI
-            const progressBar = document.getElementById('progressBar');
-            const progressText = document.getElementById('progressText');
-            if (progressBar) progressBar.style.width = '0%';
-            if (progressText) progressText.textContent = 'Not started';
-            
-            // Mark as incomplete
-            isCompleted = false;
-            updateCompletionUI();
-            
-            showToast('Progress reset successfully', 'success');
-            
-            // Reload page to update reset button visibility
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showToast('Error resetting progress', 'error');
-        }
-    } catch (error) {
-        console.error('Error resetting progress:', error);
-        showToast('Error resetting progress', 'error');
-    }
-}
-
-async function toggleFavorite() {
-    try {
-        const response = await fetch('/api/video/favorite', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ video_id: {{ video.id }} })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            const icon = document.getElementById('favoriteIcon');
-            const btn = document.getElementById('favoriteBtn');
-            
-            if (data.is_favorited) {
-                icon.textContent = 'favorite';
-                btn.classList.remove('btn-outline-danger');
-                btn.classList.add('btn-danger', 'favorited');
-                showToast('Added to favorites', 'success');
-            } else {
-                icon.textContent = 'favorite_border';
-                btn.classList.remove('btn-danger', 'favorited');
-                btn.classList.add('btn-outline-danger');
-                showToast('Removed from favorites', 'info');
-            }
-        }
-    } catch (error) {
-        console.error('Error toggling favorite:', error);
-        showToast('Error updating favorite', 'error');
-    }
-}
-
-function shareVideo() {
-    if (navigator.share) {
-        navigator.share({
-            title: '{{ video.title }}',
-            text: 'Check out this video from TGFX Trade Lab',
-            url: window.location.href
-        });
-    } else {
-        // Fallback to clipboard
-        navigator.clipboard.writeText(window.location.href).then(function() {
-            showToast('Video link copied to clipboard', 'success');
-        });
-    }
-}
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', function() {
-    stopProgressTracking();
-});
-</script>
 {% endblock %}
