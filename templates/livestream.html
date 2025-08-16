@@ -28,7 +28,6 @@
                     </span>
                     <span class="text-muted ms-2" id="totalViewers">0 viewers online</span>
                 </div>
-                {% endif %}
                 <button class="btn btn-outline-secondary btn-sm" onclick="refreshStreams()">
                     <span class="material-symbols-outlined me-1" style="font-size: 14px;">refresh</span>
                     Refresh
@@ -1644,7 +1643,7 @@ window.debugStreamInfo = function(streamId) {
 };
 
 window.testConnectionSystem = async function() {
-    debugLog('🔧 Testing connection system...');
+    console.log('🔧 Testing connection system...');
     
     const results = {
         livekitClient: typeof window.LiveKitClient !== 'undefined',
@@ -1655,7 +1654,7 @@ window.testConnectionSystem = async function() {
         notificationPermission: 'Notification' in window ? Notification.permission : 'not supported'
     };
     
-    debugLog('🔧 Connection test results:', results);
+    console.log('🔧 Connection test results:', results);
     
     const allGood = results.livekitClient && results.webSocket && results.livekitUrl;
     const message = allGood ? 
