@@ -488,6 +488,70 @@ def load_user(user_id):
 
 # Helper Functions
 
+# Initialize the app with migration
+def initialize_enhanced_app():
+    """Enhanced initialization with new features"""
+    try:
+        with app.app_context():
+            # Run existing initialization
+            db.create_all()
+            print("✅ Database tables created successfully")
+            
+            # Run new migrations
+            migrate_category_background_images()
+            migrate_user_timezones()  # Existing function
+            
+            # Create admin user if needed (existing code)
+            admin_user = User.query.filter_by(username='admin').first()
+            if not admin_user:
+                admin_user = User(
+                    username='admin',
+                    email='ray@tgfx-academy.com',
+                    password_hash=generate_password_hash('admin123!345gdfb3f35'),
+                    is_admin=True,
+                    display_name='Ray',
+                    can_stream=True,
+                    stream_color='#10B981',
+                    timezone='America/Chicago'
+                )
+                db.session.add(admin_user)
+                db.session.commit()
+                print("✅ Admin user created")
+            
+            # Initialize streamers
+            initialize_streamers()
+            
+            print("✅ Enhanced app initialization complete!")
+            
+    except Exception as e:
+        print(f"❌ Enhanced app initialization error: {e}")
+        return False
+    
+    return True
+    
+
+# Database migration function to add background_image_url column
+def migrate_category_background_images():
+    """Run this once to add background_image_url column to categories table"""
+    try:
+        # Try to add the column if it doesn't exist
+        try:
+            db.session.execute('ALTER TABLE categories ADD COLUMN background_image_url VARCHAR(500)')
+            db.session.commit()
+            print("✅ Added background_image_url column to categories table")
+        except Exception as e:
+            # Column probably already exists
+            db.session.rollback()
+            print("ℹ️ background_image_url column already exists or error adding:", str(e))
+        
+        return True
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error migrating category background images: {e}")
+        return False
+
+
 # Manual LiveKit token generation (works perfectly without SDK)
 def generate_livekit_token(room_name, participant_identity, participant_name, is_publisher=False):
     """Generate LiveKit JWT access token manually (100% compatible)"""
@@ -1804,6 +1868,141 @@ def dashboard():
                          recent_activity=recent_activity,
                          notifications=notifications)
 
+# API route for auto-fill title
+@app.route('/api/admin/auto-fill-title', methods=['POST'])
+@login_required
+def api_auto_fill_title():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        auto_title = auto_fill_live_session_title(current_user)
+        return jsonify({
+            'success': True,
+            'title': auto_title
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API route for regenerating single thumbnail
+@app.route('/api/admin/regenerate-thumbnail', methods=['POST'])
+@login_required
+def api_regenerate_thumbnail():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        
+        video = Video.query.get_or_404(video_id)
+        category = video.category
+        
+        if not category.background_image_url:
+            return jsonify({'error': 'Category has no background image set'}), 400
+        
+        # Generate new thumbnail
+        thumbnail_image = generate_thumbnail(
+            category.background_image_url,
+            category.name,
+            video.title
+        )
+        
+        # Upload to S3
+        thumbnail_url = upload_thumbnail_to_s3(thumbnail_image, video.id, video.title)
+        
+        if thumbnail_url:
+            video.thumbnail_url = thumbnail_url
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'thumbnail_url': thumbnail_url,
+                'message': 'Thumbnail regenerated successfully'
+            })
+        else:
+            return jsonify({'error': 'Failed to upload thumbnail'}), 500
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# API route for regenerating all thumbnails in a category
+@app.route('/api/admin/regenerate-category-thumbnails', methods=['POST'])
+@login_required
+def api_regenerate_category_thumbnails():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        data = request.get_json()
+        category_id = data.get('category_id')
+        
+        category = Category.query.get_or_404(category_id)
+        
+        if not category.background_image_url:
+            return jsonify({'error': 'Category has no background image set'}), 400
+        
+        success_count = 0
+        error_count = 0
+        
+        for video in category.videos:
+            try:
+                # Generate thumbnail
+                thumbnail_image = generate_thumbnail(
+                    category.background_image_url,
+                    category.name,
+                    video.title
+                )
+                
+                # Upload to S3
+                thumbnail_url = upload_thumbnail_to_s3(thumbnail_image, video.id, video.title)
+                
+                if thumbnail_url:
+                    video.thumbnail_url = thumbnail_url
+                    success_count += 1
+                else:
+                    error_count += 1
+                    
+            except Exception as e:
+                print(f"Error regenerating thumbnail for video {video.id}: {e}")
+                error_count += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Regenerated {success_count} thumbnails successfully',
+            'success_count': success_count,
+            'error_count': error_count
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# API route for updating video order
+@app.route('/api/admin/video/order', methods=['POST'])
+@login_required
+def api_update_video_order():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        order_index = data.get('order_index')
+        
+        video = Video.query.get_or_404(video_id)
+        video.order_index = order_index
+        db.session.commit()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
@@ -2721,18 +2920,46 @@ def admin_add_video():
         else:
             order_index = int(order_index)
         
+        # Get thumbnail URL from form (manual override)
+        thumbnail_url = form.thumbnail_url.data if form.thumbnail_url.data else None
+        
         video = Video(
             title=form.title.data,
             description=form.description.data,
             s3_url=form.s3_url.data,
-            thumbnail_url=form.thumbnail_url.data,
+            thumbnail_url=thumbnail_url,  # Will be updated if auto-generated
             category_id=form.category_id.data,
             is_free=form.is_free.data,
             order_index=order_index
         )
         db.session.add(video)
-        db.session.flush()
+        db.session.flush()  # Get the video ID
         
+        # Auto-generate thumbnail if no manual thumbnail provided
+        if not thumbnail_url:
+            category = Category.query.get(form.category_id.data)
+            if category and category.background_image_url:
+                try:
+                    # Generate thumbnail
+                    thumbnail_image = generate_thumbnail(
+                        category.background_image_url,
+                        category.name,
+                        video.title
+                    )
+                    
+                    # Upload to S3
+                    auto_thumbnail_url = upload_thumbnail_to_s3(thumbnail_image, video.id, video.title)
+                    
+                    if auto_thumbnail_url:
+                        video.thumbnail_url = auto_thumbnail_url
+                        print(f"✅ Auto-generated thumbnail for video: {video.title}")
+                    else:
+                        print(f"⚠️ Failed to upload auto-generated thumbnail for video: {video.title}")
+                        
+                except Exception as e:
+                    print(f"❌ Error auto-generating thumbnail: {e}")
+        
+        # Process tags
         if tags_data is not None:
             try:
                 process_video_tags(video, tags_data)
@@ -2780,14 +3007,52 @@ def admin_edit_video(video_id):
         if hasattr(form, 'tags'):
             tags_data = form.tags.data
         
+        # Store old values to check for changes
+        old_title = video.title
+        old_category_id = video.category_id
+        regenerate_thumbnail = False
+        
         video.title = form.title.data
         video.description = form.description.data
         video.s3_url = form.s3_url.data
-        video.thumbnail_url = form.thumbnail_url.data
         video.category_id = form.category_id.data
         video.is_free = form.is_free.data
         video.order_index = form.order_index.data
         
+        # Handle thumbnail updates
+        manual_thumbnail = form.thumbnail_url.data if form.thumbnail_url.data else None
+        
+        if manual_thumbnail:
+            # Manual thumbnail provided
+            video.thumbnail_url = manual_thumbnail
+        else:
+            # Check if we need to regenerate auto-thumbnail
+            if (old_title != video.title or old_category_id != video.category_id):
+                regenerate_thumbnail = True
+        
+        # Auto-regenerate thumbnail if needed
+        if regenerate_thumbnail and not manual_thumbnail:
+            category = Category.query.get(video.category_id)
+            if category and category.background_image_url:
+                try:
+                    # Generate new thumbnail
+                    thumbnail_image = generate_thumbnail(
+                        category.background_image_url,
+                        category.name,
+                        video.title
+                    )
+                    
+                    # Upload to S3
+                    auto_thumbnail_url = upload_thumbnail_to_s3(thumbnail_image, video.id, video.title)
+                    
+                    if auto_thumbnail_url:
+                        video.thumbnail_url = auto_thumbnail_url
+                        print(f"✅ Auto-regenerated thumbnail for video: {video.title}")
+                        
+                except Exception as e:
+                    print(f"❌ Error auto-regenerating thumbnail: {e}")
+        
+        # Process tags
         if tags_data is not None:
             try:
                 process_video_tags(video, tags_data)
@@ -2799,6 +3064,7 @@ def admin_edit_video(video_id):
         return redirect(url_for('admin_videos'))
     
     return render_template('admin/video_form.html', form=form, video=video, title='Edit Video')
+
 
 @app.route('/admin/categories')
 @login_required
@@ -2858,9 +3124,18 @@ def admin_edit_category(category_id):
     existing_categories = Category.query.filter(Category.id != category_id).order_by(Category.order_index).all()
     
     if form.validate_on_submit():
+        # Store old background URL to check for changes
+        old_background_url = category.background_image_url
+        
         form.populate_obj(category)
         db.session.commit()
-        flash('Category updated successfully!', 'success')
+        
+        # If background image changed, offer to regenerate all thumbnails
+        if old_background_url != category.background_image_url and category.background_image_url:
+            flash('Category updated successfully! You can now regenerate thumbnails for all videos in this category.', 'success')
+        else:
+            flash('Category updated successfully!', 'success')
+            
         return redirect(url_for('admin_categories'))
     
     return render_template('admin/category_form.html', 
@@ -2869,26 +3144,6 @@ def admin_edit_category(category_id):
                          title='Edit Category',
                          existing_categories=existing_categories)
 
-@app.route('/admin/tags')
-@login_required
-def admin_tags():
-    if not current_user.is_admin:
-        flash('Access denied', 'error')
-        return redirect(url_for('dashboard'))
-    
-    tags = Tag.query.order_by(Tag.name).all()
-    
-    tag_stats = []
-    for tag in tags:
-        video_count = len(tag.videos)
-        tag_stats.append({
-            'tag': tag,
-            'video_count': video_count,
-            'free_videos': len([v for v in tag.videos if v.is_free]),
-            'premium_videos': len([v for v in tag.videos if not v.is_free])
-        })
-    
-    return render_template('admin/tags.html', tags=tags, tag_stats=tag_stats)
 
 @app.route('/admin/tag/add', methods=['GET', 'POST'])
 @login_required
