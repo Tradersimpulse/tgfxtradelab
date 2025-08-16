@@ -43,6 +43,12 @@ class Config:
     # FIXED: Call the method properly
     SQLALCHEMY_DATABASE_URI = get_database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+        # Discord Webhook Configuration
+    APP_UPDATE_DISCORD_WEBHOOK_URL = os.environ.get(
+        'APP_UPDATE_DISCORD_WEBHOOK_URL',
+        'https://discord.com/api/webhooks/1404472981459173456/aT1uA1NANoNjzQPAYPrzb_GAzOOEOWJhgemj0DZbFFSP7IdqSuKb_vCpuu6rSzttj9EZ'
+    )
     
     # FIXED: Enhanced MySQL engine options with better error handling
     SQLALCHEMY_ENGINE_OPTIONS = {
