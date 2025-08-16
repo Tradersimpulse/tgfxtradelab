@@ -852,6 +852,84 @@
             height: 8px;
         }
 
+        .video-thumbnail {
+    position: relative;
+    width: 100%;
+    height: 200px; /* Adjust as needed */
+    border-radius: 12px;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.video-thumbnail-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        135deg, 
+        rgba(0, 0, 0, 0.4) 0%, 
+        rgba(0, 0, 0, 0.2) 50%, 
+        rgba(0, 0, 0, 0.6) 100%
+    );
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 16px;
+    color: white;
+}
+
+.video-category-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #10B981;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    margin-bottom: auto;
+}
+
+.video-title-overlay {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: center;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+    margin: auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60px;
+}
+
+.video-duration-badge {
+    background: rgba(0, 0, 0, 0.8);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    align-self: flex-end;
+    margin-top: auto;
+}
+
+/* Hover effects */
+.video-thumbnail:hover .video-thumbnail-overlay {
+    background: linear-gradient(
+        135deg, 
+        rgba(0, 0, 0, 0.3) 0%, 
+        rgba(0, 0, 0, 0.1) 50%, 
+        rgba(0, 0, 0, 0.5) 100%
+    );
+}
+
+.video-thumbnail:hover .video-title-overlay {
+    transform: scale(1.05);
+    transition: transform 0.3s ease;
+}
+
         /* Status badges */
         .badge-success {
             background: var(--gradient-success);
