@@ -65,30 +65,78 @@
                         <div class="form-text">Optional description to help identify the category's purpose</div>
                     </div>
                     
-                    <!-- Category Image -->
+                    <!-- Category Icon -->
                     <div class="mb-4">
                         {{ form.image_url.label(class="form-label") }}
-                        {{ form.image_url(class="form-control", placeholder="https://tgfx-tradelab.s3.us-east-1.amazonaws.com/categories/course-image.jpg") }}
+                        {{ form.image_url(class="form-control", placeholder="https://tgfx-tradelab.s3.us-east-1.amazonaws.com/categories/icon.jpg") }}
                         {% if form.image_url.errors %}
                         <div class="text-danger small mt-1">
                             {% for error in form.image_url.errors %}{{ error }}{% endfor %}
                         </div>
                         {% endif %}
-                        <div class="form-text">Upload an image to S3 and paste the URL here</div>
+                        <div class="form-text">Small icon image for category display (optional)</div>
                         
-                        <!-- Image Preview -->
+                        <!-- Icon Preview -->
                         <div class="mt-3">
-                            <label class="form-label">Image Preview:</label>
-                            <div id="imagePreview" class="image-preview">
+                            <label class="form-label">Icon Preview:</label>
+                            <div id="iconPreview" class="icon-preview">
                                 {% if category and category.image_url %}
-                                <img src="{{ category.image_url }}" alt="Category Image" class="img-fluid rounded">
+                                <img src="{{ category.image_url }}" alt="Category Icon" class="category-icon-img">
                                 {% else %}
-                                <div class="placeholder-image">
-                                    <span class="material-symbols-outlined">image</span>
-                                    <p class="small mt-2">Category Image Preview</p>
+                                <div class="placeholder-icon">
+                                    <span class="material-symbols-outlined">folder</span>
+                                    <p class="small mt-2">Category Icon</p>
                                 </div>
                                 {% endif %}
                             </div>
+                        </div>
+                    </div>
+                    
+                    <!-- NEW: Background Image for Video Thumbnails -->
+                    <div class="mb-4">
+                        {{ form.background_image_url.label(class="form-label") }}
+                        {{ form.background_image_url(class="form-control", placeholder="https://tgfx-tradelab.s3.us-east-1.amazonaws.com/backgrounds/course-bg.jpg") }}
+                        {% if form.background_image_url.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.background_image_url.errors %}{{ error }}{% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="form-text">
+                            <strong>Important:</strong> This background image will be used to automatically generate thumbnails 
+                            for all videos in this category. Video titles will be overlaid on this background.
+                        </div>
+                        
+                        <!-- Background Preview -->
+                        <div class="mt-3">
+                            <label class="form-label">Background Preview (with sample text overlay):</label>
+                            <div id="backgroundPreview" class="background-preview">
+                                {% if category and category.background_image_url %}
+                                <div class="thumbnail-demo" style="background-image: url('{{ category.background_image_url }}');">
+                                    <div class="thumbnail-overlay">
+                                        <div class="category-title">{{ category.name.upper() }}</div>
+                                        <div class="video-title">Sample Video Title</div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="placeholder-background">
+                                    <span class="material-symbols-outlined">image</span>
+                                    <p class="small mt-2">Background Image Preview</p>
+                                    <p class="small text-muted">Upload a 1280x720 background image</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Background Guidelines -->
+                        <div class="alert alert-info mt-3">
+                            <span class="material-symbols-outlined me-2">tips_and_updates</span>
+                            <strong>Background Guidelines:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>Recommended size: 1280x720 pixels (16:9 aspect ratio)</li>
+                                <li>Use high contrast backgrounds for better text readability</li>
+                                <li>Avoid busy backgrounds - simple gradients or patterns work best</li>
+                                <li>Consider your brand colors and course theme</li>
+                            </ul>
                         </div>
                     </div>
                     
@@ -142,10 +190,18 @@
                     <span class="material-symbols-outlined me-2">video_library</span>
                     Videos in this Category ({{ category.videos|length }})
                 </h5>
-                <a href="{{ url_for('admin_add_video') }}?category={{ category.id }}" class="btn btn-sm btn-outline-primary">
-                    <span class="material-symbols-outlined me-1" style="font-size: 16px;">add</span>
-                    Add Video
-                </a>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('admin_add_video') }}?category={{ category.id }}" class="btn btn-sm btn-outline-primary">
+                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">add</span>
+                        Add Video
+                    </a>
+                    {% if category.background_image_url %}
+                    <button class="btn btn-sm btn-outline-success" onclick="regenerateAllThumbnails()">
+                        <span class="material-symbols-outlined me-1" style="font-size: 16px;">refresh</span>
+                        Regenerate All Thumbnails
+                    </button>
+                    {% endif %}
+                </div>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -153,6 +209,7 @@
                         <thead>
                             <tr>
                                 <th>Video</th>
+                                <th class="text-center">Thumbnail</th>
                                 <th class="text-center">Type</th>
                                 <th class="text-center">Order</th>
                                 <th class="text-center">Created</th>
@@ -163,23 +220,22 @@
                             {% for video in category.videos|sort(attribute='order_index') %}
                             <tr>
                                 <td>
-                                    <div class="d-flex align-items-center">
-                                        {% if video.thumbnail_url %}
-                                        <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" 
-                                             class="me-3" style="width: 60px; height: 34px; object-fit: cover; border-radius: 6px;">
-                                        {% else %}
-                                        <div class="bg-gradient-primary me-3 d-flex align-items-center justify-content-center" 
-                                             style="width: 60px; height: 34px; border-radius: 6px;">
-                                            <span class="material-symbols-outlined text-white" style="font-size: 16px;">play_circle</span>
-                                        </div>
+                                    <div>
+                                        <strong>{{ video.title[:40] }}{% if video.title|length > 40 %}...{% endif %}</strong>
+                                        {% if video.duration %}
+                                        <br><small class="text-muted">{{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}</small>
                                         {% endif %}
-                                        <div>
-                                            <strong>{{ video.title[:40] }}{% if video.title|length > 40 %}...{% endif %}</strong>
-                                            {% if video.duration %}
-                                            <br><small class="text-muted">{{ (video.duration // 60)|int }}:{{ "%02d"|format(video.duration % 60) }}</small>
-                                            {% endif %}
-                                        </div>
                                     </div>
+                                </td>
+                                <td class="text-center">
+                                    {% if video.thumbnail_url %}
+                                    <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" 
+                                         class="video-thumbnail-small">
+                                    {% else %}
+                                    <div class="bg-gradient-primary d-flex align-items-center justify-content-center video-thumbnail-small">
+                                        <span class="material-symbols-outlined text-white" style="font-size: 16px;">auto_awesome</span>
+                                    </div>
+                                    {% endif %}
                                 </td>
                                 <td class="text-center">
                                     {% if video.is_free %}
@@ -205,10 +261,10 @@
                                            class="btn btn-outline-secondary" title="Edit">
                                             <span class="material-symbols-outlined" style="font-size: 16px;">edit</span>
                                         </a>
-                                        <button class="btn btn-outline-danger" 
-                                                onclick="removeVideoFromCategory({{ video.id }}, '{{ video.title }}')" 
-                                                title="Remove from category">
-                                            <span class="material-symbols-outlined" style="font-size: 16px;">remove</span>
+                                        <button class="btn btn-outline-warning" 
+                                                onclick="regenerateThumbnail({{ video.id }}, '{{ video.title }}')" 
+                                                title="Regenerate thumbnail">
+                                            <span class="material-symbols-outlined" style="font-size: 16px;">refresh</span>
                                         </button>
                                     </div>
                                 </td>
@@ -236,17 +292,21 @@
             <div class="card-body">
                 <div class="category-preview">
                     <div class="d-flex align-items-center mb-3">
-                        <div class="category-icon me-3">
+                        <div class="category-icon me-3" id="previewIcon">
+                            {% if category.image_url %}
+                            <img src="{{ category.image_url }}" alt="{{ category.name }}" class="category-icon-img">
+                            {% else %}
                             <span class="material-symbols-outlined">folder</span>
+                            {% endif %}
                         </div>
                         <div>
-                            <h6 class="text-white mb-1">{{ category.name }}</h6>
+                            <h6 class="text-white mb-1" id="previewName">{{ category.name }}</h6>
                             <small class="text-muted">Order: {{ category.order_index }}</small>
                         </div>
                     </div>
                     
                     {% if category.description %}
-                    <p class="text-muted small mb-3">{{ category.description }}</p>
+                    <p class="text-muted small mb-3" id="previewDescription">{{ category.description }}</p>
                     {% endif %}
                     
                     <div class="row text-center">
@@ -268,107 +328,72 @@
         </div>
         {% endif %}
         
-        <!-- Category Guidelines -->
+        <!-- Thumbnail Examples -->
         <div class="card mb-4">
             <div class="card-header">
                 <h6 class="mb-0">
+                    <span class="material-symbols-outlined me-2">auto_awesome</span>
+                    Thumbnail Examples
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Here's how your video thumbnails will look:</p>
+                
+                <div class="thumbnail-examples">
+                    <div class="example-thumbnail mb-3">
+                        <div class="thumbnail-demo example-bg-1">
+                            <div class="thumbnail-overlay">
+                                <div class="category-title">LIVE TRADING SESSIONS</div>
+                                <div class="video-title">Ray - 08-16-25 EURUSD</div>
+                            </div>
+                        </div>
+                        <small class="text-muted">Live Trading Session Example</small>
+                    </div>
+                    
+                    <div class="example-thumbnail">
+                        <div class="thumbnail-demo example-bg-2">
+                            <div class="thumbnail-overlay">
+                                <div class="category-title">MARKET STRUCTURE</div>
+                                <div class="video-title">Understanding Support and Resistance</div>
+                            </div>
+                        </div>
+                        <small class="text-muted">Educational Content Example</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Background Upload Tips -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
                     <span class="material-symbols-outlined me-2">tips_and_updates</span>
-                    Category Guidelines
+                    Background Tips
                 </h6>
             </div>
             <div class="card-body">
                 <ul class="list-unstyled mb-0">
                     <li class="mb-2">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Use clear, descriptive names</small>
+                        <small>Use 1280x720 resolution for best quality</small>
                     </li>
                     <li class="mb-2">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Keep categories focused on specific topics</small>
+                        <small>Choose high contrast backgrounds</small>
                     </li>
                     <li class="mb-2">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Order categories logically (beginner to advanced)</small>
+                        <small>Avoid busy patterns or detailed images</small>
                     </li>
                     <li class="mb-2">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Write helpful descriptions for students</small>
+                        <small>Consider your brand colors</small>
                     </li>
                     <li class="mb-0">
                         <span class="material-symbols-outlined me-2 text-success" style="font-size: 16px;">check_circle</span>
-                        <small>Aim for 5-15 videos per category</small>
+                        <small>Test with different video titles</small>
                     </li>
                 </ul>
-            </div>
-        </div>
-        
-        <!-- Existing Categories -->
-        <div class="card">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <span class="material-symbols-outlined me-2">list</span>
-                    Existing Categories
-                </h6>
-            </div>
-            <div class="card-body">
-                {% if existing_categories %}
-                <div class="list-group list-group-flush">
-                    {% for cat in existing_categories[:5] %}
-                    <div class="list-group-item bg-transparent border-secondary d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong class="text-white">{{ cat.name }}</strong>
-                            <br><small class="text-muted">{{ cat.videos|length }} videos</small>
-                        </div>
-                        <span class="badge bg-secondary">{{ cat.order_index }}</span>
-                    </div>
-                    {% endfor %}
-                    
-                    {% if existing_categories|length > 5 %}
-                    <div class="list-group-item bg-transparent border-secondary text-center">
-                        <small class="text-muted">... and {{ existing_categories|length - 5 }} more</small>
-                    </div>
-                    {% endif %}
-                </div>
-                {% else %}
-                <p class="text-muted text-center">
-                    {% if category %}
-                    This is your only category.
-                    {% else %}
-                    This will be your first category.
-                    {% endif %}
-                </p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Remove Video Modal -->
-<div class="modal fade" id="removeVideoModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content bg-dark border-warning">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title text-warning">
-                    <span class="material-symbols-outlined me-2">warning</span>
-                    Remove Video from Category
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-white">Are you sure you want to remove this video from the category?</p>
-                <p class="text-gradient-primary" id="removeVideoTitle"></p>
-                <div class="alert alert-info">
-                    <span class="material-symbols-outlined me-2">info</span>
-                    This will not delete the video, just remove it from this category. 
-                    You can assign it to another category later.
-                </div>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-warning" id="confirmRemoveBtn">
-                    <span class="material-symbols-outlined me-2">remove</span>
-                    Remove from Category
-                </button>
             </div>
         </div>
     </div>
@@ -384,30 +409,17 @@ document.getElementById('categoryForm').addEventListener('submit', function(e) {
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
 });
 
-// Auto-suggest order index
-document.addEventListener('DOMContentLoaded', function() {
-    const orderInput = document.querySelector('[name="order_index"]');
-    if (orderInput && !orderInput.value) {
-        // Suggest next order index based on existing categories
-        const existingOrders = {{ existing_categories|map(attribute='order_index')|list|sort if existing_categories else [] }};
-        if (existingOrders.length > 0) {
-            orderInput.value = Math.max(...existingOrders) + 1;
-        } else {
-            orderInput.value = 1;
-        }
-    }
-});
-
 // Live preview updates
 document.querySelector('[name="name"]').addEventListener('input', function() {
-    const previewName = document.querySelector('.category-preview h6');
+    const previewName = document.getElementById('previewName');
     if (previewName) {
         previewName.textContent = this.value || 'Category Name';
     }
+    updateBackgroundPreview();
 });
 
 document.querySelector('[name="description"]').addEventListener('input', function() {
-    const previewDesc = document.querySelector('.category-preview p');
+    const previewDesc = document.getElementById('previewDescription');
     if (previewDesc) {
         previewDesc.textContent = this.value || 'Category description will appear here...';
     }
@@ -419,6 +431,63 @@ document.querySelector('[name="order_index"]').addEventListener('input', functio
         previewOrder.textContent = `Order: ${this.value || 0}`;
     }
 });
+
+// Icon preview
+document.querySelector('[name="image_url"]').addEventListener('input', function() {
+    const preview = document.getElementById('iconPreview');
+    const previewIcon = document.getElementById('previewIcon');
+    const url = this.value.trim();
+    
+    if (url) {
+        const testImg = new Image();
+        testImg.onload = function() {
+            preview.innerHTML = `<img src="${url}" alt="Category Icon" class="category-icon-img">`;
+            if (previewIcon) {
+                previewIcon.innerHTML = `<img src="${url}" alt="Category Icon" class="category-icon-img">`;
+            }
+        };
+        testImg.onerror = function() {
+            preview.innerHTML = '<div class="placeholder-icon"><span class="material-symbols-outlined">broken_image</span><p class="small mt-2">Invalid Image URL</p></div>';
+        };
+        testImg.src = url;
+    } else {
+        preview.innerHTML = '<div class="placeholder-icon"><span class="material-symbols-outlined">folder</span><p class="small mt-2">Category Icon</p></div>';
+        if (previewIcon) {
+            previewIcon.innerHTML = '<span class="material-symbols-outlined">folder</span>';
+        }
+    }
+});
+
+// Background preview
+document.querySelector('[name="background_image_url"]').addEventListener('input', function() {
+    updateBackgroundPreview();
+});
+
+function updateBackgroundPreview() {
+    const preview = document.getElementById('backgroundPreview');
+    const url = document.querySelector('[name="background_image_url"]').value.trim();
+    const categoryName = document.querySelector('[name="name"]').value || 'CATEGORY NAME';
+    
+    if (url) {
+        const testImg = new Image();
+        testImg.onload = function() {
+            preview.innerHTML = `
+                <div class="thumbnail-demo" style="background-image: url('${url}');">
+                    <div class="thumbnail-overlay">
+                        <div class="category-title">${categoryName.toUpperCase()}</div>
+                        <div class="video-title">Sample Video Title</div>
+                    </div>
+                </div>
+            `;
+        };
+        testImg.onerror = function() {
+            preview.innerHTML = '<div class="placeholder-background"><span class="material-symbols-outlined">broken_image</span><p class="small mt-2">Invalid Image URL</p></div>';
+        };
+        testImg.src = url;
+    } else {
+        preview.innerHTML = '<div class="placeholder-background"><span class="material-symbols-outlined">image</span><p class="small mt-2">Background Image Preview</p><p class="small text-muted">Upload a 1280x720 background image</p></div>';
+    }
+}
 
 {% if category %}
 async function updateVideoOrder(videoId, newOrder) {
@@ -445,51 +514,64 @@ async function updateVideoOrder(videoId, newOrder) {
     }
 }
 
-function removeVideoFromCategory(videoId, videoTitle) {
-    document.getElementById('removeVideoTitle').textContent = videoTitle;
+async function regenerateThumbnail(videoId, videoTitle) {
+    const confirmMsg = `Regenerate thumbnail for "${videoTitle}"?`;
+    if (!confirm(confirmMsg)) return;
     
-    const modal = new bootstrap.Modal(document.getElementById('removeVideoModal'));
-    modal.show();
-    
-    document.getElementById('confirmRemoveBtn').onclick = async function() {
-        try {
-            const response = await fetch(`/api/admin/video/${videoId}/remove-from-category`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ category_id: {{ category.id }} })
-            });
-            
-            if (response.ok) {
-                showToast('Video removed from category', 'success');
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showToast('Error removing video', 'error');
-            }
-        } catch (error) {
-            console.error('Error removing video:', error);
-            showToast('Error removing video', 'error');
-        }
+    try {
+        const response = await fetch('/api/admin/regenerate-thumbnail', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                video_id: videoId
+            })
+        });
         
-        modal.hide();
-    };
+        if (response.ok) {
+            showToast('Thumbnail regenerated successfully', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('Error regenerating thumbnail', 'error');
+        }
+    } catch (error) {
+        console.error('Error regenerating thumbnail:', error);
+        showToast('Error regenerating thumbnail', 'error');
+    }
+}
+
+async function regenerateAllThumbnails() {
+    const confirmMsg = `Regenerate thumbnails for all {{ category.videos|length }} videos in this category?`;
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+        const response = await fetch('/api/admin/regenerate-category-thumbnails', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                category_id: {{ category.id }}
+            })
+        });
+        
+        if (response.ok) {
+            showToast('All thumbnails regenerated successfully', 'success');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showToast('Error regenerating thumbnails', 'error');
+        }
+    } catch (error) {
+        console.error('Error regenerating thumbnails:', error);
+        showToast('Error regenerating thumbnails', 'error');
+    }
 }
 {% endif %}
 
-// Character counter for description
-document.querySelector('[name="description"]').addEventListener('input', function() {
-    const maxLength = 500; // Suggested max length
-    const currentLength = this.value.length;
-    const formText = this.nextElementSibling;
-    
-    if (currentLength > maxLength) {
-        formText.textContent = `Description is getting long (${currentLength} characters). Consider keeping it concise.`;
-        formText.className = 'form-text text-warning';
-    } else {
-        formText.textContent = 'Provide a brief description of what videos will be in this category';
-        formText.className = 'form-text';
-    }
+// Initialize preview on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateBackgroundPreview();
 });
 </script>
 
@@ -506,6 +588,22 @@ document.querySelector('[name="description"]').addEventListener('input', functio
     font-size: 1.2rem;
 }
 
+.category-icon-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.video-thumbnail-small {
+    width: 60px;
+    height: 34px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
 .category-preview {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
@@ -514,19 +612,88 @@ document.querySelector('[name="description"]').addEventListener('input', functio
     transition: all 0.3s ease;
 }
 
-.category-preview:hover {
-    border-color: rgba(16, 185, 129, 0.3);
-    background: rgba(255, 255, 255, 0.05);
+.icon-preview, .background-preview {
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
 }
 
-.list-group-item {
-    padding: 0.75rem 0;
-    border-left: none !important;
-    border-right: none !important;
+.placeholder-icon, .placeholder-background {
+    color: var(--text-muted);
+    padding: 1rem;
 }
 
-.list-group-item:first-child {
-    border-top: none !important;
+.placeholder-icon .material-symbols-outlined,
+.placeholder-background .material-symbols-outlined {
+    font-size: 2rem;
+    opacity: 0.5;
+}
+
+.thumbnail-demo {
+    width: 100%;
+    height: 120px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.thumbnail-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 1rem;
+}
+
+.category-title {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.video-title {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    color: white;
+    line-height: 1.2;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.example-bg-1 {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #10b981 100%);
+}
+
+.example-bg-2 {
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%);
+}
+
+.thumbnail-examples .thumbnail-demo {
+    height: 80px;
+}
+
+.thumbnail-examples .category-title {
+    font-size: 10px;
+}
+
+.thumbnail-examples .video-title {
+    font-size: 12px;
 }
 
 .alert-info {
@@ -535,36 +702,17 @@ document.querySelector('[name="description"]').addEventListener('input', functio
     color: var(--primary-color);
 }
 
-/* Form enhancements */
 .form-control:focus {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
-}
-
-/* Table improvements */
-.table-dark th,
-.table-dark td {
-    border-color: var(--border-color);
-    vertical-align: middle;
-}
-
-/* Button hover effects */
-.btn:hover {
-    transform: translateY(-1px);
-}
-
-/* Card animations */
-.card {
-    transition: all 0.3s ease;
 }
 
 .card:hover {
     border-color: rgba(16, 185, 129, 0.2);
 }
 
-/* Input number styling */
-input[type="number"].form-control-sm {
-    text-align: center;
+.btn:hover {
+    transform: translateY(-1px);
 }
 </style>
 {% endblock %}
