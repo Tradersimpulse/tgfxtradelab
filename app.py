@@ -36,6 +36,9 @@ import signal
 import threading
 import requests
 import base64
+from PIL import Image, ImageDraw, ImageFont
+from io import BytesIO
+import textwrap
 
 
 # Later in the file (around line 60-90), your LiveKit section should look like:
