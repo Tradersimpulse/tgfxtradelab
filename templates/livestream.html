@@ -28,11 +28,6 @@
                     </span>
                     <span class="text-muted ms-2" id="totalViewers">0 viewers online</span>
                 </div>
-                {% if current_user.is_admin %}
-                <button class="btn btn-outline-info btn-sm" onclick="testConnectionSystem()">
-                    <span class="material-symbols-outlined me-1" style="font-size: 14px;">settings</span>
-                    Test System
-                </button>
                 {% endif %}
                 <button class="btn btn-outline-secondary btn-sm" onclick="refreshStreams()">
                     <span class="material-symbols-outlined me-1" style="font-size: 14px;">refresh</span>
