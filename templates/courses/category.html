@@ -146,7 +146,6 @@
                                             height: 80px; 
                                             border-radius: 8px;">
                                     <div class="video-thumbnail-overlay">
-                                        <div class="video-category-label">{{ video.category.name }}</div>
                                         <div class="video-title-overlay">{{ video.title }}</div>
                                     </div>
                                     
@@ -177,7 +176,6 @@
                                 {% endif %}
                             </div>
                             <div class="col-md-5">
-                                <h6 class="mb-1">{{ video.title }}</h6>
                                 {% if video.description %}
                                 <p class="text-muted small mb-2">{{ video.description[:120] }}{% if video.description|length > 120 %}...{% endif %}</p>
                                 {% endif %}
@@ -243,7 +241,6 @@
                                                 background-position: center; 
                                                 height: 180px;">
                                         <div class="video-thumbnail-overlay">
-                                            <div class="video-category-label">{{ video.category.name }}</div>
                                             <div class="video-title-overlay">{{ video.title }}</div>
                                         </div>
                                     </div>
@@ -269,7 +266,6 @@
                                 </div>
                                 
                                 <div class="card-body d-flex flex-column">
-                                    <h6 class="card-title">{{ video.title }}</h6>
                                     {% if video.description %}
                                     <p class="card-text text-muted small mb-3">{{ video.description[:80] }}{% if video.description|length > 80 %}...{% endif %}</p>
                                     {% endif %}
@@ -385,44 +381,43 @@ document.addEventListener('DOMContentLoaded', function() {
     background: linear-gradient(
         135deg,
         rgba(0, 0, 0, 0.7) 0%,
-        rgba(0, 0, 0, 0.3) 50%,
-        rgba(0, 0, 0, 0.8) 100%
+        rgba(0, 0, 0, 0.4) 50%,
+        rgba(0, 0, 0, 0.7) 100%
     );
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: center;
+    align-items: center;
     padding: 0.75rem;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    opacity: 1;
+    transition: background 0.3s ease;
 }
 
 .video-thumbnail:hover .video-thumbnail-overlay {
-    opacity: 1;
+    background: linear-gradient(
+        135deg,
+        rgba(0, 0, 0, 0.8) 0%,
+        rgba(0, 0, 0, 0.5) 50%,
+        rgba(0, 0, 0, 0.8) 100%
+    );
 }
 
 .video-category-label {
-    color: #10B981;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    align-self: flex-start;
+    display: none;
 }
 
 .video-title-overlay {
     color: white;
     font-size: 0.9rem;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.2;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
-    align-self: flex-end;
-    text-align: right;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    text-align: center;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
 }
 
@@ -431,13 +426,9 @@ document.addEventListener('DOMContentLoaded', function() {
     padding: 0.5rem;
 }
 
-.video-item .video-category-label {
-    font-size: 0.7rem;
-}
-
 .video-item .video-title-overlay {
     font-size: 0.75rem;
-    -webkit-line-clamp: 1;
+    -webkit-line-clamp: 2;
 }
 
 /* Fallback for missing images */
