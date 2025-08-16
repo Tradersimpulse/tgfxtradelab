@@ -471,7 +471,7 @@ window.StreamCoordinator = {
     streamStatusCheckInterval: null,
     
     init() {
-        debugLog('📌 Initializing Stream Coordinator...');
+        debugLog('🔌 Initializing Stream Coordinator...');
         
         this.socket = io({
             transports: ['websocket', 'polling'],
@@ -612,7 +612,7 @@ window.StreamCoordinator = {
     },
     
     startStreamStatusMonitoring() {
-        debugLog('💓 Starting stream status monitoring...');
+        debugLog('🔍 Starting stream status monitoring...');
         
         const failedChecks = new Map();
         
@@ -731,7 +731,7 @@ window.StreamCoordinator = {
         if (this.streamStatusCheckInterval) {
             clearInterval(this.streamStatusCheckInterval);
             this.streamStatusCheckInterval = null;
-            debugLog('💔 Stopped stream status monitoring');
+            debugLog('🔍 Stopped stream status monitoring');
         }
     },
     
@@ -1828,7 +1828,7 @@ debugLog('💡 Fixed LiveKit viewer integration loaded successfully!');
 </script>
 
 <style>
-/* Enhanced Professional Streaming Interface Styles */
+/* Enhanced Professional Streaming Interface Styles - Updated to Green Theme */
 
 /* Stream Cards */
 .stream-card {
@@ -1916,7 +1916,7 @@ debugLog('💡 Fixed LiveKit viewer integration loaded successfully!');
     transform: translate(-50%, -50%);
     width: 40px;
     height: 40px;
-    border: 2px solid #007bff;
+    border: 2px solid #10B981;
     border-top-color: transparent;
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -1924,7 +1924,7 @@ debugLog('💡 Fixed LiveKit viewer integration loaded successfully!');
 
 .connecting-icon {
     font-size: 2rem;
-    color: #007bff;
+    color: #10B981;
 }
 
 /* Status Badges */
@@ -2074,7 +2074,7 @@ debugLog('💡 Fixed LiveKit viewer integration loaded successfully!');
 }
 
 .dropdown-item:hover {
-    background: rgba(59, 130, 246, 0.8);
+    background: rgba(16, 185, 129, 0.8);
     color: white;
 }
 
@@ -2091,7 +2091,7 @@ debugLog('💡 Fixed LiveKit viewer integration loaded successfully!');
 }
 
 .progress-bar {
-    background: linear-gradient(90deg, #007bff, #0056b3);
+    background: linear-gradient(90deg, #10B981, #059669);
 }
 
 /* Animations */
@@ -2254,6 +2254,44 @@ debugLog('💡 Fixed LiveKit viewer integration loaded successfully!');
     .notification-toast {
         display: none !important;
     }
+}
+
+/* Button color overrides to match site theme */
+.spinner-border.text-primary {
+    color: #10B981 !important;
+}
+
+.text-primary {
+    color: #10B981 !important;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #10B981, #059669);
+    border-color: #10B981;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    border-color: #059669;
+}
+
+.btn-outline-primary {
+    color: #10B981;
+    border-color: #10B981;
+}
+
+.btn-outline-primary:hover {
+    background-color: #10B981;
+    border-color: #10B981;
+    color: white;
+}
+
+.bg-primary {
+    background-color: #10B981 !important;
+}
+
+.border-primary {
+    border-color: #10B981 !important;
 }
 </style>
 {% endblock %}
