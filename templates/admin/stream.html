@@ -91,14 +91,14 @@
 <div class="row">
     <!-- Your Stream Control -->
     <div class="col-lg-6 mb-4">
-        <div class="card" style="border-left: 4px solid {{ current_user.stream_color }};">
+        <div class="card stream-control-card" style="border-left: 4px solid {{ current_user.stream_color }};">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
                     <h5 class="mb-1">{{ current_user.display_name or current_user.username }}'s Stream</h5>
                     <small class="text-muted">Professional LiveKit streaming controls</small>
                 </div>
                 {% if user_active_stream %}
-                <span class="badge bg-success">
+                <span class="badge bg-success live-badge">
                     <span class="material-symbols-outlined me-1" style="font-size: 12px;">radio_button_checked</span>
                     LIVE
                 </span>
@@ -110,7 +110,7 @@
             <div class="card-body">
                 {% if user_active_stream %}
                 <!-- Your Active Stream Controls -->
-                <div class="alert alert-success d-flex align-items-center mb-3">
+                <div class="alert alert-success stream-alert d-flex align-items-center mb-3">
                     <span class="material-symbols-outlined me-2">radio_button_checked</span>
                     <div class="flex-grow-1">
                         <strong>{{ user_active_stream.title }}</strong>
@@ -124,7 +124,7 @@
 
                 <!-- Recording Status Display -->
                 <div id="recordingStatusDisplay" class="mb-3" style="display: none;">
-                    <div class="alert alert-info d-flex align-items-center">
+                    <div class="alert alert-info recording-alert d-flex align-items-center">
                         <span class="material-symbols-outlined me-2 text-danger pulse">fiber_manual_record</span>
                         <div class="flex-grow-1">
                             <strong>Recording Active</strong>
@@ -134,7 +134,7 @@
                 </div>
 
                 <!-- Enhanced LiveKit Status Display -->
-                <div class="mb-3 p-3 border rounded" style="background: linear-gradient(135deg, #1a1a1a, #2d2d2d);">
+                <div class="mb-3 p-3 border rounded livekit-studio">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h6 class="text-white mb-0">
                             <span class="material-symbols-outlined me-1" style="font-size: 16px;">live_tv</span>
@@ -181,7 +181,7 @@
                 </div>
 
                 <!-- Enhanced Preview Area with Picture-in-Picture -->
-                <div class="mb-3 position-relative" style="background: #000; min-height: 250px; border-radius: 8px; overflow: hidden;">
+                <div class="mb-3 position-relative preview-area" style="background: #000; min-height: 250px; border-radius: 8px; overflow: hidden;">
                     <!-- Main preview -->
                     <div id="mainPreview" class="w-100 h-100 d-flex align-items-center justify-content-center" style="min-height: 250px;">
                         <div class="text-center text-white">
@@ -198,7 +198,7 @@
                     
                     <!-- Recording indicator -->
                     <div id="recordingIndicator" class="position-absolute top-0 end-0 m-2" style="display: none;">
-                        <span class="badge bg-danger pulse">
+                        <span class="badge bg-danger pulse recording-badge">
                             <span class="material-symbols-outlined me-1" style="font-size: 10px;">fiber_manual_record</span>
                             REC
                         </span>
@@ -208,19 +208,19 @@
                 <!-- Enhanced Stream Controls -->
                 <div class="row mb-3">
                     <div class="col-4">
-                        <button class="btn btn-primary btn-sm w-100" id="toggleCameraBtn" onclick="toggleCamera()" disabled>
+                        <button class="btn btn-primary btn-sm w-100 stream-control-btn" id="toggleCameraBtn" onclick="toggleCamera()" disabled>
                             <span class="material-symbols-outlined me-1" style="font-size: 14px;">videocam</span>
                             Camera
                         </button>
                     </div>
                     <div class="col-4">
-                        <button class="btn btn-success btn-sm w-100" id="toggleMicBtn" onclick="toggleMicrophone()" disabled>
+                        <button class="btn btn-success btn-sm w-100 stream-control-btn" id="toggleMicBtn" onclick="toggleMicrophone()" disabled>
                             <span class="material-symbols-outlined me-1" style="font-size: 14px;">mic</span>
                             Audio
                         </button>
                     </div>
                     <div class="col-4">
-                        <button class="btn btn-warning btn-sm w-100" id="toggleScreenBtn" onclick="toggleScreenShare()" disabled>
+                        <button class="btn btn-warning btn-sm w-100 stream-control-btn" id="toggleScreenBtn" onclick="toggleScreenShare()" disabled>
                             <span class="material-symbols-outlined me-1" style="font-size: 14px;">screen_share</span>
                             Screen
                         </button>
@@ -230,20 +230,20 @@
                 <!-- Advanced Controls -->
                 <div class="row">
                     <div class="col-6">
-                        <button class="btn btn-outline-info btn-sm w-100" id="toggleRecordingBtn" disabled title="Recording starts automatically">
+                        <button class="btn btn-outline-info btn-sm w-100 stream-control-btn" id="toggleRecordingBtn" disabled title="Recording starts automatically">
                             <span class="material-symbols-outlined me-1" style="font-size: 14px;">smart_display</span>
                             <span id="recordingText">Auto-Record</span>
                         </button>
                     </div>
                     <div class="col-6">
-                        <button class="btn btn-danger btn-sm w-100" onclick="stopUserStream()">
+                        <button class="btn btn-danger btn-sm w-100 stream-control-btn" onclick="stopUserStream()">
                             <span class="material-symbols-outlined me-1" style="font-size: 14px;">stop</span>
                             End Stream
                         </button>
                     </div>
                 </div>
 
-                <button class="btn btn-outline-info btn-sm" onclick="checkEgressStatus()">
+                <button class="btn btn-outline-info btn-sm mt-2" onclick="checkEgressStatus()">
                     <span class="material-symbols-outlined me-1" style="font-size: 14px;">info</span>
                     Check Egress
                 </button>
@@ -257,7 +257,7 @@
                 </div>
                 
                 <div class="collapse mt-2" id="streamSettings">
-                    <div class="card card-body bg-dark">
+                    <div class="card card-body stream-settings-card">
                         <div class="row">
                             <div class="col-6">
                                 <label class="form-label text-white">Video Quality</label>
@@ -281,7 +281,7 @@
                 {% else %}
                 <!-- Start Your Stream -->
                 {% if can_start_stream %}
-                <form id="startUserStreamForm">
+                <form id="startUserStreamForm" class="stream-start-form">
                     <div class="mb-3">
                         <label class="form-label">Stream Title</label>
                         <input type="text" class="form-control form-control-sm" id="userStreamTitle" 
@@ -305,20 +305,20 @@
                                   placeholder="What will you be covering in this session?"></textarea>
                     </div>
                     
-                    <div class="alert alert-info">
+                    <div class="alert alert-info stream-info-alert">
                         <span class="material-symbols-outlined me-2">info</span>
                         <small>Recording will start automatically when you begin streaming</small>
                     </div>
                     
                     <div class="d-grid">
-                        <button type="submit" class="btn btn-success" id="startStreamBtn">
+                        <button type="submit" class="btn btn-success stream-start-btn" id="startStreamBtn">
                             <span class="material-symbols-outlined me-2">play_arrow</span>
                             Start LiveKit Stream
                         </button>
                     </div>
                 </form>
                 {% else %}
-                <div class="text-center py-3">
+                <div class="text-center py-3 stream-blocked">
                     <span class="material-symbols-outlined text-muted mb-2" style="font-size: 2rem;">block</span>
                     <p class="text-muted mb-0">
                         {% if active_streams|length >= 2 %}
@@ -336,7 +336,7 @@
     
     <!-- Other Active Streams -->
     <div class="col-lg-6 mb-4">
-        <div class="card">
+        <div class="card other-streams-card">
             <div class="card-header">
                 <h5 class="mb-0">
                     <span class="material-symbols-outlined me-2">groups</span>
@@ -347,12 +347,12 @@
                 {% set other_streams = active_streams|rejectattr('created_by', 'equalto', current_user.id)|list %}
                 {% if other_streams %}
                 {% for stream in other_streams %}
-                <div class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded" 
+                <div class="d-flex justify-content-between align-items-center mb-3 p-3 border rounded other-stream-item" 
                      style="border-left: 4px solid {{ stream.creator.stream_color }} !important;">
                     <div class="flex-grow-1">
                         <div class="d-flex align-items-center mb-1">
                             <h6 class="mb-0 me-2">{{ stream.title }}</h6>
-                            <span class="badge" style="background-color: {{ stream.creator.stream_color }};">
+                            <span class="badge other-stream-badge" style="background-color: {{ stream.creator.stream_color }};">
                                 {{ stream.streamer_name }}
                             </span>
                         </div>
@@ -374,7 +374,7 @@
                 </div>
                 {% endfor %}
                 {% else %}
-                <div class="text-center py-3">
+                <div class="text-center py-3 no-streams">
                     <span class="material-symbols-outlined text-muted mb-2" style="font-size: 2rem;">live_tv</span>
                     <p class="text-muted mb-0">No other streams active</p>
                 </div>
@@ -387,7 +387,7 @@
 <!-- Recent Streams History with Recording Info -->
 <div class="row">
     <div class="col-12">
-        <div class="card">
+        <div class="card recent-streams-card">
             <div class="card-header">
                 <h5 class="mb-0">
                     <span class="material-symbols-outlined me-2">history</span>
@@ -397,7 +397,7 @@
             <div class="card-body">
                 {% if recent_streams %}
                 <div class="table-responsive">
-                    <table class="table table-dark table-hover">
+                    <table class="table table-dark table-hover streams-table">
                         <thead>
                             <tr>
                                 <th>Streamer</th>
@@ -414,7 +414,7 @@
                             {% for stream in recent_streams[:10] %}
                             <tr>
                                 <td>
-                                    <span class="badge" style="background-color: {{ stream.creator.stream_color }};">
+                                    <span class="badge streamer-badge" style="background-color: {{ stream.creator.stream_color }};">
                                         {{ stream.streamer_name or stream.creator.username }}
                                     </span>
                                 </td>
@@ -424,7 +424,7 @@
                                     {% if stream.started_at and stream.ended_at %}
                                     {{ ((stream.ended_at - stream.started_at).total_seconds() / 60)|round(0)|int }}m
                                     {% elif stream.started_at and stream.is_active %}
-                                    <span class="text-success">Live Now</span>
+                                    <span class="text-success live-indicator">Live Now</span>
                                     {% else %}
                                     --
                                     {% endif %}
@@ -442,7 +442,7 @@
                                         </button>
                                     </div>
                                     {% elif stream.is_recording %}
-                                    <span class="badge bg-danger">
+                                    <span class="badge bg-danger recording-badge">
                                         <span class="material-symbols-outlined" style="font-size: 10px;">fiber_manual_record</span>
                                         Recording
                                     </span>
@@ -469,7 +469,7 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="text-center py-3">
+                <div class="text-center py-3 no-streams">
                     <span class="material-symbols-outlined text-muted mb-2" style="font-size: 2rem;">history</span>
                     <p class="text-muted mb-0">No recent streams</p>
                 </div>
@@ -478,7 +478,7 @@
         </div>
     </div>
 </div>
-<button class="btn btn-info btn-sm" onclick="addPastRecordingsToCorses()">
+<button class="btn btn-info btn-sm mt-3" onclick="addPastRecordingsToCorses()">
     <span class="material-symbols-outlined me-1" style="font-size: 14px;">video_library</span>
     Add Past Recordings to Courses
 </button>
@@ -530,7 +530,7 @@ window.WebSocketManager = {
     currentStreamId: null,
     
     init: function() {
-        console.log('📌 Initializing WebSocket for LiveKit coordination...');
+        console.log('🔌 Initializing WebSocket for LiveKit coordination...');
         
         this.socket = io({
             transports: ['websocket', 'polling'],
@@ -584,7 +584,7 @@ window.WebSocketManager = {
         });
         
         this.socket.on('recording_stopped', (data) => {
-            console.log('⏹️ Recording stopped');
+            console.log('ℹ️ Recording stopped');
             window.streamState.stats.isRecording = false;
             document.getElementById('recordingIndicator').style.display = 'none';
             document.getElementById('recordingStatusDisplay').style.display = 'none';
@@ -1296,7 +1296,7 @@ window.stopUserStream = async function() {
 // Recording Management Functions
 function showRecordingSavedNotification(recordingUrl, duration) {
     const notification = document.createElement('div');
-    notification.className = 'alert alert-success position-fixed shadow-lg';
+    notification.className = 'alert alert-success position-fixed shadow-lg recording-notification';
     notification.style.cssText = 'top: 80px; right: 20px; z-index: 9999; min-width: 450px; max-width: 500px; font-size: 14px; border-radius: 8px;';
     notification.innerHTML = `
         <div class="d-flex align-items-start">
@@ -1569,7 +1569,7 @@ function showNotification(type, message) {
                       type === 'success' ? 'alert-success' : 
                       type === 'warning' ? 'alert-warning' : 'alert-info';
     
-    notification.className = `alert ${alertClass} position-fixed shadow`;
+    notification.className = `alert ${alertClass} position-fixed shadow notification-toast`;
     notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; font-size: 14px; border-radius: 8px;';
     notification.innerHTML = `
         <div class="d-flex align-items-center">
@@ -1749,22 +1749,79 @@ window.addEventListener('beforeunload', function() {
 </script>
 
 <style>
-/* Enhanced Styling for Professional Stream Control */
+/* Sleek Black Theme for Stream Control */
 
+/* CSS Variables for consistent theming */
+:root {
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #1a1a1a;
+    --bg-tertiary: #2d2d2d;
+    --border-color: rgba(255, 255, 255, 0.1);
+    --border-accent: rgba(255, 255, 255, 0.2);
+    --text-primary: #ffffff;
+    --text-secondary: #e5e7eb;
+    --text-muted: #9ca3af;
+    --accent-primary: #10B981;
+    --accent-secondary: #3B82F6;
+    --accent-warning: #F59E0B;
+    --accent-danger: #EF4444;
+    --accent-purple: #8B5CF6;
+}
+
+/* Body and base styling */
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+/* Card styling */
+.card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.card-header {
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 12px 12px 0 0;
+}
+
+.card:hover {
+    border-color: var(--border-accent);
+    transform: translateY(-2px);
+}
+
+/* Stream-specific card styling */
+.stream-control-card {
+    border-left-width: 4px !important;
+    border-left-style: solid !important;
+}
+
+.other-streams-card,
+.recent-streams-card {
+    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+}
+
+/* System status styling */
 .system-status {
-    padding: 8px;
-    border-radius: 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
     transition: all 0.3s ease;
 }
 
 .system-status.active {
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+    border-color: rgba(16, 185, 129, 0.3);
 }
 
 .system-status.inactive {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05));
+    border-color: rgba(239, 68, 68, 0.3);
 }
 
 .status-icon {
@@ -1773,40 +1830,47 @@ window.addEventListener('beforeunload', function() {
     margin-bottom: 4px;
 }
 
+/* LiveKit Studio styling */
+.livekit-studio {
+    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Media control cards */
 .media-control-card {
     text-align: center;
     padding: 12px 8px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 2px solid transparent;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
     transition: all 0.3s ease;
     position: relative;
 }
 
 .media-control-card.active {
-    background: rgba(16, 185, 129, 0.1);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
     border-color: rgba(16, 185, 129, 0.4);
 }
 
 .media-control-card .material-symbols-outlined {
     font-size: 20px;
-    color: #6b7280;
+    color: var(--text-muted);
     margin-bottom: 4px;
     transition: color 0.3s ease;
 }
 
 .media-control-card.active .material-symbols-outlined {
-    color: #10B981;
+    color: var(--accent-primary);
 }
 
 .media-control-card small {
     font-size: 10px;
-    color: #9ca3af;
+    color: var(--text-muted);
     display: block;
 }
 
 .media-control-card.active small {
-    color: #10B981;
+    color: var(--accent-primary);
 }
 
 .quality-indicator {
@@ -1822,14 +1886,19 @@ window.addEventListener('beforeunload', function() {
 }
 
 .quality-indicator.active {
-    background: #10B981;
-    box-shadow: 0 0 4px #10B981;
+    background: var(--accent-primary);
+    box-shadow: 0 0 4px var(--accent-primary);
+}
+
+/* Preview area styling */
+.preview-area {
+    border: 1px solid var(--border-color);
+    background: linear-gradient(135deg, #000000, #1a1a1a);
 }
 
 #mainPreview, #pipPreview {
     border-radius: 8px;
     overflow: hidden;
-    background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
 }
 
 #pipPreview {
@@ -1837,50 +1906,269 @@ window.addEventListener('beforeunload', function() {
     backdrop-filter: blur(4px);
 }
 
-#recordingIndicator, .pulse {
+/* Button styling */
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent-primary), #059669);
+    border: none;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #059669, var(--accent-primary));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-outline-primary {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: transparent;
+}
+
+.btn-outline-primary:hover {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.btn-outline-secondary {
+    border-color: var(--border-accent);
+    color: var(--text-secondary);
+    background: transparent;
+}
+
+.btn-outline-secondary:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-accent);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+}
+
+.btn-outline-info {
+    border-color: var(--accent-secondary);
+    color: var(--accent-secondary);
+    background: transparent;
+}
+
+.btn-outline-info:hover {
+    background: var(--accent-secondary);
+    border-color: var(--accent-secondary);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.stream-control-btn {
+    font-weight: 600;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.stream-start-btn {
+    background: linear-gradient(135deg, var(--accent-primary), #059669);
+    border: none;
+    font-weight: 700;
+    padding: 12px 24px;
+    border-radius: 8px;
+}
+
+.stream-start-btn:hover {
+    background: linear-gradient(135deg, #059669, var(--accent-primary));
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+/* Badge styling */
+.badge {
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 0.5em 0.75em;
+}
+
+.badge.bg-primary {
+    background: linear-gradient(135deg, var(--accent-primary), #059669) !important;
+}
+
+.badge.bg-info {
+    background: linear-gradient(135deg, var(--accent-secondary), #1D4ED8) !important;
+}
+
+.badge.bg-success {
+    background: linear-gradient(135deg, var(--accent-primary), #059669) !important;
+}
+
+.badge.bg-warning {
+    background: linear-gradient(135deg, var(--accent-warning), #D97706) !important;
+}
+
+.badge.bg-danger {
+    background: linear-gradient(135deg, var(--accent-danger), #DC2626) !important;
+}
+
+.badge.bg-secondary {
+    background: linear-gradient(135deg, var(--bg-tertiary), #404040) !important;
+    color: var(--text-secondary);
+}
+
+.live-badge {
     animation: pulse 2s infinite;
 }
 
+.recording-badge {
+    animation: pulse 1.5s infinite;
+}
+
+.streamer-badge,
+.other-stream-badge {
+    font-weight: 700;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Alert styling */
+.alert-success.stream-alert {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: var(--accent-primary);
+}
+
+.alert-info.recording-alert {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.15), rgba(220, 53, 69, 0.05));
+    border: 1px solid rgba(220, 53, 69, 0.4);
+    color: var(--accent-danger);
+}
+
+.alert-info.stream-info-alert {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: var(--accent-primary);
+}
+
+/* Form styling */
+.form-control {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 8px;
+}
+
+.form-control:focus {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
+    color: var(--text-primary);
+}
+
+.form-select {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 8px;
+}
+
+.form-select:focus {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.15);
+    color: var(--text-primary);
+}
+
+.stream-settings-card {
+    background: var(--bg-tertiary) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Table styling */
+.table-dark.streams-table {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.table-dark th {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.875rem;
+}
+
+.table-dark td {
+    border-color: var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.table-hover tbody tr:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.05)) !important;
+}
+
+/* Stream item styling */
+.other-stream-item {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.other-stream-item:hover {
+    background: var(--bg-secondary);
+    transform: translateY(-1px);
+}
+
+/* Live indicators */
+.live-indicator {
+    font-weight: 700;
+    color: var(--accent-primary);
+    animation: pulse 2s infinite;
+}
+
+/* Empty state styling */
+.no-streams,
+.stream-blocked {
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 2rem;
+}
+
+/* Animation keyframes */
 @keyframes pulse {
     0% { opacity: 1; }
     50% { opacity: 0.6; }
     100% { opacity: 1; }
 }
 
-.btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-.card {
-    backdrop-filter: blur(10px);
-    transition: transform 0.3s ease;
-}
-
-.card:hover {
-    transform: translateY(-2px);
-}
-
-.alert {
+/* Notification styling */
+.notification-toast {
     backdrop-filter: blur(10px);
     border: none;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-.table-dark {
-    background: rgba(0, 0, 0, 0.3);
+.recording-notification {
     backdrop-filter: blur(10px);
+    border: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-.spinner-border-sm {
-    width: 1rem;
-    height: 1rem;
-}
-
-/* Recording Status Styles */
-#recordingStatusDisplay .alert {
-    background: linear-gradient(135deg, rgba(220, 53, 69, 0.1), rgba(220, 53, 69, 0.2));
-    border: 1px solid rgba(220, 53, 69, 0.3);
+/* Gradient text */
+.text-gradient-primary {
+    background: linear-gradient(135deg, var(--accent-primary), #059669);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 700;
 }
 
 /* Mobile responsiveness */
@@ -1909,24 +2197,29 @@ window.addEventListener('beforeunload', function() {
     }
 }
 
-/* Dark mode optimizations */
-@media (prefers-color-scheme: dark) {
-    .card {
-        background: rgba(30, 41, 59, 0.8);
-        border-color: rgba(71, 85, 105, 0.3);
-    }
-    
-    .form-control, .form-select {
-        background: rgba(0, 0, 0, 0.4);
-        border-color: rgba(71, 85, 105, 0.3);
-        color: white;
-    }
-    
-    .form-control:focus, .form-select:focus {
-        background: rgba(0, 0, 0, 0.6);
-        border-color: #10B981;
-        box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.25);
-    }
+/* Button disabled state */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--border-accent);
 }
 </style>
 {% endblock %}
