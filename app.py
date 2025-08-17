@@ -3065,63 +3065,6 @@ def stripe_webhook():
         return jsonify({'error': str(e)}), 500
 
 
-
-@app.route('/api/create-checkout-session', methods=['POST'])
-@login_required
-def create_checkout_session():
-    """Create a Stripe Checkout session for subscription"""
-    try:
-        data = request.get_json()
-        plan_type = data.get('plan_type', 'monthly')
-        
-        # Get price IDs
-        price_ids = initialize_stripe_price_ids()
-        price_id = price_ids.get(plan_type)
-        
-        if not price_id:
-            return jsonify({'error': 'Invalid plan selected'}), 400
-        
-        # Create or get Stripe customer
-        if current_user.stripe_customer_id:
-            customer_id = current_user.stripe_customer_id
-        else:
-            customer = stripe.Customer.create(
-                email=current_user.email,
-                name=current_user.username,
-                metadata={'user_id': current_user.id}
-            )
-            current_user.stripe_customer_id = customer.id
-            db.session.commit()
-            customer_id = customer.id
-        
-        # Create checkout session
-        session = stripe.checkout.Session.create(
-            customer=customer_id,
-            payment_method_types=['card'],
-            line_items=[{
-                'price': price_id,
-                'quantity': 1,
-            }],
-            mode='subscription',
-            success_url=f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{request.host_url}subscription?canceled=true",
-            metadata={
-                'user_id': current_user.id,
-                'plan_type': plan_type
-            }
-        )
-        
-        return jsonify({
-            'success': True,
-            'checkout_url': session.url
-        })
-        
-    except stripe.error.StripeError as e:
-        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/subscription-success')
 @login_required
 def subscription_success():
