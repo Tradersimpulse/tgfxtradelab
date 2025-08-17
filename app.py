@@ -4645,16 +4645,6 @@ def download_file(file_id):
     
     return redirect(video_file.s3_url)
 
-@app.route('/subscription')
-@login_required
-def subscription():
-    stripe_key = app.config.get('STRIPE_PUBLISHABLE_KEY')
-    
-    if not stripe_key:
-        flash('Payment system is currently unavailable. Please try again later.', 'warning')
-        return redirect(url_for('dashboard'))
-    
-    return render_template('subscription.html', stripe_key=stripe_key)
 
 @app.route('/donate')
 @login_required
