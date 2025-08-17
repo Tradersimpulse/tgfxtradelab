@@ -827,7 +827,129 @@ def test_discord_webhook():
         fields=test_fields
     )
 
+# Add this function to your app.py
 
+def migrate_stripe_integration():
+    """Run this once to add Stripe integration fields to existing database"""
+    try:
+        # Add new columns to users table
+        stripe_columns = [
+            'ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(100)',
+            'ALTER TABLE users ADD COLUMN stripe_subscription_id VARCHAR(100)',
+            'ALTER TABLE users ADD COLUMN subscription_status VARCHAR(50)',
+            'ALTER TABLE users ADD COLUMN subscription_plan VARCHAR(50)',
+            'ALTER TABLE users ADD COLUMN subscription_price_id VARCHAR(100)',
+            'ALTER TABLE users ADD COLUMN subscription_current_period_start DATETIME',
+            'ALTER TABLE users ADD COLUMN subscription_current_period_end DATETIME',
+            'ALTER TABLE users ADD COLUMN subscription_cancel_at_period_end BOOLEAN DEFAULT FALSE',
+            'ALTER TABLE users ADD COLUMN total_revenue DECIMAL(10,2) DEFAULT 0.00',
+            'ALTER TABLE users ADD COLUMN last_payment_date DATETIME',
+            'ALTER TABLE users ADD COLUMN last_payment_amount DECIMAL(10,2)',
+            'CREATE INDEX idx_users_stripe_customer_id ON users(stripe_customer_id)',
+            'CREATE INDEX idx_users_stripe_subscription_id ON users(stripe_subscription_id)'
+        ]
+        
+        for sql in stripe_columns:
+            try:
+                db.session.execute(sql)
+                print(f"✅ Executed: {sql[:50]}...")
+            except Exception as e:
+                if 'already exists' in str(e) or 'duplicate column' in str(e).lower():
+                    print(f"ℹ️ Column already exists: {sql[:50]}...")
+                else:
+                    print(f"⚠️ Error executing {sql[:50]}...: {e}")
+        
+        # Create new tables
+        db.create_all()
+        db.session.commit()
+        print("✅ Stripe integration migration completed successfully")
+        
+        return True
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Migration failed: {e}")
+        return False
+
+def initialize_stripe_price_ids():
+    """Set up your Stripe price IDs - update these with your actual Stripe price IDs"""
+    return {
+        'monthly': 'price_1R4RMQCir8vKAFowSpnyfvnI',  # Replace with your actual monthly price ID
+        'annual': 'price_1Rx5qACir8vKAFowfoovlQmt',
+        'lifetime': 'price_1Rx5rfCir8vKAFowQ7UZ6syL'
+    }
+
+def sync_user_with_stripe(user_id, stripe_customer_id=None):
+    """Sync a user's subscription data with Stripe"""
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return False
+        
+        # If no customer ID provided, try to find or create Stripe customer
+        if not stripe_customer_id:
+            if user.stripe_customer_id:
+                stripe_customer_id = user.stripe_customer_id
+            else:
+                # Create new Stripe customer
+                customer = stripe.Customer.create(
+                    email=user.email,
+                    name=user.username,
+                    metadata={'user_id': user.id}
+                )
+                user.stripe_customer_id = customer.id
+                stripe_customer_id = customer.id
+        
+        # Get customer from Stripe
+        customer = stripe.Customer.retrieve(stripe_customer_id)
+        
+        # Get active subscriptions
+        subscriptions = stripe.Subscription.list(
+            customer=stripe_customer_id,
+            status='all',
+            limit=1
+        )
+        
+        if subscriptions.data:
+            subscription = subscriptions.data[0]
+            
+            # Update user subscription data
+            user.stripe_subscription_id = subscription.id
+            user.subscription_status = subscription.status
+            user.subscription_current_period_start = datetime.fromtimestamp(subscription.current_period_start)
+            user.subscription_current_period_end = datetime.fromtimestamp(subscription.current_period_end)
+            user.subscription_cancel_at_period_end = subscription.cancel_at_period_end
+            
+            # Determine plan type
+            if subscription.items.data:
+                price_id = subscription.items.data[0].price.id
+                price_ids = initialize_stripe_price_ids()
+                
+                for plan_name, plan_price_id in price_ids.items():
+                    if price_id == plan_price_id:
+                        user.subscription_plan = plan_name
+                        break
+                
+                user.subscription_price_id = price_id
+            
+            # Update subscription status
+            user.has_subscription = subscription.status in ['active', 'trialing']
+            user.subscription_expires = user.subscription_current_period_end
+        else:
+            # No active subscription
+            user.has_subscription = False
+            user.subscription_status = None
+            user.stripe_subscription_id = None
+        
+        db.session.commit()
+        print(f"✅ Synced user {user.username} with Stripe")
+        return True
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error syncing user with Stripe: {e}")
+        return False
+        
 
 # Manual LiveKit token generation (works perfectly without SDK)
 def generate_livekit_token(room_name, participant_identity, participant_name, is_publisher=False):
@@ -1397,43 +1519,54 @@ def migrate_user_timezones():
         print(f"❌ Error migrating user timezones: {e}")
 
 def has_active_subscription(self):
-        """Check if user has an active subscription"""
-        if not self.has_subscription:
-            return False
-        
-        if self.subscription_status in ['active', 'trialing']:
-            return True
-            
-        if self.subscription_expires and self.subscription_expires > datetime.utcnow():
-            return True
-            
+    """Check if user has an active subscription - updated for lifetime"""
+    if not self.has_subscription:
         return False
     
-    def get_subscription_status_display(self):
-        """Get human-readable subscription status"""
-        if not self.has_subscription:
-            return "Free"
-        
-        status_map = {
-            'active': 'Active',
-            'trialing': 'Trial',
-            'past_due': 'Past Due',
-            'canceled': 'Canceled',
-            'unpaid': 'Unpaid',
-            'incomplete': 'Incomplete'
-        }
-        
-        return status_map.get(self.subscription_status, 'Unknown')
+    # Lifetime subscription never expires
+    if self.subscription_plan == 'lifetime':
+        return True
     
-    def get_subscription_plan_display(self):
-        """Get human-readable subscription plan"""
-        plan_map = {
-            'monthly': 'Monthly ($29/month)',
-            'annual': 'Annual ($299/year)',
-            'lifetime': 'Lifetime'
-        }
+    if self.subscription_status in ['active', 'trialing']:
+        return True
         
-        return plan_map.get(self.subscription_plan, 'Unknown Plan')
+    if self.subscription_expires and self.subscription_expires > datetime.utcnow():
+        return True
+        
+    return False
+
+def get_subscription_status_display(self):
+    """Get human-readable subscription status - updated for lifetime"""
+    if not self.has_subscription:
+        return "Free"
+    
+    if self.subscription_plan == 'lifetime':
+        return "Lifetime"
+    
+    status_map = {
+        'active': 'Active',
+        'trialing': 'Trial',
+        'past_due': 'Past Due',
+        'canceled': 'Canceled',
+        'unpaid': 'Unpaid',
+        'incomplete': 'Incomplete'
+    }
+    
+    return status_map.get(self.subscription_status, 'Unknown')
+
+def get_subscription_plan_display(self):
+    """Get human-readable subscription plan - updated for lifetime"""
+    plan_map = {
+        'monthly': 'Monthly ($29/month)',
+        'annual': 'Annual ($299/year)',
+        'lifetime': 'Lifetime Access ($499 one-time)'
+    }
+    
+    return plan_map.get(self.subscription_plan, 'Unknown Plan')
+
+def is_lifetime_subscriber(self):
+    """Check if user has lifetime subscription"""
+    return self.subscription_plan == 'lifetime' and self.has_subscription
         
 # Custom Jinja2 filters
 @app.template_filter('nl2br')
