@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+
+{% block title %}Premium Subscription - TGFX Trade Lab{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="text-center">
+            <h1 class="text-gradient-primary mb-3">
+                <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">workspace_premium</span>
+                Upgrade to Premium
+            </h1>
+            <p class="text-muted mb-0 lead">Unlock exclusive trading content and accelerate your learning</p>
+        </div>
+    </div>
+</div>
+
+<!-- Current Status (if user has subscription) -->
+{% if current_user.has_subscription %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-success">
+            <div class="d-flex align-items-center">
+                <span class="material-symbols-outlined me-3" style="font-size: 2rem;">check_circle</span>
+                <div>
+                    <h5 class="mb-1">You're already a Premium member!</h5>
+                    <p class="mb-0">
+                        Your {{ current_user.get_subscription_plan_display() }} subscription is active
+                        {% if current_user.subscription_expires and current_user.subscription_plan != 'lifetime' %}
+                        until {{ current_user.subscription_expires.strftime('%B %d, %Y') }}
+                        {% elif current_user.subscription_plan == 'lifetime' %}
+                        for life!
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Pricing Cards -->
+<div class="row justify-content-center mb-5">
+    <!-- Free Plan -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card h-100 {% if not current_user.has_subscription %}border-primary{% endif %}">
+            <div class="card-header text-center py-4">
+                <h3 class="text-white mb-2">Free</h3>
+                <div class="display-4 text-gradient-primary mb-2">$0</div>
+                <p class="text-muted mb-0">Forever</p>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Access to free video lessons
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Basic progress tracking
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Favorite videos feature
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Community access
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-muted">cancel</span>
+                        <span class="text-muted">Premium video content</span>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-muted">cancel</span>
+                        <span class="text-muted">Downloadable resources</span>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-muted">cancel</span>
+                        <span class="text-muted">Priority support</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-footer text-center">
+                {% if not current_user.has_subscription %}
+                <span class="badge bg-primary">Current Plan</span>
+                {% else %}
+                <button class="btn btn-outline-secondary" disabled>Your Free Plan</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Premium Monthly Plan -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card h-100 {% if current_user.subscription_plan == 'monthly' %}border-success{% else %}border-primary{% endif %}">
+            <div class="card-header text-center py-4 bg-gradient-primary">
+                <h3 class="text-white mb-2">Monthly</h3>
+                <div class="display-4 text-white mb-2">$29</div>
+                <p class="text-white mb-0 opacity-75">per month</p>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        <strong>Everything in Free</strong>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Access to all premium videos
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Downloadable course materials
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Advanced progress analytics
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Priority customer support
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Monthly live Q&A sessions
+                    </li>
+                </ul>
+            </div>
+            <div class="card-footer text-center">
+                {% if current_user.subscription_plan == 'monthly' %}
+                <span class="badge bg-success">Current Plan</span>
+                {% else %}
+                <button class="btn btn-primary btn-lg w-100" onclick="startSubscription('monthly')">
+                    <span class="material-symbols-outlined me-2">credit_card</span>
+                    Subscribe Monthly
+                </button>
+                <p class="text-muted small mt-2 mb-0">Cancel anytime</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Premium Annual Plan -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card h-100 border-warning position-relative {% if current_user.subscription_plan == 'annual' %}border-success{% endif %}">
+            <!-- Popular Badge -->
+            <div class="position-absolute top-0 start-50 translate-middle">
+                <span class="badge bg-warning text-dark px-3 py-2">Most Popular</span>
+            </div>
+            
+            <div class="card-header text-center py-4 bg-gradient-warning">
+                <h3 class="text-dark mb-2">Annual</h3>
+                <div class="d-flex align-items-center justify-content-center mb-2">
+                    <span class="text-muted text-decoration-line-through me-2">$348</span>
+                    <div class="display-4 text-dark">$299</div>
+                </div>
+                <p class="text-dark mb-1">per year</p>
+                <span class="badge bg-success">Save $49</span>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        <strong>Everything in Monthly</strong>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        2 months free (14% savings)
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Exclusive annual member content
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Trading strategy PDFs
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        One-on-one monthly consultation
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Priority in live sessions
+                    </li>
+                </ul>
+            </div>
+            <div class="card-footer text-center">
+                {% if current_user.subscription_plan == 'annual' %}
+                <span class="badge bg-success">Current Plan</span>
+                {% else %}
+                <button class="btn btn-warning btn-lg w-100" onclick="startSubscription('annual')">
+                    <span class="material-symbols-outlined me-2">payments</span>
+                    Subscribe Annually
+                </button>
+                <p class="text-muted small mt-2 mb-0">Best value • Cancel anytime</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Lifetime Plan -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card h-100 border-gold position-relative {% if current_user.subscription_plan == 'lifetime' %}border-success{% endif %}">
+            <!-- Ultimate Badge -->
+            <div class="position-absolute top-0 start-50 translate-middle">
+                <span class="badge bg-gold text-dark px-3 py-2">🏆 Ultimate</span>
+            </div>
+            
+            <div class="card-header text-center py-4 bg-gradient-gold">
+                <h3 class="text-dark mb-2">Lifetime</h3>
+                <div class="d-flex align-items-center justify-content-center mb-2">
+                    <span class="text-muted text-decoration-line-through me-2">$2,999+</span>
+                    <div class="display-4 text-dark">$499</div>
+                </div>
+                <p class="text-dark mb-1">one-time payment</p>
+                <span class="badge bg-success">Save $2,500+</span>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        <strong>Everything in Annual</strong>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        <strong>Lifetime access to all content</strong>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        All future courses included
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Exclusive lifetime member perks
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Direct access to instructors
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        VIP community access
+                    </li>
+                </ul>
+            </div>
+            <div class="card-footer text-center">
+                {% if current_user.subscription_plan == 'lifetime' %}
+                <span class="badge bg-success">Current Plan</span>
+                <p class="text-success small mt-2 mb-0">🎉 Lifetime Access Active!</p>
+                {% else %}
+                <button class="btn btn-gold btn-lg w-100" onclick="startSubscription('lifetime')">
+                    <span class="material-symbols-outlined me-2">workspace_premium</span>
+                    Get Lifetime Access
+                </button>
+                <p class="text-muted small mt-2 mb-0">One-time payment • No recurring fees</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Features Comparison Table -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header text-center">
+                <h3 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2">compare</span>
+                    Feature Comparison
+                </h3>
+                <p class="text-muted mb-0">See what's included in each plan</p>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark">
+                        <thead>
+                            <tr>
+                                <th>Feature</th>
+                                <th class="text-center">Free</th>
+                                <th class="text-center">Monthly</th>
+                                <th class="text-center">Annual</th>
+                                <th class="text-center">Lifetime</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Basic Video Lessons</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>Premium Video Content</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>Downloadable Resources</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>Monthly Live Q&A</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>One-on-One Consultation</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>All Future Content</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>VIP Community Access</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>Direct Instructor Access</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Value Proposition for Lifetime -->
+{% if not current_user.subscription_plan == 'lifetime' %}
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card bg-gradient-gold text-dark">
+            <div class="card-body text-center py-5">
+                <h3 class="mb-3">🚀 Why Choose Lifetime Access?</h3>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="h2">💰</div>
+                        <h5>Massive Savings</h5>
+                        <p>Pay once, save $2,500+ over time compared to monthly subscriptions</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="h2">🎓</div>
+                        <h5>All Future Content</h5>
+                        <p>Get every new course, update, and feature we ever release</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="h2">🔒</div>
+                        <h5>Price Protection</h5>
+                        <p>Lock in this price forever - never worry about price increases</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Rest of the existing content (FAQ, Trust Indicators, etc.) -->
+<!-- ... (keep existing FAQ and other sections) ... -->
+
+<style>
+.border-gold {
+    border-color: #FFD700 !important;
+}
+
+.bg-gradient-gold {
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+}
+
+.btn-gold {
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    border: none;
+    color: #000;
+    font-weight: bold;
+}
+
+.btn-gold:hover {
+    background: linear-gradient(135deg, #FFA500, #FFD700);
+    color: #000;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(255, 215, 0, 0.3);
+}
+
+.badge.bg-gold {
+    background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+    color: #000 !important;
+}
+
+.card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.table th, .table td {
+    vertical-align: middle;
+}
+</style>
+
+<script>
+function startSubscription(planType) {
+    selectedPlan = planType;
+    
+    // Show different messaging for lifetime
+    if (planType === 'lifetime') {
+        if (!confirm('🎉 You\'re about to get LIFETIME access to TGFX Trade Lab!\n\n✅ One-time payment of $499\n✅ Never pay again\n✅ All future content included\n✅ VIP community access\n\nProceed to checkout?')) {
+            return;
+        }
+    }
+    
+    // Show payment modal or redirect to checkout
+    const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+    modal.show();
+    
+    // Initialize Stripe Elements
+    initializeStripeElements();
+}
+
+// Rest of existing JavaScript functions...
+</script>
+{% endblock %}
