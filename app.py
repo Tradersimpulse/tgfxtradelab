@@ -2465,6 +2465,29 @@ def handle_payment_succeeded(invoice):
         print(f"❌ Error handling payment succeeded: {e}")
         db.session.rollback()
 
+@app.route('/payment-methods')
+@login_required
+def payment_methods():
+    return render_template('payment_methods.html')
+
+@app.route('/admin/subscriptions')
+@login_required
+def admin_subscriptions():
+    if not current_user.is_admin:
+        return redirect(url_for('dashboard'))
+    users_with_subs = User.query.filter(User.has_subscription == True).all()
+    return render_template('admin/subscriptions.html', users_with_subs=users_with_subs, 
+                         total_subscribers=len(users_with_subs), active_subs=0, 
+                         past_due_subs=0, canceled_subs=0)
+
+@app.route('/admin/payment-issues')
+@login_required
+def admin_payment_issues():
+    if not current_user.is_admin:
+        return redirect(url_for('dashboard'))
+    users_with_issues = []
+    return render_template('admin/payment_issues.html', users_with_issues=users_with_issues)
+
 @app.route('/api/user/upgrade-to-lifetime', methods=['POST'])
 @login_required
 def api_upgrade_to_lifetime():
