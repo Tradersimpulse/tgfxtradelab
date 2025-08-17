@@ -2568,6 +2568,96 @@ def api_get_user_billing_history():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/user/notifications')
+@login_required
+def api_get_user_notifications():
+    """Get user's notifications"""
+    try:
+        notifications = Notification.query.filter_by(user_id=current_user.id)\
+                                         .order_by(Notification.created_at.desc())\
+                                         .limit(20).all()
+        
+        unread_count = Notification.query.filter_by(
+            user_id=current_user.id,
+            is_read=False
+        ).count()
+        
+        notifications_data = []
+        for notification in notifications:
+            notifications_data.append({
+                'id': notification.id,
+                'title': notification.title,
+                'message': notification.message,
+                'notification_type': notification.notification_type,
+                'is_read': notification.is_read,
+                'created_at': notification.created_at.isoformat()
+            })
+        
+        return jsonify({
+            'success': True,
+            'notifications': notifications_data,
+            'unread_count': unread_count
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/notifications/<int:notification_id>/read', methods=['POST'])
+@login_required
+def api_mark_notification_read(notification_id):
+    """Mark a notification as read"""
+    try:
+        notification = Notification.query.filter_by(
+            id=notification_id,
+            user_id=current_user.id
+        ).first()
+        
+        if not notification:
+            return jsonify({'error': 'Notification not found'}), 404
+        
+        notification.is_read = True
+        db.session.commit()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/notifications/mark-all-read', methods=['POST'])
+@login_required
+def api_mark_all_notifications_read():
+    """Mark all notifications as read"""
+    try:
+        Notification.query.filter_by(
+            user_id=current_user.id,
+            is_read=False
+        ).update({'is_read': True})
+        
+        db.session.commit()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/notifications', methods=['DELETE'])
+@login_required
+def api_clear_all_notifications():
+    """Clear all notifications for user"""
+    try:
+        Notification.query.filter_by(user_id=current_user.id).delete()
+        db.session.commit()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+        
+
 @app.route('/api/user/cancel-subscription', methods=['POST'])
 @login_required
 def api_cancel_user_subscription():
