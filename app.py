@@ -160,24 +160,75 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    
+    # Enhanced subscription fields
     has_subscription = db.Column(db.Boolean, default=False, nullable=False)
     subscription_expires = db.Column(db.DateTime, nullable=True)
+    
+    # NEW: Stripe integration fields
+    stripe_customer_id = db.Column(db.String(100), nullable=True, index=True)
+    stripe_subscription_id = db.Column(db.String(100), nullable=True, index=True)
+    subscription_status = db.Column(db.String(50), nullable=True)  # active, canceled, past_due, etc.
+    subscription_plan = db.Column(db.String(50), nullable=True)  # monthly, annual
+    subscription_price_id = db.Column(db.String(100), nullable=True)
+    subscription_current_period_start = db.Column(db.DateTime, nullable=True)
+    subscription_current_period_end = db.Column(db.DateTime, nullable=True)
+    subscription_cancel_at_period_end = db.Column(db.Boolean, default=False, nullable=False)
+    
+    # Payment tracking
+    total_revenue = db.Column(db.Numeric(10, 2), default=0.00, nullable=False)
+    last_payment_date = db.Column(db.DateTime, nullable=True)
+    last_payment_amount = db.Column(db.Numeric(10, 2), nullable=True)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     
-    # Stream-related fields
+    # Stream-related fields (existing)
     display_name = db.Column(db.String(100), nullable=True)
     can_stream = db.Column(db.Boolean, default=False, nullable=False)
     stream_color = db.Column(db.String(7), default='#10B981', nullable=False)
-    
-    # Timezone field - NEW
     timezone = db.Column(db.String(50), default='America/Chicago', nullable=False)
     
-    # Relationships
+    # Relationships (existing)
     progress = db.relationship('UserProgress', backref='user', lazy=True, cascade='all, delete-orphan')
     favorites = db.relationship('UserFavorite', backref='user', lazy=True, cascade='all, delete-orphan')
     created_streams = db.relationship('Stream', backref='creator', lazy=True, cascade='all, delete-orphan')
     activities = db.relationship('UserActivity', backref='user', lazy=True, cascade='all, delete-orphan')
     notifications = db.relationship('Notification', backref='user', lazy=True, cascade='all, delete-orphan')
+
+
+class SubscriptionEvent(db.Model):
+    __tablename__ = 'subscription_events'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    stripe_customer_id = db.Column(db.String(100), nullable=True, index=True)
+    stripe_subscription_id = db.Column(db.String(100), nullable=True, index=True)
+    event_type = db.Column(db.String(50), nullable=False, index=True)  # created, updated, deleted, payment_succeeded, etc.
+    event_data = db.Column(db.Text, nullable=True)  # JSON data from Stripe
+    amount = db.Column(db.Numeric(10, 2), nullable=True)
+    currency = db.Column(db.String(3), default='usd', nullable=False)
+    processed = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationship
+    user = db.relationship('User', backref='subscription_events')
+
+# NEW: Model to track revenue analytics
+class RevenueAnalytics(db.Model):
+    __tablename__ = 'revenue_analytics'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    daily_revenue = db.Column(db.Numeric(10, 2), default=0.00, nullable=False)
+    monthly_revenue = db.Column(db.Numeric(10, 2), default=0.00, nullable=False)
+    new_subscriptions = db.Column(db.Integer, default=0, nullable=False)
+    canceled_subscriptions = db.Column(db.Integer, default=0, nullable=False)
+    active_subscriptions = db.Column(db.Integer, default=0, nullable=False)
+    churn_rate = db.Column(db.Numeric(5, 2), default=0.00, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (db.UniqueConstraint('date', name='unique_daily_analytics'),)
+    
 
 class Category(db.Model):
     __tablename__ = 'categories'
@@ -1345,6 +1396,45 @@ def migrate_user_timezones():
         db.session.rollback()
         print(f"❌ Error migrating user timezones: {e}")
 
+def has_active_subscription(self):
+        """Check if user has an active subscription"""
+        if not self.has_subscription:
+            return False
+        
+        if self.subscription_status in ['active', 'trialing']:
+            return True
+            
+        if self.subscription_expires and self.subscription_expires > datetime.utcnow():
+            return True
+            
+        return False
+    
+    def get_subscription_status_display(self):
+        """Get human-readable subscription status"""
+        if not self.has_subscription:
+            return "Free"
+        
+        status_map = {
+            'active': 'Active',
+            'trialing': 'Trial',
+            'past_due': 'Past Due',
+            'canceled': 'Canceled',
+            'unpaid': 'Unpaid',
+            'incomplete': 'Incomplete'
+        }
+        
+        return status_map.get(self.subscription_status, 'Unknown')
+    
+    def get_subscription_plan_display(self):
+        """Get human-readable subscription plan"""
+        plan_map = {
+            'monthly': 'Monthly ($29/month)',
+            'annual': 'Annual ($299/year)',
+            'lifetime': 'Lifetime'
+        }
+        
+        return plan_map.get(self.subscription_plan, 'Unknown Plan')
+        
 # Custom Jinja2 filters
 @app.template_filter('nl2br')
 def nl2br_filter(text):
