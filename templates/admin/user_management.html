@@ -1,0 +1,667 @@
+{% extends "base.html" %}
+
+{% block title %}User Management - TGFX Trade Lab Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="text-gradient-primary">
+                <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">group</span>
+                User Management
+            </h1>
+            <div>
+                <button class="btn btn-outline-primary me-2" onclick="syncAllUsersWithStripe()">
+                    <span class="material-symbols-outlined me-2">sync</span>
+                    Sync All with Stripe
+                </button>
+                <button class="btn btn-primary" onclick="exportUsers()">
+                    <span class="material-symbols-outlined me-2">download</span>
+                    Export Users
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-gradient-primary text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">people</span>
+                    <div>
+                        <h3 class="mb-0">{{ total_users }}</h3>
+                        <p class="mb-0">Total Users</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-gradient-success text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">star</span>
+                    <div>
+                        <h3 class="mb-0">{{ premium_users }}</h3>
+                        <p class="mb-0">Premium Users</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-gradient-warning text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">trending_up</span>
+                    <div>
+                        <h3 class="mb-0">${{ monthly_revenue }}</h3>
+                        <p class="mb-0">Monthly Revenue</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-gradient-info text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">percent</span>
+                    <div>
+                        <h3 class="mb-0">{{ conversion_rate }}%</h3>
+                        <p class="mb-0">Conversion Rate</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">Filter by Status</label>
+                        <select class="form-select" id="statusFilter" onchange="filterUsers()">
+                            <option value="">All Users</option>
+                            <option value="active">Active Subscribers</option>
+                            <option value="canceled">Canceled</option>
+                            <option value="past_due">Past Due</option>
+                            <option value="free">Free Users</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Filter by Plan</label>
+                        <select class="form-select" id="planFilter" onchange="filterUsers()">
+                            <option value="">All Plans</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="annual">Annual</option>
+                            <option value="free">Free</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Search Users</label>
+                        <input type="text" class="form-control" id="userSearch" placeholder="Search by name, email, or username" onkeyup="filterUsers()">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                            <span class="material-symbols-outlined me-2">clear</span>
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">table_view</span>
+                    Users List
+                </h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="showDetailsToggle" onchange="toggleDetails()">
+                    <label class="form-check-label" for="showDetailsToggle">
+                        Show Details
+                    </label>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped mb-0" id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Subscription</th>
+                                <th>Revenue</th>
+                                <th>Joined</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr data-user-id="{{ user.id }}" 
+                                data-status="{{ user.subscription_status or 'free' }}" 
+                                data-plan="{{ user.subscription_plan or 'free' }}"
+                                data-search-text="{{ user.username.lower() }} {{ user.email.lower() }} {{ user.display_name.lower() if user.display_name }}">
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar-circle me-3" style="background-color: {{ user.stream_color }}">
+                                            {{ user.username[0].upper() }}
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ user.username }}</div>
+                                            <small class="text-muted">{{ user.email }}</small>
+                                            {% if user.is_admin %}
+                                                <span class="badge bg-warning text-dark ms-2">Admin</span>
+                                            {% endif %}
+                                            {% if user.can_stream %}
+                                                <span class="badge bg-info ms-2">Streamer</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        <span class="badge bg-{{ 'success' if user.has_active_subscription() else 'secondary' }}">
+                                            {{ user.get_subscription_status_display() }}
+                                        </span>
+                                        {% if user.subscription_plan %}
+                                            <div class="small text-muted mt-1">{{ user.get_subscription_plan_display() }}</div>
+                                        {% endif %}
+                                        {% if user.subscription_expires %}
+                                            <div class="small text-muted">
+                                                Expires: {{ user.subscription_expires.strftime('%m/%d/%Y') }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="fw-bold">${{ "%.2f"|format(user.total_revenue or 0) }}</div>
+                                    {% if user.last_payment_date %}
+                                        <div class="small text-muted">
+                                            Last: {{ user.last_payment_date.strftime('%m/%d/%Y') }}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div>{{ user.created_at.strftime('%m/%d/%Y') }}</div>
+                                    <div class="small text-muted">{{ user.timezone }}</div>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" onclick="viewUser({{ user.id }})">
+                                            <span class="material-symbols-outlined">visibility</span>
+                                        </button>
+                                        <button class="btn btn-outline-warning" onclick="editUser({{ user.id }})">
+                                            <span class="material-symbols-outlined">edit</span>
+                                        </button>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                                <span class="material-symbols-outlined">more_horiz</span>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-dark">
+                                                <li><a class="dropdown-item" onclick="syncUserWithStripe({{ user.id }})">
+                                                    <span class="material-symbols-outlined me-2">sync</span>Sync with Stripe
+                                                </a></li>
+                                                {% if user.has_subscription %}
+                                                    <li><a class="dropdown-item" onclick="manageSubscription({{ user.id }})">
+                                                        <span class="material-symbols-outlined me-2">payment</span>Manage Subscription
+                                                    </a></li>
+                                                    <li><a class="dropdown-item" onclick="cancelSubscription({{ user.id }})">
+                                                        <span class="material-symbols-outlined me-2">cancel</span>Cancel Subscription
+                                                    </a></li>
+                                                {% else %}
+                                                    <li><a class="dropdown-item" onclick="grantSubscription({{ user.id }})">
+                                                        <span class="material-symbols-outlined me-2">star</span>Grant Subscription
+                                                    </a></li>
+                                                {% endif %}
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item" onclick="loginAsUser({{ user.id }})">
+                                                    <span class="material-symbols-outlined me-2">login</span>Login as User
+                                                </a></li>
+                                                <li><a class="dropdown-item text-danger" onclick="deleteUser({{ user.id }})">
+                                                    <span class="material-symbols-outlined me-2">delete</span>Delete User
+                                                </a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <!-- Detailed row (hidden by default) -->
+                            <tr class="user-details" id="details-{{ user.id }}" style="display: none;">
+                                <td colspan="5">
+                                    <div class="row p-3">
+                                        <div class="col-md-4">
+                                            <h6 class="text-muted">Subscription Details</h6>
+                                            <p><strong>Stripe Customer:</strong> {{ user.stripe_customer_id or 'Not linked' }}</p>
+                                            <p><strong>Subscription ID:</strong> {{ user.stripe_subscription_id or 'None' }}</p>
+                                            <p><strong>Cancel at Period End:</strong> {{ 'Yes' if user.subscription_cancel_at_period_end else 'No' }}</p>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <h6 class="text-muted">Activity</h6>
+                                            <p><strong>Videos Completed:</strong> {{ user.progress|selectattr('completed')|list|length }}</p>
+                                            <p><strong>Favorites:</strong> {{ user.favorites|length }}</p>
+                                            <p><strong>Last Login:</strong> Recently</p>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <h6 class="text-muted">Payment History</h6>
+                                            <p><strong>Total Paid:</strong> ${{ "%.2f"|format(user.total_revenue or 0) }}</p>
+                                            <p><strong>Last Payment:</strong> ${{ "%.2f"|format(user.last_payment_amount or 0) }}</p>
+                                            <button class="btn btn-sm btn-outline-info" onclick="viewPaymentHistory({{ user.id }})">
+                                                View Payment History
+                                            </button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Management Modal -->
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">User Management</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="userModalBody">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Subscription Management Modal -->
+<div class="modal fade" id="subscriptionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">Subscription Management</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="subscriptionModalBody">
+                <!-- Content loaded dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.avatar-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+}
+
+.user-details {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.table td {
+    vertical-align: middle;
+}
+</style>
+
+<script>
+// Filter and search functionality
+function filterUsers() {
+    const statusFilter = document.getElementById('statusFilter').value;
+    const planFilter = document.getElementById('planFilter').value;
+    const searchText = document.getElementById('userSearch').value.toLowerCase();
+    
+    const rows = document.querySelectorAll('#usersTable tbody tr:not(.user-details)');
+    
+    rows.forEach(row => {
+        const status = row.dataset.status;
+        const plan = row.dataset.plan;
+        const searchableText = row.dataset.searchText;
+        
+        let showRow = true;
+        
+        // Status filter
+        if (statusFilter && status !== statusFilter) {
+            showRow = false;
+        }
+        
+        // Plan filter
+        if (planFilter && plan !== planFilter) {
+            showRow = false;
+        }
+        
+        // Search filter
+        if (searchText && !searchableText.includes(searchText)) {
+            showRow = false;
+        }
+        
+        row.style.display = showRow ? '' : 'none';
+        
+        // Also hide/show corresponding details row
+        const detailsRow = document.getElementById(`details-${row.dataset.userId}`);
+        if (detailsRow) {
+            detailsRow.style.display = showRow && detailsRow.style.display !== 'none' ? '' : 'none';
+        }
+    });
+}
+
+function clearFilters() {
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('planFilter').value = '';
+    document.getElementById('userSearch').value = '';
+    filterUsers();
+}
+
+function toggleDetails() {
+    const showDetails = document.getElementById('showDetailsToggle').checked;
+    const detailRows = document.querySelectorAll('.user-details');
+    
+    detailRows.forEach(row => {
+        row.style.display = showDetails ? '' : 'none';
+    });
+}
+
+// User management functions
+function viewUser(userId) {
+    fetch(`/api/admin/user/${userId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('userModalBody').innerHTML = generateUserDetailsHTML(data.user);
+                new bootstrap.Modal(document.getElementById('userModal')).show();
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error loading user details', 'error');
+        });
+}
+
+function editUser(userId) {
+    // Implementation for editing user
+    showToast('Edit user functionality coming soon', 'info');
+}
+
+function syncUserWithStripe(userId) {
+    showToast('Syncing user with Stripe...', 'info');
+    
+    fetch(`/api/admin/user/${userId}/sync-stripe`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('User synced with Stripe successfully', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast(data.error || 'Failed to sync user', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error syncing user', 'error');
+    });
+}
+
+function syncAllUsersWithStripe() {
+    if (!confirm('This will sync all users with Stripe. This may take a while. Continue?')) {
+        return;
+    }
+    
+    showToast('Syncing all users with Stripe...', 'info');
+    
+    fetch('/api/admin/users/sync-all-stripe', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(`Synced ${data.synced_count} users successfully`, 'success');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showToast(data.error || 'Failed to sync users', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error syncing users', 'error');
+    });
+}
+
+function manageSubscription(userId) {
+    fetch(`/api/admin/user/${userId}/subscription`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('subscriptionModalBody').innerHTML = generateSubscriptionManagementHTML(data);
+                new bootstrap.Modal(document.getElementById('subscriptionModal')).show();
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error loading subscription details', 'error');
+        });
+}
+
+function cancelSubscription(userId) {
+    if (!confirm('Are you sure you want to cancel this user\'s subscription?')) {
+        return;
+    }
+    
+    fetch(`/api/admin/user/${userId}/cancel-subscription`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Subscription canceled successfully', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast(data.error || 'Failed to cancel subscription', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error canceling subscription', 'error');
+    });
+}
+
+function grantSubscription(userId) {
+    // Implementation for granting subscription
+    const modal = `
+        <div class="mb-3">
+            <label class="form-label">Subscription Plan</label>
+            <select class="form-select" id="grantPlan">
+                <option value="monthly">Monthly ($29/month)</option>
+                <option value="annual">Annual ($299/year)</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Duration (months)</label>
+            <input type="number" class="form-control" id="grantDuration" value="1" min="1" max="12">
+        </div>
+        <div class="text-end">
+            <button class="btn btn-primary" onclick="confirmGrantSubscription(${userId})">Grant Subscription</button>
+        </div>
+    `;
+    
+    document.getElementById('userModalBody').innerHTML = modal;
+    new bootstrap.Modal(document.getElementById('userModal')).show();
+}
+
+function confirmGrantSubscription(userId) {
+    const plan = document.getElementById('grantPlan').value;
+    const duration = document.getElementById('grantDuration').value;
+    
+    fetch(`/api/admin/user/${userId}/grant-subscription`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({plan, duration: parseInt(duration)})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Subscription granted successfully', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast(data.error || 'Failed to grant subscription', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error granting subscription', 'error');
+    });
+}
+
+function loginAsUser(userId) {
+    if (!confirm('Login as this user? You will be logged out of your admin account.')) {
+        return;
+    }
+    
+    fetch(`/api/admin/login-as-user/${userId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.href = '/dashboard';
+        } else {
+            showToast(data.error || 'Failed to login as user', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error logging in as user', 'error');
+    });
+}
+
+function deleteUser(userId) {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+        return;
+    }
+    
+    fetch(`/api/admin/user/${userId}`, {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('User deleted successfully', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast(data.error || 'Failed to delete user', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error deleting user', 'error');
+    });
+}
+
+function exportUsers() {
+    showToast('Exporting users...', 'info');
+    window.open('/api/admin/users/export', '_blank');
+}
+
+function viewPaymentHistory(userId) {
+    fetch(`/api/admin/user/${userId}/payment-history`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('userModalBody').innerHTML = generatePaymentHistoryHTML(data.payments);
+                new bootstrap.Modal(document.getElementById('userModal')).show();
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error loading payment history', 'error');
+        });
+}
+
+// Helper functions to generate HTML
+function generateUserDetailsHTML(user) {
+    return `
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="text-muted">User Information</h6>
+                <p><strong>Username:</strong> ${user.username}</p>
+                <p><strong>Email:</strong> ${user.email}</p>
+                <p><strong>Display Name:</strong> ${user.display_name || 'Not set'}</p>
+                <p><strong>Timezone:</strong> ${user.timezone}</p>
+                <p><strong>Admin:</strong> ${user.is_admin ? 'Yes' : 'No'}</p>
+                <p><strong>Can Stream:</strong> ${user.can_stream ? 'Yes' : 'No'}</p>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-muted">Subscription</h6>
+                <p><strong>Status:</strong> ${user.subscription_status || 'Free'}</p>
+                <p><strong>Plan:</strong> ${user.subscription_plan || 'None'}</p>
+                <p><strong>Expires:</strong> ${user.subscription_expires || 'N/A'}</p>
+                <p><strong>Stripe Customer:</strong> ${user.stripe_customer_id || 'Not linked'}</p>
+                <p><strong>Total Revenue:</strong> $${user.total_revenue || '0.00'}</p>
+            </div>
+        </div>
+    `;
+}
+
+function generateSubscriptionManagementHTML(data) {
+    // Implementation for subscription management interface
+    return `
+        <div class="text-center">
+            <p>Subscription management interface will be implemented here</p>
+            <p>User: ${data.user.username}</p>
+            <p>Current Plan: ${data.subscription.plan || 'Free'}</p>
+        </div>
+    `;
+}
+
+function generatePaymentHistoryHTML(payments) {
+    if (!payments || payments.length === 0) {
+        return '<div class="text-center p-4"><p>No payment history found</p></div>';
+    }
+    
+    let html = '<div class="table-responsive"><table class="table table-dark"><thead><tr><th>Date</th><th>Amount</th><th>Status</th><th>Description</th></tr></thead><tbody>';
+    
+    payments.forEach(payment => {
+        html += `
+            <tr>
+                <td>${payment.date}</td>
+                <td>$${payment.amount}</td>
+                <td><span class="badge bg-${payment.status === 'succeeded' ? 'success' : 'danger'}">${payment.status}</span></td>
+                <td>${payment.description}</td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    return html;
+}
+</script>
+{% endblock %}
