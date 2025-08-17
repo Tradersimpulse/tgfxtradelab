@@ -3006,6 +3006,12 @@ def subscription():
                          stripe_key=stripe_key,
                          selected_plan=selected_plan)
 
+@app.route('/billing-history')
+@login_required
+def billing_history():
+    """Billing history page - redirects to subscription management"""
+    return redirect(url_for('manage_subscription'))
+
 
 @app.route('/webhook/stripe', methods=['POST'])
 def stripe_webhook():
