@@ -1453,6 +1453,382 @@ def upload_recording_to_s3(local_file_path, stream_id, streamer_name):
         print(f"Error uploading recording to S3: {e}")
         return None
 
+def handle_subscription_created(subscription):
+    """Handle new subscription creation"""
+    try:
+        print(f"🆕 New subscription created: {subscription['id']}")
+        
+        # Find user by customer ID
+        user = User.query.filter_by(stripe_customer_id=subscription['customer']).first()
+        if not user:
+            print(f"⚠️ User not found for customer {subscription['customer']}")
+            return
+        
+        # Update user subscription info
+        user.stripe_subscription_id = subscription['id']
+        user.subscription_status = subscription['status']
+        user.has_subscription = subscription['status'] in ['active', 'trialing']
+        user.subscription_current_period_start = datetime.fromtimestamp(subscription['current_period_start'])
+        user.subscription_current_period_end = datetime.fromtimestamp(subscription['current_period_end'])
+        user.subscription_expires = user.subscription_current_period_end
+        user.subscription_cancel_at_period_end = subscription.get('cancel_at_period_end', False)
+        
+        # Determine plan type
+        if subscription['items']['data']:
+            price_id = subscription['items']['data'][0]['price']['id']
+            price_ids = initialize_stripe_price_ids()
+            
+            for plan_name, plan_price_id in price_ids.items():
+                if price_id == plan_price_id:
+                    user.subscription_plan = plan_name
+                    break
+            
+            user.subscription_price_id = price_id
+        
+        db.session.commit()
+        
+        # Create welcome notification
+        create_notification(
+            user.id,
+            'Welcome to Premium!',
+            f'Your {user.subscription_plan} subscription is now active. Enjoy exclusive access to all premium content!',
+            'subscription'
+        )
+        
+        # Create activity log
+        create_user_activity(
+            user.id,
+            'subscription_activated',
+            f'Premium subscription activated ({user.subscription_plan})'
+        )
+        
+        print(f"✅ User {user.username} subscription activated: {user.subscription_plan}")
+        
+    except Exception as e:
+        print(f"❌ Error handling subscription created: {e}")
+        db.session.rollback()
+
+def handle_subscription_updated(subscription):
+    """Handle subscription updates"""
+    try:
+        print(f"🔄 Subscription updated: {subscription['id']}")
+        
+        # Find user by subscription ID
+        user = User.query.filter_by(stripe_subscription_id=subscription['id']).first()
+        if not user:
+            print(f"⚠️ User not found for subscription {subscription['id']}")
+            return
+        
+        old_status = user.subscription_status
+        
+        # Update subscription info
+        user.subscription_status = subscription['status']
+        user.has_subscription = subscription['status'] in ['active', 'trialing']
+        user.subscription_current_period_start = datetime.fromtimestamp(subscription['current_period_start'])
+        user.subscription_current_period_end = datetime.fromtimestamp(subscription['current_period_end'])
+        user.subscription_expires = user.subscription_current_period_end
+        user.subscription_cancel_at_period_end = subscription.get('cancel_at_period_end', False)
+        
+        # Check if plan changed
+        if subscription['items']['data']:
+            price_id = subscription['items']['data'][0]['price']['id']
+            price_ids = initialize_stripe_price_ids()
+            
+            old_plan = user.subscription_plan
+            for plan_name, plan_price_id in price_ids.items():
+                if price_id == plan_price_id:
+                    user.subscription_plan = plan_name
+                    break
+            
+            user.subscription_price_id = price_id
+            
+            # Notify if plan changed
+            if old_plan != user.subscription_plan:
+                create_notification(
+                    user.id,
+                    'Plan Updated',
+                    f'Your subscription plan has been updated from {old_plan} to {user.subscription_plan}.',
+                    'subscription'
+                )
+        
+        # Notify on status changes
+        if old_status != user.subscription_status:
+            if user.subscription_status == 'past_due':
+                create_notification(
+                    user.id,
+                    'Payment Past Due',
+                    'Your subscription payment is past due. Please update your payment method to continue service.',
+                    'payment_issue'
+                )
+            elif user.subscription_status == 'canceled':
+                create_notification(
+                    user.id,
+                    'Subscription Canceled',
+                    'Your subscription has been canceled. You will lose access to premium content at the end of your billing period.',
+                    'subscription'
+                )
+        
+        db.session.commit()
+        print(f"✅ User {user.username} subscription updated: {user.subscription_status}")
+        
+    except Exception as e:
+        print(f"❌ Error handling subscription updated: {e}")
+        db.session.rollback()
+
+def handle_subscription_deleted(subscription):
+    """Handle subscription cancellation"""
+    try:
+        print(f"❌ Subscription deleted: {subscription['id']}")
+        
+        # Find user by subscription ID
+        user = User.query.filter_by(stripe_subscription_id=subscription['id']).first()
+        if not user:
+            print(f"⚠️ User not found for subscription {subscription['id']}")
+            return
+        
+        # Update user subscription info
+        user.has_subscription = False
+        user.subscription_status = 'canceled'
+        user.subscription_cancel_at_period_end = False
+        
+        # Keep expiration date so they have access until end of period
+        if not user.subscription_expires:
+            user.subscription_expires = datetime.fromtimestamp(subscription['current_period_end'])
+        
+        db.session.commit()
+        
+        # Create notification
+        create_notification(
+            user.id,
+            'Subscription Ended',
+            'Your premium subscription has ended. You can resubscribe anytime to regain access to premium content.',
+            'subscription'
+        )
+        
+        # Create activity log
+        create_user_activity(
+            user.id,
+            'subscription_canceled',
+            'Premium subscription canceled'
+        )
+        
+        print(f"✅ User {user.username} subscription canceled")
+        
+    except Exception as e:
+        print(f"❌ Error handling subscription deleted: {e}")
+        db.session.rollback()
+
+def handle_payment_succeeded(invoice):
+    """Handle successful payments"""
+    try:
+        print(f"💰 Payment succeeded: {invoice['id']}")
+        
+        # Find user by customer ID
+        user = User.query.filter_by(stripe_customer_id=invoice['customer']).first()
+        if not user:
+            print(f"⚠️ User not found for customer {invoice['customer']}")
+            return
+        
+        payment_amount = invoice['amount_paid'] / 100  # Convert cents to dollars
+        
+        # Update user payment info
+        user.last_payment_date = datetime.fromtimestamp(invoice['created'])
+        user.last_payment_amount = payment_amount
+        user.total_revenue = (user.total_revenue or 0) + payment_amount
+        
+        db.session.commit()
+        
+        # Create notification for significant payments (subscriptions)
+        if payment_amount >= 20:  # Only for subscription payments, not small fees
+            create_notification(
+                user.id,
+                'Payment Received',
+                f'Thank you! Your payment of ${payment_amount:.2f} has been processed successfully.',
+                'payment'
+            )
+        
+        print(f"✅ Payment processed for {user.username}: ${payment_amount:.2f}")
+        
+    except Exception as e:
+        print(f"❌ Error handling payment succeeded: {e}")
+        db.session.rollback()
+
+def handle_payment_failed(invoice):
+    """Handle failed payments"""
+    try:
+        print(f"⚠️ Payment failed: {invoice['id']}")
+        
+        # Find user by customer ID
+        user = User.query.filter_by(stripe_customer_id=invoice['customer']).first()
+        if not user:
+            print(f"⚠️ User not found for customer {invoice['customer']}")
+            return
+        
+        # Create urgent notification
+        create_notification(
+            user.id,
+            'Payment Failed',
+            'Your subscription payment failed. Please update your payment method to avoid service interruption.',
+            'payment_issue'
+        )
+        
+        # If multiple failed payments, send email reminder (you can implement this)
+        failed_attempts = invoice.get('attempt_count', 1)
+        if failed_attempts >= 2:
+            create_notification(
+                user.id,
+                'Urgent: Multiple Payment Failures',
+                f'We\'ve attempted to charge your card {failed_attempts} times. Please update your payment method immediately to keep your subscription active.',
+                'payment_issue'
+            )
+        
+        print(f"⚠️ Payment failed for {user.username} (attempt {failed_attempts})")
+        
+    except Exception as e:
+        print(f"❌ Error handling payment failed: {e}")
+
+def handle_trial_will_end(subscription):
+    """Handle trial ending soon"""
+    try:
+        print(f"⏰ Trial ending soon: {subscription['id']}")
+        
+        # Find user by subscription ID
+        user = User.query.filter_by(stripe_subscription_id=subscription['id']).first()
+        if not user:
+            return
+        
+        trial_end = datetime.fromtimestamp(subscription['trial_end'])
+        
+        create_notification(
+            user.id,
+            'Trial Ending Soon',
+            f'Your free trial ends on {trial_end.strftime("%B %d, %Y")}. Add a payment method to continue enjoying premium access.',
+            'trial'
+        )
+        
+        print(f"✅ Trial reminder sent to {user.username}")
+        
+    except Exception as e:
+        print(f"❌ Error handling trial will end: {e}")
+
+def handle_checkout_completed(session):
+    """Handle completed checkout sessions"""
+    try:
+        print(f"🛒 Checkout completed: {session['id']}")
+        
+        # Get user from metadata
+        user_id = session['metadata'].get('user_id')
+        if user_id:
+            user = User.query.get(user_id)
+            if user:
+                # Sync user data with Stripe
+                sync_user_with_stripe(user.id)
+                
+                create_notification(
+                    user.id,
+                    'Welcome to Premium!',
+                    'Your subscription has been activated. Start exploring premium content now!',
+                    'subscription'
+                )
+        
+    except Exception as e:
+        print(f"❌ Error handling checkout completed: {e}")
+
+def log_stripe_event(event):
+    """Log Stripe events for analytics"""
+    try:
+        # Determine user if possible
+        user_id = None
+        stripe_customer_id = None
+        stripe_subscription_id = None
+        amount = None
+        
+        event_object = event['data']['object']
+        
+        # Extract customer info
+        if 'customer' in event_object:
+            stripe_customer_id = event_object['customer']
+            user = User.query.filter_by(stripe_customer_id=stripe_customer_id).first()
+            if user:
+                user_id = user.id
+        
+        # Extract subscription info
+        if 'subscription' in event_object:
+            stripe_subscription_id = event_object['subscription']
+        elif event_object.get('object') == 'subscription':
+            stripe_subscription_id = event_object['id']
+        
+        # Extract amount for payment events
+        if 'amount_paid' in event_object:
+            amount = event_object['amount_paid'] / 100
+        elif 'amount' in event_object:
+            amount = event_object['amount'] / 100
+        
+        # Create event record
+        subscription_event = SubscriptionEvent(
+            user_id=user_id,
+            stripe_customer_id=stripe_customer_id,
+            stripe_subscription_id=stripe_subscription_id,
+            event_type=event['type'],
+            event_data=json.dumps(event_object),
+            amount=amount,
+            processed=True
+        )
+        
+        db.session.add(subscription_event)
+        db.session.commit()
+        
+        print(f"📊 Logged event: {event['type']}")
+        
+    except Exception as e:
+        print(f"❌ Error logging Stripe event: {e}")
+        db.session.rollback()
+
+# Helper function to update revenue analytics daily
+@app.route('/api/admin/update-revenue-analytics', methods=['POST'])
+@login_required
+def api_update_revenue_analytics():
+    """Manually trigger revenue analytics update"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        update_revenue_analytics()
+        return jsonify({'success': True, 'message': 'Revenue analytics updated'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Function to sync all subscription statuses with Stripe
+def sync_all_subscriptions_with_stripe():
+    """Sync all user subscriptions with Stripe - run this periodically"""
+    try:
+        print("🔄 Starting bulk subscription sync with Stripe...")
+        
+        # Get all users with Stripe customer IDs
+        users_with_stripe = User.query.filter(User.stripe_customer_id.isnot(None)).all()
+        
+        success_count = 0
+        error_count = 0
+        
+        for user in users_with_stripe:
+            try:
+                if sync_user_with_stripe(user.id):
+                    success_count += 1
+                else:
+                    error_count += 1
+            except Exception as e:
+                print(f"Error syncing user {user.id}: {e}")
+                error_count += 1
+        
+        print(f"✅ Bulk sync completed: {success_count} successful, {error_count} errors")
+        return success_count, error_count
+        
+    except Exception as e:
+        print(f"❌ Error in bulk sync: {e}")
+        return 0, 0
+
+
+
 def initialize_streamers():
     """Initialize Ray and Jordan as streamers - run this once after deployment"""
     try:
@@ -2519,6 +2895,66 @@ def subscription():
     return render_template('subscription.html', 
                          stripe_key=stripe_key,
                          selected_plan=selected_plan)
+
+
+@app.route('/webhook/stripe', methods=['POST'])
+def stripe_webhook():
+    """Handle Stripe webhooks"""
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
+    endpoint_secret = app.config.get('STRIPE_WEBHOOK_SECRET')
+    
+    if not endpoint_secret:
+        print("⚠️ Stripe webhook secret not configured")
+        return jsonify({'error': 'Webhook secret not configured'}), 400
+    
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, endpoint_secret
+        )
+    except ValueError as e:
+        print(f"❌ Invalid payload: {e}")
+        return jsonify({'error': 'Invalid payload'}), 400
+    except stripe.error.SignatureVerificationError as e:
+        print(f"❌ Invalid signature: {e}")
+        return jsonify({'error': 'Invalid signature'}), 400
+    
+    # Handle the event
+    try:
+        if event['type'] == 'customer.subscription.created':
+            handle_subscription_created(event['data']['object'])
+        
+        elif event['type'] == 'customer.subscription.updated':
+            handle_subscription_updated(event['data']['object'])
+        
+        elif event['type'] == 'customer.subscription.deleted':
+            handle_subscription_deleted(event['data']['object'])
+        
+        elif event['type'] == 'invoice.payment_succeeded':
+            handle_payment_succeeded(event['data']['object'])
+        
+        elif event['type'] == 'invoice.payment_failed':
+            handle_payment_failed(event['data']['object'])
+        
+        elif event['type'] == 'customer.subscription.trial_will_end':
+            handle_trial_will_end(event['data']['object'])
+        
+        elif event['type'] == 'checkout.session.completed':
+            handle_checkout_completed(event['data']['object'])
+        
+        else:
+            print(f"ℹ️ Unhandled event type: {event['type']}")
+        
+        # Log all events for analytics
+        log_stripe_event(event)
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"❌ Error handling webhook: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 
 @app.route('/api/create-checkout-session', methods=['POST'])
 @login_required
