@@ -2152,6 +2152,454 @@ def api_upgrade_to_lifetime():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/manage-subscription')
+@login_required
+def manage_subscription():
+    """User subscription management page"""
+    return render_template('manage_subscription.html')
+
+@app.route('/api/user/billing-history')
+@login_required
+def api_get_user_billing_history():
+    """Get current user's billing history"""
+    try:
+        invoices = []
+        
+        if current_user.stripe_customer_id:
+            # Get invoices from Stripe
+            stripe_invoices = stripe.Invoice.list(
+                customer=current_user.stripe_customer_id,
+                limit=20
+            )
+            
+            for invoice in stripe_invoices.data:
+                invoices.append({
+                    'id': invoice.id,
+                    'date': datetime.fromtimestamp(invoice.created).strftime('%m/%d/%Y'),
+                    'amount': f"{invoice.amount_paid / 100:.2f}",
+                    'status': invoice.status,
+                    'description': invoice.description or f"Subscription - {invoice.lines.data[0].price.nickname if invoice.lines.data else 'Premium'}",
+                    'pdf_url': invoice.invoice_pdf if invoice.status == 'paid' else None
+                })
+        
+        return jsonify({
+            'success': True,
+            'invoices': invoices
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/cancel-subscription', methods=['POST'])
+@login_required
+def api_cancel_user_subscription():
+    """Cancel current user's subscription"""
+    try:
+        data = request.get_json()
+        reason = data.get('reason', '')
+        feedback = data.get('feedback', '')
+        
+        if not current_user.stripe_subscription_id:
+            return jsonify({'error': 'No active subscription found'}), 400
+        
+        # Cancel subscription at period end in Stripe
+        subscription = stripe.Subscription.modify(
+            current_user.stripe_subscription_id,
+            cancel_at_period_end=True,
+            cancellation_details={
+                'comment': f"Reason: {reason}. Feedback: {feedback}"
+            }
+        )
+        
+        # Update user record
+        current_user.subscription_cancel_at_period_end = True
+        db.session.commit()
+        
+        # Log the cancellation
+        event = SubscriptionEvent(
+            user_id=current_user.id,
+            stripe_customer_id=current_user.stripe_customer_id,
+            stripe_subscription_id=current_user.stripe_subscription_id,
+            event_type='subscription_canceled_by_user',
+            event_data=json.dumps({
+                'reason': reason,
+                'feedback': feedback,
+                'canceled_at': datetime.utcnow().isoformat()
+            }),
+            processed=True
+        )
+        db.session.add(event)
+        db.session.commit()
+        
+        # Send notification
+        create_notification(
+            current_user.id,
+            'Subscription Canceled',
+            f'Your subscription has been canceled and will end on {current_user.subscription_expires.strftime("%B %d, %Y") if current_user.subscription_expires else "the end of your billing period"}. You can reactivate anytime before then.',
+            'subscription'
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Subscription canceled successfully. You will retain access until the end of your current billing period.'
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/reactivate-subscription', methods=['POST'])
+@login_required
+def api_reactivate_user_subscription():
+    """Reactivate a canceled subscription"""
+    try:
+        if not current_user.stripe_subscription_id:
+            return jsonify({'error': 'No subscription found'}), 400
+        
+        if not current_user.subscription_cancel_at_period_end:
+            return jsonify({'error': 'Subscription is not canceled'}), 400
+        
+        # Reactivate subscription in Stripe
+        subscription = stripe.Subscription.modify(
+            current_user.stripe_subscription_id,
+            cancel_at_period_end=False
+        )
+        
+        # Update user record
+        current_user.subscription_cancel_at_period_end = False
+        db.session.commit()
+        
+        # Log the reactivation
+        event = SubscriptionEvent(
+            user_id=current_user.id,
+            stripe_customer_id=current_user.stripe_customer_id,
+            stripe_subscription_id=current_user.stripe_subscription_id,
+            event_type='subscription_reactivated_by_user',
+            event_data=json.dumps({
+                'reactivated_at': datetime.utcnow().isoformat()
+            }),
+            processed=True
+        )
+        db.session.add(event)
+        db.session.commit()
+        
+        # Send notification
+        create_notification(
+            current_user.id,
+            'Subscription Reactivated',
+            'Your subscription has been reactivated and will continue to renew automatically.',
+            'subscription'
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Subscription reactivated successfully'
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/upgrade-to-annual', methods=['POST'])
+@login_required
+def api_upgrade_to_annual():
+    """Upgrade user from monthly to annual plan"""
+    try:
+        if not current_user.stripe_subscription_id:
+            return jsonify({'error': 'No active subscription found'}), 400
+        
+        if current_user.subscription_plan == 'annual':
+            return jsonify({'error': 'Already on annual plan'}), 400
+        
+        # Get price IDs
+        price_ids = initialize_stripe_price_ids()
+        annual_price_id = price_ids.get('annual')
+        
+        if not annual_price_id:
+            return jsonify({'error': 'Annual plan not configured'}), 500
+        
+        # Update subscription in Stripe
+        subscription = stripe.Subscription.retrieve(current_user.stripe_subscription_id)
+        
+        stripe.Subscription.modify(
+            current_user.stripe_subscription_id,
+            items=[{
+                'id': subscription['items']['data'][0].id,
+                'price': annual_price_id,
+            }],
+            proration_behavior='immediate_with_remainder'
+        )
+        
+        # Update user record
+        current_user.subscription_plan = 'annual'
+        current_user.subscription_price_id = annual_price_id
+        db.session.commit()
+        
+        # Log the upgrade
+        event = SubscriptionEvent(
+            user_id=current_user.id,
+            stripe_customer_id=current_user.stripe_customer_id,
+            stripe_subscription_id=current_user.stripe_subscription_id,
+            event_type='subscription_upgraded_to_annual',
+            event_data=json.dumps({
+                'upgraded_at': datetime.utcnow().isoformat(),
+                'previous_plan': 'monthly',
+                'new_plan': 'annual'
+            }),
+            processed=True
+        )
+        db.session.add(event)
+        db.session.commit()
+        
+        # Send notification
+        create_notification(
+            current_user.id,
+            'Upgraded to Annual!',
+            'You have successfully upgraded to the annual plan. You\'ll save $49 per year and get exclusive annual benefits!',
+            'subscription'
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Successfully upgraded to annual plan'
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/change-plan', methods=['POST'])
+@login_required
+def api_change_plan():
+    """Change subscription plan"""
+    try:
+        data = request.get_json()
+        new_plan = data.get('plan')
+        
+        if new_plan not in ['monthly', 'annual']:
+            return jsonify({'error': 'Invalid plan type'}), 400
+        
+        if not current_user.stripe_subscription_id:
+            return jsonify({'error': 'No active subscription found'}), 400
+        
+        if current_user.subscription_plan == new_plan:
+            return jsonify({'error': f'Already on {new_plan} plan'}), 400
+        
+        # Get price IDs
+        price_ids = initialize_stripe_price_ids()
+        new_price_id = price_ids.get(new_plan)
+        
+        if not new_price_id:
+            return jsonify({'error': f'{new_plan.title()} plan not configured'}), 500
+        
+        # Update subscription in Stripe
+        subscription = stripe.Subscription.retrieve(current_user.stripe_subscription_id)
+        
+        stripe.Subscription.modify(
+            current_user.stripe_subscription_id,
+            items=[{
+                'id': subscription['items']['data'][0].id,
+                'price': new_price_id,
+            }],
+            proration_behavior='immediate_with_remainder'
+        )
+        
+        # Update user record
+        old_plan = current_user.subscription_plan
+        current_user.subscription_plan = new_plan
+        current_user.subscription_price_id = new_price_id
+        db.session.commit()
+        
+        # Log the change
+        event = SubscriptionEvent(
+            user_id=current_user.id,
+            stripe_customer_id=current_user.stripe_customer_id,
+            stripe_subscription_id=current_user.stripe_subscription_id,
+            event_type='subscription_plan_changed',
+            event_data=json.dumps({
+                'changed_at': datetime.utcnow().isoformat(),
+                'previous_plan': old_plan,
+                'new_plan': new_plan
+            }),
+            processed=True
+        )
+        db.session.add(event)
+        db.session.commit()
+        
+        # Send notification
+        create_notification(
+            current_user.id,
+            'Plan Changed',
+            f'Your subscription plan has been changed from {old_plan} to {new_plan}.',
+            'subscription'
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully changed to {new_plan} plan'
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/update-payment-method', methods=['POST'])
+@login_required
+def api_update_payment_method():
+    """Create a Stripe Customer Portal session for payment method updates"""
+    try:
+        if not current_user.stripe_customer_id:
+            return jsonify({'error': 'No Stripe customer found'}), 400
+        
+        # Create a Customer Portal session
+        session = stripe.billing_portal.Session.create(
+            customer=current_user.stripe_customer_id,
+            return_url=f"{request.host_url}manage-subscription"
+        )
+        
+        return jsonify({
+            'success': True,
+            'url': session.url
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user/subscription-status')
+@login_required
+def api_get_subscription_status():
+    """Get current user's subscription status"""
+    try:
+        # Sync with Stripe if needed
+        if current_user.stripe_customer_id:
+            sync_user_with_stripe(current_user.id)
+        
+        return jsonify({
+            'success': True,
+            'subscription': {
+                'has_subscription': current_user.has_subscription,
+                'status': current_user.subscription_status,
+                'plan': current_user.subscription_plan,
+                'expires': current_user.subscription_expires.isoformat() if current_user.subscription_expires else None,
+                'cancel_at_period_end': current_user.subscription_cancel_at_period_end,
+                'total_revenue': float(current_user.total_revenue or 0),
+                'last_payment_date': current_user.last_payment_date.isoformat() if current_user.last_payment_date else None,
+                'last_payment_amount': float(current_user.last_payment_amount or 0)
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Enhanced subscription route with plan selection
+@app.route('/subscription')
+@login_required
+def subscription():
+    stripe_key = app.config.get('STRIPE_PUBLISHABLE_KEY')
+    
+    if not stripe_key:
+        flash('Payment system is currently unavailable. Please try again later.', 'warning')
+        return redirect(url_for('dashboard'))
+    
+    # Get plan from query parameter
+    selected_plan = request.args.get('plan', 'monthly')
+    
+    return render_template('subscription.html', 
+                         stripe_key=stripe_key,
+                         selected_plan=selected_plan)
+
+@app.route('/api/create-checkout-session', methods=['POST'])
+@login_required
+def create_checkout_session():
+    """Create a Stripe Checkout session for subscription"""
+    try:
+        data = request.get_json()
+        plan_type = data.get('plan_type', 'monthly')
+        
+        # Get price IDs
+        price_ids = initialize_stripe_price_ids()
+        price_id = price_ids.get(plan_type)
+        
+        if not price_id:
+            return jsonify({'error': 'Invalid plan selected'}), 400
+        
+        # Create or get Stripe customer
+        if current_user.stripe_customer_id:
+            customer_id = current_user.stripe_customer_id
+        else:
+            customer = stripe.Customer.create(
+                email=current_user.email,
+                name=current_user.username,
+                metadata={'user_id': current_user.id}
+            )
+            current_user.stripe_customer_id = customer.id
+            db.session.commit()
+            customer_id = customer.id
+        
+        # Create checkout session
+        session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=['card'],
+            line_items=[{
+                'price': price_id,
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url=f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{request.host_url}subscription?canceled=true",
+            metadata={
+                'user_id': current_user.id,
+                'plan_type': plan_type
+            }
+        )
+        
+        return jsonify({
+            'success': True,
+            'checkout_url': session.url
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/subscription-success')
+@login_required
+def subscription_success():
+    """Handle successful subscription"""
+    session_id = request.args.get('session_id')
+    
+    if session_id:
+        try:
+            # Retrieve the session
+            session = stripe.checkout.Session.retrieve(session_id)
+            
+            if session.payment_status == 'paid':
+                # Sync user with Stripe to get latest subscription info
+                sync_user_with_stripe(current_user.id)
+                
+                flash('Subscription activated successfully! Welcome to TGFX Trade Lab Premium!', 'success')
+                return redirect(url_for('dashboard'))
+        except stripe.error.StripeError as e:
+            flash(f'Error verifying subscription: {str(e)}', 'error')
+    
+    flash('Subscription completed!', 'success')
+    return redirect(url_for('dashboard'))
+    
+
 @app.route('/api/admin/user/<int:user_id>/grant-subscription', methods=['POST'])
 @login_required
 def api_grant_user_subscription():
