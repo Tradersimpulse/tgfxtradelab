@@ -2853,6 +2853,26 @@ def api_update_payment_method():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/admin/sync-all-subscriptions', methods=['POST'])
+@login_required
+def api_sync_all_subscriptions():
+    """API endpoint to sync all subscriptions"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        success_count, error_count = sync_all_subscriptions_with_stripe()
+        
+        return jsonify({
+            'success': True,
+            'synced': success_count,
+            'errors': error_count,
+            'message': f'Synced {success_count} users, {error_count} errors'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/user/subscription-status')
 @login_required
 def api_get_subscription_status():
