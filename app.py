@@ -1976,8 +1976,248 @@ def generate_livekit_api_token():
     
     return token
 
+def handle_subscription_created(subscription):
+    """Handle new subscription creation - updated for lifetime"""
+    try:
+        print(f"🆕 New subscription created: {subscription['id']}")
+        
+        # Find user by customer ID
+        user = User.query.filter_by(stripe_customer_id=subscription['customer']).first()
+        if not user:
+            print(f"⚠️ User not found for customer {subscription['customer']}")
+            return
+        
+        # Update user subscription info
+        user.stripe_subscription_id = subscription['id']
+        user.subscription_status = subscription['status']
+        user.has_subscription = subscription['status'] in ['active', 'trialing']
+        user.subscription_current_period_start = datetime.fromtimestamp(subscription['current_period_start'])
+        user.subscription_current_period_end = datetime.fromtimestamp(subscription['current_period_end'])
+        user.subscription_cancel_at_period_end = subscription.get('cancel_at_period_end', False)
+        
+        # Determine plan type
+        if subscription['items']['data']:
+            price_id = subscription['items']['data'][0]['price']['id']
+            price_ids = initialize_stripe_price_ids()
+            
+            for plan_name, plan_price_id in price_ids.items():
+                if price_id == plan_price_id:
+                    user.subscription_plan = plan_name
+                    break
+            
+            user.subscription_price_id = price_id
+            
+            # For lifetime subscriptions, set special expiration
+            if user.subscription_plan == 'lifetime':
+                # Set expiration to 100 years from now (effectively never expires)
+                user.subscription_expires = datetime.utcnow() + timedelta(days=36500)
+                print(f"🏆 Lifetime subscription activated for {user.username}")
+            else:
+                user.subscription_expires = user.subscription_current_period_end
+        
+        db.session.commit()
+        
+        # Create welcome notification with plan-specific message
+        if user.subscription_plan == 'lifetime':
+            create_notification(
+                user.id,
+                'Welcome to Lifetime Access! 🏆',
+                'Congratulations! You now have lifetime access to all TGFX Trade Lab content, including all future releases. Welcome to the VIP community!',
+                'subscription'
+            )
+        else:
+            create_notification(
+                user.id,
+                'Welcome to Premium!',
+                f'Your {user.subscription_plan} subscription is now active. Enjoy exclusive access to all premium content!',
+                'subscription'
+            )
+        
+        # Create activity log
+        create_user_activity(
+            user.id,
+            'subscription_activated',
+            f'Premium subscription activated ({user.subscription_plan})'
+        )
+        
+        print(f"✅ User {user.username} subscription activated: {user.subscription_plan}")
+        
+    except Exception as e:
+        print(f"❌ Error handling subscription created: {e}")
+        db.session.rollback()
+
+def handle_payment_succeeded(invoice):
+    """Handle successful payments - updated for lifetime"""
+    try:
+        print(f"💰 Payment succeeded: {invoice['id']}")
+        
+        # Find user by customer ID
+        user = User.query.filter_by(stripe_customer_id=invoice['customer']).first()
+        if not user:
+            print(f"⚠️ User not found for customer {invoice['customer']}")
+            return
+        
+        payment_amount = invoice['amount_paid'] / 100  # Convert cents to dollars
+        
+        # Update user payment info
+        user.last_payment_date = datetime.fromtimestamp(invoice['created'])
+        user.last_payment_amount = payment_amount
+        user.total_revenue = (user.total_revenue or 0) + payment_amount
+        
+        db.session.commit()
+        
+        # Create notification for significant payments with plan-specific messaging
+        if payment_amount >= 20:  # Only for subscription payments, not small fees
+            if payment_amount >= 400:  # Likely lifetime payment
+                create_notification(
+                    user.id,
+                    'Lifetime Access Confirmed! 🎉',
+                    f'Your lifetime payment of ${payment_amount:.2f} has been processed. You now have permanent access to all TGFX Trade Lab content!',
+                    'payment'
+                )
+            else:
+                create_notification(
+                    user.id,
+                    'Payment Received',
+                    f'Thank you! Your payment of ${payment_amount:.2f} has been processed successfully.',
+                    'payment'
+                )
+        
+        print(f"✅ Payment processed for {user.username}: ${payment_amount:.2f}")
+        
+    except Exception as e:
+        print(f"❌ Error handling payment succeeded: {e}")
+        db.session.rollback()
+
+@app.route('/api/user/upgrade-to-lifetime', methods=['POST'])
+@login_required
+def api_upgrade_to_lifetime():
+    """Upgrade user to lifetime plan"""
+    try:
+        if current_user.subscription_plan == 'lifetime':
+            return jsonify({'error': 'Already on lifetime plan'}), 400
+        
+        # For lifetime upgrades, we'll redirect to a new checkout session
+        # since it's a one-time payment rather than a subscription modification
+        
+        price_ids = initialize_stripe_price_ids()
+        lifetime_price_id = price_ids.get('lifetime')
+        
+        if not lifetime_price_id:
+            return jsonify({'error': 'Lifetime plan not configured'}), 500
+        
+        # Create or get Stripe customer
+        if current_user.stripe_customer_id:
+            customer_id = current_user.stripe_customer_id
+        else:
+            customer = stripe.Customer.create(
+                email=current_user.email,
+                name=current_user.username,
+                metadata={'user_id': current_user.id}
+            )
+            current_user.stripe_customer_id = customer.id
+            db.session.commit()
+            customer_id = customer.id
+        
+        # If user has existing subscription, we'll need to cancel it after lifetime purchase
+        existing_subscription_id = current_user.stripe_subscription_id
+        
+        # Create checkout session for lifetime purchase
+        session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=['card'],
+            line_items=[{
+                'price': lifetime_price_id,
+                'quantity': 1,
+            }],
+            mode='payment',  # One-time payment, not subscription
+            success_url=f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}&plan=lifetime",
+            cancel_url=f"{request.host_url}manage-subscription?upgrade_canceled=true",
+            metadata={
+                'user_id': current_user.id,
+                'plan_type': 'lifetime',
+                'cancel_subscription_id': existing_subscription_id if existing_subscription_id else ''
+            }
+        )
+        
+        return jsonify({
+            'success': True,
+            'checkout_url': session.url,
+            'message': 'Redirecting to lifetime upgrade checkout'
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/user/<int:user_id>/grant-subscription', methods=['POST'])
+@login_required
+def api_grant_user_subscription():
+    """Grant subscription to user - updated for lifetime"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        data = request.get_json()
+        plan = data.get('plan', 'monthly')
+        duration = data.get('duration', 1)
+        
+        user = User.query.get_or_404(user_id)
+        
+        # Calculate expiration date
+        if plan == 'lifetime':
+            # Lifetime never expires (set to 100 years from now)
+            expiration_date = datetime.utcnow() + timedelta(days=36500)
+        elif plan == 'annual':
+            expiration_date = datetime.utcnow() + timedelta(days=365 * duration)
+        else:  # monthly
+            expiration_date = datetime.utcnow() + timedelta(days=30 * duration)
+        
+        # Update user subscription manually (admin grant)
+        user.has_subscription = True
+        user.subscription_status = 'active'
+        user.subscription_plan = plan
+        user.subscription_expires = expiration_date
+        user.subscription_current_period_end = expiration_date
+        
+        db.session.commit()
+        
+        # Log the event
+        event = SubscriptionEvent(
+            user_id=user.id,
+            event_type='subscription_granted_by_admin',
+            event_data=f"Granted {plan} subscription for {duration} {'months' if plan != 'lifetime' else 'lifetime'} by admin {current_user.username}",
+            processed=True
+        )
+        db.session.add(event)
+        db.session.commit()
+        
+        # Send notification to user
+        if plan == 'lifetime':
+            create_notification(
+                user.id,
+                'Lifetime Access Granted! 🏆',
+                'You have been granted lifetime access to TGFX Trade Lab! Enjoy permanent access to all content.',
+                'system'
+            )
+        else:
+            create_notification(
+                user.id,
+                'Subscription Granted!',
+                f'You have been granted a {plan} subscription. Enjoy your premium access!',
+                'system'
+            )
+        
+        return jsonify({'success': True, 'message': f'{plan.title()} subscription granted successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 def calculate_analytics_summary():
-    """Calculate summary analytics for the dashboard"""
+    """Calculate summary analytics - updated for lifetime"""
     try:
         # Basic metrics
         total_users = User.query.count()
@@ -1986,34 +2226,42 @@ def calculate_analytics_summary():
         # Revenue calculation
         total_revenue = db.session.query(db.func.sum(User.total_revenue)).scalar() or 0
         
-        # MRR calculation (Monthly Recurring Revenue)
+        # MRR calculation (Monthly Recurring Revenue) - lifetime doesn't count toward MRR
         monthly_subscribers = User.query.filter_by(subscription_plan='monthly', has_subscription=True).count()
         annual_subscribers = User.query.filter_by(subscription_plan='annual', has_subscription=True).count()
+        lifetime_subscribers = User.query.filter_by(subscription_plan='lifetime', has_subscription=True).count()
         
         monthly_mrr = monthly_subscribers * 29  # $29/month
         annual_mrr = annual_subscribers * (299 / 12)  # $299/year = ~$24.92/month
+        # Note: Lifetime doesn't contribute to MRR since it's one-time payment
         total_mrr = monthly_mrr + annual_mrr
         
-        # Churn rate (last 30 days)
+        # Calculate lifetime revenue impact
+        lifetime_revenue = lifetime_subscribers * 499
+        
+        # Churn rate (last 30 days) - lifetime users can't churn
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         canceled_last_30_days = SubscriptionEvent.query.filter(
             SubscriptionEvent.event_type.like('%cancel%'),
             SubscriptionEvent.created_at >= thirty_days_ago
         ).count()
         
-        churn_rate = (canceled_last_30_days / premium_users * 100) if premium_users > 0 else 0
+        # Only count non-lifetime users for churn calculation
+        non_lifetime_subscribers = premium_users - lifetime_subscribers
+        churn_rate = (canceled_last_30_days / non_lifetime_subscribers * 100) if non_lifetime_subscribers > 0 else 0
         
-        # Calculate changes (mock data for now)
         return {
             'total_revenue': f"{total_revenue:.2f}",
             'revenue_change': '+12.5',
             'mrr': f"{total_mrr:.2f}",
             'mrr_change': '+8.3',
-            'new_subscribers': monthly_subscribers + annual_subscribers,
+            'new_subscribers': monthly_subscribers + annual_subscribers + lifetime_subscribers,
             'subscribers_change': '+15.2',
             'churn_rate': f"{churn_rate:.1f}",
             'churn_change': '-2.1',
             'total_subscribers': premium_users,
+            'lifetime_subscribers': lifetime_subscribers,
+            'lifetime_revenue': f"{lifetime_revenue:.2f}",
             'prev_total_subscribers': premium_users - 5,
             'active_subscriptions': premium_users,
             'prev_active_subscriptions': premium_users - 3,
@@ -2030,59 +2278,10 @@ def calculate_analytics_summary():
         print(f"Error calculating analytics: {e}")
         return {}
 
-def calculate_period_metrics(start_date, end_date):
-    """Calculate metrics for a specific period"""
-    try:
-        # Users created in period
-        users_in_period = User.query.filter(
-            User.created_at.between(start_date, end_date)
-        ).all()
-        
-        # Revenue in period
-        period_revenue = sum(user.total_revenue or 0 for user in users_in_period)
-        
-        # Subscriptions in period
-        subscriptions_in_period = len([u for u in users_in_period if u.has_subscription])
-        
-        # Calculate previous period for comparison
-        period_length = (end_date - start_date).days
-        prev_start = start_date - timedelta(days=period_length)
-        prev_end = start_date
-        
-        prev_users = User.query.filter(
-            User.created_at.between(prev_start, prev_end)
-        ).count()
-        
-        prev_revenue = sum(
-            user.total_revenue or 0 
-            for user in User.query.filter(
-                User.created_at.between(prev_start, prev_end)
-            ).all()
-        )
-        
-        # Calculate changes
-        revenue_change = ((period_revenue - prev_revenue) / prev_revenue * 100) if prev_revenue > 0 else 0
-        user_change = ((len(users_in_period) - prev_users) / prev_users * 100) if prev_users > 0 else 0
-        
-        return {
-            'total_revenue': f"{period_revenue:.2f}",
-            'revenue_change': f"{revenue_change:.1f}",
-            'new_subscribers': subscriptions_in_period,
-            'subscribers_change': f"{user_change:.1f}",
-            'mrr': "1250.00",  # Calculate actual MRR
-            'mrr_change': "+8.5",
-            'churn_rate': "3.2",
-            'churn_change': "-1.1"
-        }
-        
-    except Exception as e:
-        print(f"Error calculating period metrics: {e}")
-        return {}
-
 def generate_chart_data(start_date, end_date):
-    """Generate data for analytics charts"""
+    """Generate data for analytics charts - updated for lifetime"""
     try:
-        # Daily revenue data
+        # Daily revenue data (same as before)
         daily_revenue = []
         cumulative_revenue = []
         labels = []
@@ -2091,7 +2290,6 @@ def generate_chart_data(start_date, end_date):
         running_total = 0
         
         while current_date <= end_date:
-            # Get users who paid on this date (mock data for now)
             day_revenue = 150  # Mock daily revenue
             daily_revenue.append(day_revenue)
             running_total += day_revenue
@@ -2099,9 +2297,10 @@ def generate_chart_data(start_date, end_date):
             labels.append(current_date.strftime('%m/%d'))
             current_date += timedelta(days=1)
         
-        # Subscription plans distribution
+        # Subscription plans distribution - now includes lifetime
         monthly_subs = User.query.filter_by(subscription_plan='monthly', has_subscription=True).count()
         annual_subs = User.query.filter_by(subscription_plan='annual', has_subscription=True).count()
+        lifetime_subs = User.query.filter_by(subscription_plan='lifetime', has_subscription=True).count()
         free_users = User.query.filter_by(has_subscription=False).count()
         
         # Cohort analysis (mock data)
@@ -2120,7 +2319,9 @@ def generate_chart_data(start_date, end_date):
                 'cumulative': cumulative_revenue
             },
             'plans': {
-                'data': [monthly_subs, annual_subs, free_users]
+                'labels': ['Monthly', 'Annual', 'Lifetime', 'Free'],
+                'data': [monthly_subs, annual_subs, lifetime_subs, free_users],
+                'colors': ['#10B981', '#3B82F6', '#FFD700', '#6B7280']
             },
             'cohort': {
                 'labels': cohort_labels,
@@ -2137,95 +2338,74 @@ def generate_chart_data(start_date, end_date):
         print(f"Error generating chart data: {e}")
         return {}
 
-def determine_plan_from_payment(payment):
-    """Determine subscription plan from Stripe payment"""
+# Update the checkout session creation to handle lifetime
+@app.route('/api/create-checkout-session', methods=['POST'])
+@login_required
+def create_checkout_session():
+    """Create a Stripe Checkout session for subscription - updated for lifetime"""
     try:
-        # Get the payment method or description to determine plan
-        if payment.amount == 2900:  # $29.00
-            return "Monthly"
-        elif payment.amount == 29900:  # $299.00
-            return "Annual"
+        data = request.get_json()
+        plan_type = data.get('plan_type', 'monthly')
+        
+        # Get price IDs
+        price_ids = initialize_stripe_price_ids()
+        price_id = price_ids.get(plan_type)
+        
+        if not price_id:
+            return jsonify({'error': 'Invalid plan selected'}), 400
+        
+        # Create or get Stripe customer
+        if current_user.stripe_customer_id:
+            customer_id = current_user.stripe_customer_id
         else:
-            return "Unknown"
-    except:
-        return "Unknown"
-
-def update_revenue_analytics():
-    """Update the revenue analytics table with latest data"""
-    try:
-        today = datetime.utcnow().date()
+            customer = stripe.Customer.create(
+                email=current_user.email,
+                name=current_user.username,
+                metadata={'user_id': current_user.id}
+            )
+            current_user.stripe_customer_id = customer.id
+            db.session.commit()
+            customer_id = customer.id
         
-        # Check if we already have analytics for today
-        today_analytics = RevenueAnalytics.query.filter_by(date=today).first()
+        # Determine checkout mode based on plan type
+        if plan_type == 'lifetime':
+            mode = 'payment'  # One-time payment
+            line_items = [{
+                'price': price_id,
+                'quantity': 1,
+            }]
+        else:
+            mode = 'subscription'  # Recurring subscription
+            line_items = [{
+                'price': price_id,
+                'quantity': 1,
+            }]
         
-        if not today_analytics:
-            today_analytics = RevenueAnalytics(date=today)
-            db.session.add(today_analytics)
+        # Create checkout session
+        session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=['card'],
+            line_items=line_items,
+            mode=mode,
+            success_url=f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}&plan={plan_type}",
+            cancel_url=f"{request.host_url}subscription?canceled=true",
+            metadata={
+                'user_id': current_user.id,
+                'plan_type': plan_type
+            }
+        )
         
-        # Calculate today's metrics
-        today_revenue = db.session.query(db.func.sum(User.total_revenue)).scalar() or 0
-        active_subs = User.query.filter_by(has_subscription=True).count()
-        new_subs_today = User.query.filter(
-            User.created_at >= datetime.combine(today, datetime.min.time()),
-            User.has_subscription == True
-        ).count()
+        return jsonify({
+            'success': True,
+            'checkout_url': session.url
+        })
         
-        # Update analytics
-        today_analytics.daily_revenue = today_revenue
-        today_analytics.active_subscriptions = active_subs
-        today_analytics.new_subscriptions = new_subs_today
-        
-        db.session.commit()
-        print(f"✅ Updated revenue analytics for {today}")
-        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Error updating revenue analytics: {e}")
-
-def export_analytics_csv(start_date, end_date):
-    """Export analytics data as CSV"""
-    try:
-        import csv
-        from io import StringIO
-        from flask import make_response
-        
-        output = StringIO()
-        writer = csv.writer(output)
-        
-        # Write header
-        writer.writerow([
-            'Date', 'Daily Revenue', 'New Subscriptions', 'Canceled Subscriptions',
-            'Active Subscriptions', 'Total Users'
-        ])
-        
-        # Write data
-        current_date = start_date
-        while current_date <= end_date:
-            # Get analytics for this date (mock data for now)
-            writer.writerow([
-                current_date.strftime('%Y-%m-%d'),
-                "150.00",  # Mock daily revenue
-                "5",       # Mock new subscriptions
-                "1",       # Mock canceled subscriptions
-                "125",     # Mock active subscriptions
-                "500"      # Mock total users
-            ])
-            current_date += timedelta(days=1)
-        
-        response = make_response(output.getvalue())
-        response.headers['Content-Type'] = 'text/csv'
-        response.headers['Content-Disposition'] = f'attachment; filename=analytics_{start_date.strftime("%Y%m%d")}_{end_date.strftime("%Y%m%d")}.csv'
-        
-        return response
-        
-    except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-def export_analytics_pdf(start_date, end_date):
-    """Export analytics data as PDF (placeholder)"""
-    # For now, return a simple response
-    # You would implement actual PDF generation here
-    return jsonify({'message': 'PDF export coming soon'})
+        
     
 
 def start_livekit_egress_recording(room_name, stream_id, streamer_name):
