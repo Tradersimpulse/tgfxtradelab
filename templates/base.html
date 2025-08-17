@@ -1659,11 +1659,11 @@
                 </div>
             </div>
 
-            <!-- Account Section with Dropdown -->
+            <!-- Account Section with Enhanced Billing Dropdown -->
             <div class="nav-section">
                 <div class="nav-section-title">Account</div>
                 <div class="nav-item nav-dropdown" id="accountDropdown">
-                    <button class="nav-dropdown-toggle {% if request.endpoint in ['subscription', 'donate', 'user_settings'] %}active{% endif %}" 
+                    <button class="nav-dropdown-toggle {% if request.endpoint in ['subscription', 'manage_subscription', 'billing_history', 'payment_methods', 'donate', 'user_settings'] %}active{% endif %}" 
                             onclick="toggleDropdown('accountDropdown')">
                         <span class="material-symbols-outlined">account_circle</span>
                         <span class="nav-text">Account</span>
@@ -1674,10 +1674,28 @@
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">settings</span>
                             Settings
                         </a>
+                        
+                        <!-- Billing & Subscription Management -->
                         <a href="{{ url_for('subscription') }}" class="nav-dropdown-item {% if request.endpoint == 'subscription' %}active{% endif %}">
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">workspace_premium</span>
-                            Billing & Subscription
+                            Plans & Pricing
                         </a>
+                        
+                        <a href="{{ url_for('manage_subscription') }}" class="nav-dropdown-item {% if request.endpoint == 'manage_subscription' %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">credit_card</span>
+                            Manage Subscription
+                        </a>
+                        
+                        <a href="{{ url_for('billing_history') }}" class="nav-dropdown-item {% if request.endpoint == 'billing_history' %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">receipt_long</span>
+                            Billing History
+                        </a>
+                        
+                        <a href="{{ url_for('payment_methods') }}" class="nav-dropdown-item {% if request.endpoint == 'payment_methods' %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">payment</span>
+                            Payment Methods
+                        </a>
+                        
                         <a href="{{ url_for('donate') }}" class="nav-dropdown-item {% if request.endpoint == 'donate' %}active{% endif %}">
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">volunteer_activism</span>
                             Support Us
@@ -1687,7 +1705,7 @@
             </div>
 
             {% if current_user.is_authenticated and current_user.is_admin %}
-            <!-- Admin Section with Dropdown -->
+            <!-- Enhanced Admin Section with Business Management -->
             <div class="nav-section">
                 <div class="nav-section-title">Admin</div>
                 <div class="nav-item nav-dropdown" id="adminDropdown">
@@ -1702,6 +1720,8 @@
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">dashboard</span>
                             Dashboard
                         </a>
+                        
+                        <!-- Content Management -->
                         <a href="{{ url_for('admin_videos') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'video' in request.endpoint %}active{% endif %}">
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">video_library</span>
                             Videos
@@ -1714,11 +1734,35 @@
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">label</span>
                             Tags
                         </a>
+                        
+                        <!-- Business Management -->
+                        <a href="{{ url_for('admin_users') }}" class="nav-dropdown-item {% if 'admin_users' in request.endpoint %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">group</span>
+                            User Management
+                        </a>
+                        
+                        <a href="{{ url_for('admin_revenue') }}" class="nav-dropdown-item {% if 'admin_revenue' in request.endpoint %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">analytics</span>
+                            Revenue Analytics
+                        </a>
+                        
+                        <a href="{{ url_for('admin_subscriptions') }}" class="nav-dropdown-item {% if 'admin_subscriptions' in request.endpoint %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">subscriptions</span>
+                            Subscriptions
+                        </a>
+                        
+                        <a href="{{ url_for('admin_payment_issues') }}" class="nav-dropdown-item {% if 'admin_payment_issues' in request.endpoint %}active{% endif %}">
+                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">error</span>
+                            Payment Issues
+                        </a>
+                        
+                        <!-- Stream Control -->
                         <a href="{{ url_for('admin_stream') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'stream' in request.endpoint %}active{% endif %}">
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">live_tv</span>
                             Stream Control
                             <span class="stream-status-badge live ms-auto" id="adminStreamBadge" style="display: none;">LIVE</span>
                         </a>
+                        
                         <a href="{{ url_for('admin_recommendations') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'recommendation' in request.endpoint %}active{% endif %}">
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">recommend</span>
                             Recommendations
@@ -1729,7 +1773,7 @@
             {% endif %}
         </nav>
 
-        <!-- User section -->
+        <!-- Enhanced User section with subscription status -->
         <div class="sidebar-user">
             <div class="user-profile">
                 <div class="user-avatar">
@@ -1738,7 +1782,27 @@
                 <div class="user-info">
                     <div class="user-name">{{ current_user.username }}</div>
                     <div class="user-role">
-                        {% if current_user.has_subscription %}Premium{% else %}Free{% endif %}
+                        {% if current_user.has_active_subscription() %}
+                            <span class="badge bg-success" style="font-size: 0.6rem; padding: 0.2rem 0.4rem;">
+                                <span class="material-symbols-outlined" style="font-size: 10px;">star</span>
+                                Premium
+                            </span>
+                        {% elif current_user.subscription_status == 'past_due' %}
+                            <span class="badge bg-warning" style="font-size: 0.6rem; padding: 0.2rem 0.4rem;">
+                                <span class="material-symbols-outlined" style="font-size: 10px;">warning</span>
+                                Payment Due
+                            </span>
+                        {% elif current_user.subscription_status == 'canceled' %}
+                            <span class="badge bg-secondary" style="font-size: 0.6rem; padding: 0.2rem 0.4rem;">
+                                <span class="material-symbols-outlined" style="font-size: 10px;">cancel</span>
+                                Canceled
+                            </span>
+                        {% else %}
+                            <span class="badge bg-outline-primary" style="font-size: 0.6rem; padding: 0.2rem 0.4rem; border: 1px solid var(--primary-color); color: var(--primary-color);">
+                                <span class="material-symbols-outlined" style="font-size: 10px;">upgrade</span>
+                                Free
+                            </span>
+                        {% endif %}
                     </div>
                 </div>
                 <a href="{{ url_for('logout') }}" class="logout-btn" title="Logout">
