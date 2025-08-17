@@ -1,0 +1,685 @@
+{% extends "base.html" %}
+
+{% block title %}Revenue Analytics - TGFX Trade Lab Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1 class="text-gradient-primary">
+                <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">analytics</span>
+                Revenue Analytics
+            </h1>
+            <div>
+                <button class="btn btn-outline-primary me-2" onclick="refreshAnalytics()">
+                    <span class="material-symbols-outlined me-2">refresh</span>
+                    Refresh Data
+                </button>
+                <div class="btn-group">
+                    <button class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown">
+                        <span class="material-symbols-outlined me-2">download</span>
+                        Export
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        <li><a class="dropdown-item" onclick="exportRevenue('csv')">Export CSV</a></li>
+                        <li><a class="dropdown-item" onclick="exportRevenue('pdf')">Export PDF</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Time Period Selector -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <label class="form-label">Time Period</label>
+                        <select class="form-select" id="timePeriod" onchange="updateAnalytics()">
+                            <option value="7">Last 7 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                            <option value="365">Last Year</option>
+                            <option value="all">All Time</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Custom Range</label>
+                        <div class="input-group">
+                            <input type="date" class="form-control" id="startDate">
+                            <input type="date" class="form-control" id="endDate">
+                        </div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button class="btn btn-outline-info" onclick="applyCustomRange()">
+                            Apply Custom Range
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Key Metrics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-gradient-success text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">attach_money</span>
+                    <div>
+                        <h3 class="mb-0" id="totalRevenue">${{ analytics.total_revenue }}</h3>
+                        <p class="mb-0">Total Revenue</p>
+                        <small class="text-light" id="revenueChange">{{ analytics.revenue_change }}% vs last period</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-gradient-primary text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">trending_up</span>
+                    <div>
+                        <h3 class="mb-0" id="mrr">${{ analytics.mrr }}</h3>
+                        <p class="mb-0">Monthly Recurring Revenue</p>
+                        <small class="text-light" id="mrrChange">{{ analytics.mrr_change }}% vs last month</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-gradient-warning text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">group_add</span>
+                    <div>
+                        <h3 class="mb-0" id="newSubscribers">{{ analytics.new_subscribers }}</h3>
+                        <p class="mb-0">New Subscribers</p>
+                        <small class="text-light" id="subscribersChange">{{ analytics.subscribers_change }}% vs last period</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-gradient-danger text-white">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">trending_down</span>
+                    <div>
+                        <h3 class="mb-0" id="churnRate">{{ analytics.churn_rate }}%</h3>
+                        <p class="mb-0">Churn Rate</p>
+                        <small class="text-light" id="churnChange">{{ analytics.churn_change }}% vs last period</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">show_chart</span>
+                    Revenue Over Time
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="revenueChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">donut_large</span>
+                    Subscription Plans
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="plansChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Analytics Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">bar_chart</span>
+                    Monthly Cohort Analysis
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="cohortChart" height="150"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">account_balance_wallet</span>
+                    Average Revenue Per User
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="arpuChart" height="150"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Subscription Analytics Table -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">table_view</span>
+                    Subscription Analytics Breakdown
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Current Period</th>
+                                <th>Previous Period</th>
+                                <th>Change</th>
+                                <th>Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody id="analyticsTableBody">
+                            <tr>
+                                <td><strong>Total Subscribers</strong></td>
+                                <td id="currentSubscribers">{{ analytics.total_subscribers }}</td>
+                                <td id="prevSubscribers">{{ analytics.prev_total_subscribers }}</td>
+                                <td id="subscribersChangePercent">
+                                    <span class="badge bg-{{ 'success' if analytics.subscribers_change > 0 else 'danger' }}">
+                                        {{ analytics.subscribers_change }}%
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="material-symbols-outlined text-{{ 'success' if analytics.subscribers_change > 0 else 'danger' }}">
+                                        {{ 'trending_up' if analytics.subscribers_change > 0 else 'trending_down' }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Active Subscriptions</strong></td>
+                                <td id="activeSubscriptions">{{ analytics.active_subscriptions }}</td>
+                                <td id="prevActiveSubscriptions">{{ analytics.prev_active_subscriptions }}</td>
+                                <td id="activeSubsChangePercent">
+                                    <span class="badge bg-{{ 'success' if analytics.active_subs_change > 0 else 'danger' }}">
+                                        {{ analytics.active_subs_change }}%
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="material-symbols-outlined text-{{ 'success' if analytics.active_subs_change > 0 else 'danger' }}">
+                                        {{ 'trending_up' if analytics.active_subs_change > 0 else 'trending_down' }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Canceled Subscriptions</strong></td>
+                                <td id="canceledSubscriptions">{{ analytics.canceled_subscriptions }}</td>
+                                <td id="prevCanceledSubscriptions">{{ analytics.prev_canceled_subscriptions }}</td>
+                                <td id="canceledSubsChangePercent">
+                                    <span class="badge bg-{{ 'danger' if analytics.canceled_subs_change > 0 else 'success' }}">
+                                        {{ analytics.canceled_subs_change }}%
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="material-symbols-outlined text-{{ 'danger' if analytics.canceled_subs_change > 0 else 'success' }}">
+                                        {{ 'trending_up' if analytics.canceled_subs_change > 0 else 'trending_down' }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Average Order Value</strong></td>
+                                <td id="avgOrderValue">${{ analytics.avg_order_value }}</td>
+                                <td id="prevAvgOrderValue">${{ analytics.prev_avg_order_value }}</td>
+                                <td id="aovChangePercent">
+                                    <span class="badge bg-{{ 'success' if analytics.aov_change > 0 else 'danger' }}">
+                                        {{ analytics.aov_change }}%
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="material-symbols-outlined text-{{ 'success' if analytics.aov_change > 0 else 'danger' }}">
+                                        {{ 'trending_up' if analytics.aov_change > 0 else 'trending_down' }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">receipt_long</span>
+                    Recent Transactions
+                </h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadRecentTransactions()">
+                    <span class="material-symbols-outlined me-2">refresh</span>
+                    Refresh
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Customer</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Plan</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsTableBody">
+                            <!-- Transactions loaded via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+/* Custom 5-column layout for metrics cards */
+.col-md-2_4 {
+    flex: 0 0 auto;
+    width: 20%;
+}
+
+@media (max-width: 768px) {
+    .col-md-2_4 {
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 992px) {
+    .col-md-2_4 {
+        width: 50%;
+        margin-bottom: 1rem;
+    }
+}
+
+/* Adjust card content for smaller cards */
+.col-md-2_4 .card-body {
+    padding: 1rem 0.75rem;
+}
+
+.col-md-2_4 .material-symbols-outlined {
+    font-size: 1.8rem !important;
+}
+
+.col-md-2_4 h4 {
+    font-size: 1.5rem;
+}
+
+.col-md-2_4 .small {
+    font-size: 0.8rem;
+}
+</style>
+<script>
+// Chart instances
+let revenueChart, plansChart, cohortChart, arpuChart;
+
+// Initialize charts when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    loadRecentTransactions();
+    updateAnalytics();
+});
+
+function initializeCharts() {
+    // Revenue Chart
+    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+    revenueChart = new Chart(revenueCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Daily Revenue',
+                data: [],
+                borderColor: '#10B981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: 'Cumulative Revenue',
+                data: [],
+                borderColor: '#3B82F6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                yAxisID: 'y1'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#fff' }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#fff' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    ticks: { 
+                        color: '#fff',
+                        callback: function(value) { return '$' + value.toFixed(0); }
+                    },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    ticks: { 
+                        color: '#fff',
+                        callback: function(value) { return '$' + value.toFixed(0); }
+                    },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+
+    // Plans Chart
+    const plansCtx = document.getElementById('plansChart').getContext('2d');
+    plansChart = new Chart(plansCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Monthly', 'Annual', 'Lifetime', 'Free'],
+            datasets: [{
+                data: [0, 0, 0, 0],
+                backgroundColor: ['#10B981', '#3B82F6', '#FFD700', '#6B7280'],
+                borderColor: '#1a1a1a',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#fff' }
+                }
+            }
+        }
+    });
+
+    // Cohort Chart
+    const cohortCtx = document.getElementById('cohortChart').getContext('2d');
+    cohortChart = new Chart(cohortCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'New Subscriptions',
+                data: [],
+                backgroundColor: '#10B981'
+            }, {
+                label: 'Churned Subscriptions',
+                data: [],
+                backgroundColor: '#EF4444'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#fff' }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#fff' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                y: {
+                    ticks: { color: '#fff' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                }
+            }
+        }
+    });
+
+    // ARPU Chart
+    const arpuCtx = document.getElementById('arpuChart').getContext('2d');
+    arpuChart = new Chart(arpuCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'ARPU',
+                data: [],
+                borderColor: '#F59E0B',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#fff' }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#fff' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                y: {
+                    ticks: { 
+                        color: '#fff',
+                        callback: function(value) { return '$' + value.toFixed(2); }
+                    },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                }
+            }
+        }
+    });
+}
+
+function updateAnalytics() {
+    const timePeriod = document.getElementById('timePeriod').value;
+    
+    showToast('Updating analytics...', 'info');
+    
+    fetch(`/api/admin/analytics?period=${timePeriod}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateMetricsCards(data.metrics);
+                updateCharts(data.charts);
+                showToast('Analytics updated', 'success');
+            } else {
+                showToast('Failed to update analytics', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error updating analytics', 'error');
+        });
+}
+
+function updateMetricsCards(metrics) {
+    document.getElementById('totalRevenue').textContent = '$' + metrics.total_revenue;
+    document.getElementById('revenueChange').textContent = metrics.revenue_change + '% vs last period';
+    
+    document.getElementById('mrr').textContent = '$' + metrics.mrr;
+    document.getElementById('mrrChange').textContent = metrics.mrr_change + '% vs last month';
+    
+    document.getElementById('newSubscribers').textContent = metrics.new_subscribers;
+    document.getElementById('subscribersChange').textContent = metrics.subscribers_change + '% vs last period';
+    
+    document.getElementById('churnRate').textContent = metrics.churn_rate + '%';
+    document.getElementById('churnChange').textContent = metrics.churn_change + '% vs last period';
+}
+
+function updateCharts(chartData) {
+    // Update Revenue Chart
+    revenueChart.data.labels = chartData.revenue.labels;
+    revenueChart.data.datasets[0].data = chartData.revenue.daily;
+    revenueChart.data.datasets[1].data = chartData.revenue.cumulative;
+    revenueChart.update();
+    
+    // Update Plans Chart
+    plansChart.data.datasets[0].data = chartData.plans.data;
+    plansChart.update();
+    
+    // Update Cohort Chart
+    cohortChart.data.labels = chartData.cohort.labels;
+    cohortChart.data.datasets[0].data = chartData.cohort.new_subs;
+    cohortChart.data.datasets[1].data = chartData.cohort.churned_subs;
+    cohortChart.update();
+    
+    // Update ARPU Chart
+    arpuChart.data.labels = chartData.arpu.labels;
+    arpuChart.data.datasets[0].data = chartData.arpu.data;
+    arpuChart.update();
+}
+
+function loadRecentTransactions() {
+    fetch('/api/admin/recent-transactions')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const tbody = document.getElementById('transactionsTableBody');
+                tbody.innerHTML = '';
+                
+                data.transactions.forEach(transaction => {
+                    const row = `
+                        <tr>
+                            <td>${transaction.date}</td>
+                            <td>
+                                <div>
+                                    <div class="fw-bold">${transaction.customer_name}</div>
+                                    <small class="text-muted">${transaction.customer_email}</small>
+                                </div>
+                            </td>
+                            <td class="fw-bold">$${transaction.amount}</td>
+                            <td>
+                                <span class="badge bg-${transaction.status === 'succeeded' ? 'success' : 'danger'}">
+                                    ${transaction.status}
+                                </span>
+                            </td>
+                            <td>${transaction.plan}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-info" onclick="viewTransaction('${transaction.id}')">
+                                    <span class="material-symbols-outlined">visibility</span>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error loading transactions', 'error');
+        });
+}
+
+function refreshAnalytics() {
+    showToast('Refreshing analytics from Stripe...', 'info');
+    
+    fetch('/api/admin/analytics/refresh', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Analytics refreshed successfully', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast('Failed to refresh analytics', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error refreshing analytics', 'error');
+    });
+}
+
+function applyCustomRange() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    if (!startDate || !endDate) {
+        showToast('Please select both start and end dates', 'warning');
+        return;
+    }
+    
+    fetch(`/api/admin/analytics?start_date=${startDate}&end_date=${endDate}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateMetricsCards(data.metrics);
+                updateCharts(data.charts);
+                showToast('Custom range applied', 'success');
+            } else {
+                showToast('Failed to apply custom range', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error applying custom range', 'error');
+        });
+}
+
+function exportRevenue(format) {
+    const timePeriod = document.getElementById('timePeriod').value;
+    window.open(`/api/admin/analytics/export?format=${format}&period=${timePeriod}`, '_blank');
+}
+
+function viewTransaction(transactionId) {
+    // Implementation for viewing transaction details
+    showToast('Transaction details coming soon', 'info');
+}
+</script>
+{% endblock %}
