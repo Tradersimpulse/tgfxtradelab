@@ -3006,6 +3006,29 @@ def subscription():
                          stripe_key=stripe_key,
                          selected_plan=selected_plan)
 
+
+# Admin routes referenced in navigation
+@app.route('/admin/users')
+@login_required
+def admin_users():
+    """User management page"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    users = User.query.order_by(User.created_at.desc()).all()
+    return render_template('admin/user_management.html', users=users)
+
+@app.route('/admin/revenue')
+@login_required
+def admin_revenue():
+    """Revenue analytics page - redirect to existing analytics"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    return redirect(url_for('admin_analytics'))
+
 @app.route('/billing-history')
 @login_required
 def billing_history():
