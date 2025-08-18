@@ -1933,9 +1933,9 @@ def get_subscription_status_display(self):
 def get_subscription_plan_display(self):
     """Get human-readable subscription plan - updated for lifetime"""
     plan_map = {
-        'monthly': 'Monthly ($29/month)',
-        'annual': 'Annual ($299/year)',
-        'lifetime': 'Lifetime Access ($499 one-time)'
+        'monthly': 'Monthly ($80/month)',
+        'annual': 'Annual ($777/year)',
+        'lifetime': 'Lifetime Access ($1497 one-time)'
     }
     
     return plan_map.get(self.subscription_plan, 'Unknown Plan')
@@ -2468,25 +2468,48 @@ def handle_payment_succeeded(invoice):
 @app.route('/payment-methods')
 @login_required
 def payment_methods():
+    """Payment methods management page"""
     return render_template('payment_methods.html')
 
 @app.route('/admin/subscriptions')
 @login_required
 def admin_subscriptions():
+    """Admin subscriptions management"""
     if not current_user.is_admin:
+        flash('Access denied', 'error')
         return redirect(url_for('dashboard'))
+    
+    # Get all users with subscriptions
     users_with_subs = User.query.filter(User.has_subscription == True).all()
-    return render_template('admin/subscriptions.html', users_with_subs=users_with_subs, 
-                         total_subscribers=len(users_with_subs), active_subs=0, 
-                         past_due_subs=0, canceled_subs=0)
+    
+    # Get subscription stats
+    total_subscribers = len(users_with_subs)
+    active_subs = User.query.filter(User.subscription_status == 'active').count()
+    past_due_subs = User.query.filter(User.subscription_status == 'past_due').count()
+    canceled_subs = User.query.filter(User.subscription_status == 'canceled').count()
+    
+    return render_template('admin/subscriptions.html',
+                         users_with_subs=users_with_subs,
+                         total_subscribers=total_subscribers,
+                         active_subs=active_subs,
+                         past_due_subs=past_due_subs,
+                         canceled_subs=canceled_subs)
 
 @app.route('/admin/payment-issues')
 @login_required
 def admin_payment_issues():
+    """Admin payment issues management"""
     if not current_user.is_admin:
+        flash('Access denied', 'error')
         return redirect(url_for('dashboard'))
-    users_with_issues = []
-    return render_template('admin/payment_issues.html', users_with_issues=users_with_issues)
+    
+    # Get users with payment issues
+    users_with_issues = User.query.filter(
+        User.subscription_status.in_(['past_due', 'unpaid', 'incomplete'])
+    ).all()
+    
+    return render_template('admin/payment_issues.html',
+                         users_with_issues=users_with_issues)
 
 @app.route('/api/user/upgrade-to-lifetime', methods=['POST'])
 @login_required
@@ -3052,8 +3075,9 @@ def admin_revenue():
     
     return redirect(url_for('admin_analytics'))
 
+# Fix for billing_history route (redirect to manage_subscription)
 @app.route('/billing-history')
-@login_required
+@login_required  
 def billing_history():
     """Billing history page - redirects to subscription management"""
     return redirect(url_for('manage_subscription'))
