@@ -4387,17 +4387,19 @@ def api_stream_join():
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
 def user_settings():
+    """User settings page"""
     form = UserSettingsForm(obj=current_user)
     
     if form.validate_on_submit():
         # Validate timezone
         try:
+            import pytz
             pytz.timezone(form.timezone.data)  # This will raise an exception if invalid
             current_user.timezone = form.timezone.data
             db.session.commit()
             flash('Settings updated successfully!', 'success')
             return redirect(url_for('user_settings'))
-        except pytz.exceptions.UnknownTimeZoneError:
+        except:
             flash('Invalid timezone selected.', 'error')
     
     return render_template('settings.html', form=form)
