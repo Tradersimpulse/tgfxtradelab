@@ -2672,6 +2672,212 @@ def api_get_user_billing_history():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/admin/user/<int:user_id>')
+@login_required
+def admin_user_details(user_id):
+    """View user details in admin panel"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    user = User.query.get_or_404(user_id)
+    
+    # Get user's subscription events if available
+    try:
+        subscription_events = SubscriptionEvent.query.filter_by(user_id=user_id).order_by(SubscriptionEvent.created_at.desc()).limit(10).all()
+    except:
+        subscription_events = []
+    
+    # Get user's progress
+    progress_count = UserProgress.query.filter_by(user_id=user_id).count()
+    completed_count = UserProgress.query.filter_by(user_id=user_id, completed=True).count()
+    
+    # Get user's favorites
+    favorites_count = UserFavorite.query.filter_by(user_id=user_id).count()
+    
+    return render_template('admin/user_details.html', 
+                         user=user,
+                         subscription_events=subscription_events,
+                         progress_count=progress_count,
+                         completed_count=completed_count,
+                         favorites_count=favorites_count)
+
+@app.route('/admin/user/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+def admin_edit_user(user_id):
+    """Edit user in admin panel"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    user = User.query.get_or_404(user_id)
+    
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            
+            # Update basic user info
+            if 'username' in data:
+                # Check if username is already taken by another user
+                existing_user = User.query.filter_by(username=data['username']).first()
+                if existing_user and existing_user.id != user_id:
+                    return jsonify({'error': 'Username already exists'}), 400
+                user.username = data['username']
+            
+            if 'email' in data:
+                # Check if email is already taken by another user
+                existing_user = User.query.filter_by(email=data['email']).first()
+                if existing_user and existing_user.id != user_id:
+                    return jsonify({'error': 'Email already exists'}), 400
+                user.email = data['email']
+            
+            if 'is_admin' in data:
+                user.is_admin = data['is_admin']
+            
+            if 'can_stream' in data:
+                user.can_stream = data['can_stream']
+            
+            if 'display_name' in data:
+                user.display_name = data['display_name']
+            
+            if 'timezone' in data:
+                user.timezone = data['timezone']
+            
+            # Update subscription info
+            if 'has_subscription' in data:
+                user.has_subscription = data['has_subscription']
+            
+            if 'subscription_plan' in data:
+                user.subscription_plan = data['subscription_plan']
+            
+            if 'subscription_status' in data:
+                user.subscription_status = data['subscription_status']
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'User updated successfully'
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+    
+    # GET request - return user data for editing
+    return jsonify({
+        'user': {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'is_admin': user.is_admin,
+            'can_stream': user.can_stream,
+            'display_name': user.display_name,
+            'timezone': user.timezone,
+            'has_subscription': user.has_subscription,
+            'subscription_plan': user.subscription_plan,
+            'subscription_status': user.subscription_status,
+            'created_at': user.created_at.isoformat(),
+            'total_revenue': float(user.total_revenue or 0)
+        }
+    })
+
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_user(user_id):
+    """Delete user (admin only)"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    if user_id == current_user.id:
+        return jsonify({'error': 'Cannot delete your own account'}), 400
+    
+    user = User.query.get_or_404(user_id)
+    
+    try:
+        # Delete user (cascade will handle related records)
+        db.session.delete(user)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'User {user.username} deleted successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/user/<int:user_id>/grant-subscription', methods=['POST'])
+@login_required
+def admin_grant_user_subscription(user_id):
+    """Grant subscription to user - updated for lifetime"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        data = request.get_json()
+        plan = data.get('plan', 'monthly')
+        duration = data.get('duration', 1)
+        
+        user = User.query.get_or_404(user_id)
+        
+        # Calculate expiration date
+        if plan == 'lifetime':
+            # Lifetime never expires (set to 100 years from now)
+            expiration_date = datetime.utcnow() + timedelta(days=36500)
+        elif plan == 'annual':
+            expiration_date = datetime.utcnow() + timedelta(days=365 * duration)
+        else:  # monthly
+            expiration_date = datetime.utcnow() + timedelta(days=30 * duration)
+        
+        # Update user subscription manually (admin grant)
+        user.has_subscription = True
+        user.subscription_status = 'active'
+        user.subscription_plan = plan
+        user.subscription_expires = expiration_date
+        user.subscription_current_period_end = expiration_date
+        
+        db.session.commit()
+        
+        # Log the event if SubscriptionEvent model exists
+        try:
+            event = SubscriptionEvent(
+                user_id=user.id,
+                event_type='subscription_granted_by_admin',
+                event_data=f"Granted {plan} subscription for {duration} {'months' if plan != 'lifetime' else 'lifetime'} by admin {current_user.username}",
+                processed=True
+            )
+            db.session.add(event)
+            db.session.commit()
+        except:
+            pass  # Skip if SubscriptionEvent model doesn't exist
+        
+        # Send notification to user
+        try:
+            if plan == 'lifetime':
+                create_notification(
+                    user.id,
+                    'Lifetime Access Granted! 🏆',
+                    'You have been granted lifetime access to TGFX Trade Lab! Enjoy permanent access to all content.',
+                    'system'
+                )
+            else:
+                create_notification(
+                    user.id,
+                    'Subscription Granted!',
+                    f'You have been granted a {plan} subscription. Enjoy your premium access!',
+                    'system'
+                )
+        except:
+            pass  # Skip if notification system not available
+        
+        return jsonify({'success': True, 'message': f'{plan.title()} subscription granted successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/user/notifications')
 @login_required
