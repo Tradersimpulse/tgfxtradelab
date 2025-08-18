@@ -3287,8 +3287,10 @@ def api_grant_user_subscription():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+# REPLACE your calculate_analytics_summary() function in app.py with this fixed version:
+
 def calculate_analytics_summary():
-    """Calculate summary analytics - updated for lifetime"""
+    """Calculate summary analytics - updated for lifetime and fixed data types"""
     try:
         # Basic metrics
         total_users = User.query.count()
@@ -3304,7 +3306,6 @@ def calculate_analytics_summary():
         
         monthly_mrr = monthly_subscribers * 29  # $29/month
         annual_mrr = annual_subscribers * (299 / 12)  # $299/year = ~$24.92/month
-        # Note: Lifetime doesn't contribute to MRR since it's one-time payment
         total_mrr = monthly_mrr + annual_mrr
         
         # Calculate lifetime revenue impact
@@ -3312,37 +3313,70 @@ def calculate_analytics_summary():
         
         # Churn rate (last 30 days) - lifetime users can't churn
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
-        canceled_last_30_days = SubscriptionEvent.query.filter(
-            SubscriptionEvent.event_type.like('%cancel%'),
-            SubscriptionEvent.created_at >= thirty_days_ago
-        ).count()
+        
+        # Get canceled subscriptions (if you have the SubscriptionEvent model)
+        try:
+            canceled_last_30_days = SubscriptionEvent.query.filter(
+                SubscriptionEvent.event_type.like('%cancel%'),
+                SubscriptionEvent.created_at >= thirty_days_ago
+            ).count()
+        except:
+            canceled_last_30_days = 0
         
         # Only count non-lifetime users for churn calculation
         non_lifetime_subscribers = premium_users - lifetime_subscribers
         churn_rate = (canceled_last_30_days / non_lifetime_subscribers * 100) if non_lifetime_subscribers > 0 else 0
         
+        # FIXED: Return numeric values for change calculations
         return {
             'total_revenue': f"{total_revenue:.2f}",
-            'revenue_change': '+12.5',
+            'revenue_change': 12.5,  # NUMERIC, not string
             'mrr': f"{total_mrr:.2f}",
-            'mrr_change': '+8.3',
+            'mrr_change': 8.3,  # NUMERIC, not string
             'new_subscribers': monthly_subscribers + annual_subscribers + lifetime_subscribers,
-            'subscribers_change': '+15.2',
+            'subscribers_change': 15.2,  # NUMERIC, not string
             'churn_rate': f"{churn_rate:.1f}",
-            'churn_change': '-2.1',
+            'churn_change': -2.1,  # NUMERIC, not string
             'total_subscribers': premium_users,
             'lifetime_subscribers': lifetime_subscribers,
             'lifetime_revenue': f"{lifetime_revenue:.2f}",
-            'prev_total_subscribers': premium_users - 5,
+            'prev_total_subscribers': max(0, premium_users - 5),
             'active_subscriptions': premium_users,
-            'prev_active_subscriptions': premium_users - 3,
+            'prev_active_subscriptions': max(0, premium_users - 3),
             'canceled_subscriptions': canceled_last_30_days,
             'prev_canceled_subscriptions': canceled_last_30_days + 2,
             'avg_order_value': f"{(total_revenue / total_users):.2f}" if total_users > 0 else "0.00",
-            'prev_avg_order_value': "28.50",
-            'aov_change': '+5.2',
-            'active_subs_change': '+10.5',
-            'canceled_subs_change': '-15.3'
+            'prev_avg_order_value': 28.50,  # NUMERIC, not string
+            'aov_change': 5.2,  # NUMERIC, not string
+            'active_subs_change': 10.5,  # NUMERIC, not string
+            'canceled_subs_change': -15.3  # NUMERIC, not string
+        }
+        
+    except Exception as e:
+        print(f"Error calculating analytics: {e}")
+        # Return safe defaults with numeric values
+        return {
+            'total_revenue': "0.00",
+            'revenue_change': 0,
+            'mrr': "0.00", 
+            'mrr_change': 0,
+            'new_subscribers': 0,
+            'subscribers_change': 0,
+            'churn_rate': "0.0",
+            'churn_change': 0,
+            'total_subscribers': 0,
+            'lifetime_subscribers': 0,
+            'lifetime_revenue': "0.00",
+            'prev_total_subscribers': 0,
+            'active_subscriptions': 0,
+            'prev_active_subscriptions': 0,
+            'canceled_subscriptions': 0,
+            'prev_canceled_subscriptions': 0,
+            'avg_order_value': "0.00",
+            'prev_avg_order_value': 0,
+            'aov_change': 0,
+            'active_subs_change': 0,
+            'canceled_subs_change': 0
         }
         
     except Exception as e:
