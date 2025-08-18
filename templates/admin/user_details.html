@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}User Details - {{ user.username }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="text-gradient-primary">👤 User Details</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item">
+                            <a href="{{ url_for('admin') }}" class="text-decoration-none">Admin</a>
+                        </li>
+                        <li class="breadcrumb-item">
+                            <a href="{{ url_for('admin_users') }}" class="text-decoration-none">Users</a>
+                        </li>
+                        <li class="breadcrumb-item active">{{ user.username }}</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Info Card -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <span class="material-symbols-outlined me-2">person</span>
+                            User Information
+                        </h5>
+                        <button class="btn btn-primary btn-sm" onclick="editUser({{ user.id }})">
+                            <span class="material-symbols-outlined me-1" style="font-size: 16px;">edit</span>
+                            Edit User
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Username</label>
+                            <div class="fw-medium">{{ user.username }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Email</label>
+                            <div class="fw-medium">{{ user.email }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Display Name</label>
+                            <div class="fw-medium">{{ user.display_name or 'Not set' }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Timezone</label>
+                            <div class="fw-medium">{{ user.timezone or 'Not set' }}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Role</label>
+                            <div>
+                                {% if user.is_admin %}
+                                <span class="badge bg-danger">Admin</span>
+                                {% else %}
+                                <span class="badge bg-secondary">User</span>
+                                {% endif %}
+                                
+                                {% if user.can_stream %}
+                                <span class="badge bg-info ms-1">Streamer</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Member Since</label>
+                            <div class="fw-medium">{{ user.created_at.strftime('%B %d, %Y') }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <!-- Subscription Info -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <span class="material-symbols-outlined me-2">workspace_premium</span>
+                        Subscription
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if user.has_subscription %}
+                    <div class="text-center mb-3">
+                        <span class="badge bg-success p-2">Active Subscriber</span>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <small class="text-muted">Plan</small>
+                        <div class="fw-medium">{{ user.subscription_plan.title() if user.subscription_plan else 'Unknown' }}</div>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <small class="text-muted">Status</small>
+                        <div class="fw-medium">{{ user.subscription_status.title() if user.subscription_status else 'Unknown' }}</div>
+                    </div>
+                    
+                    {% if user.subscription_expires %}
+                    <div class="mb-2">
+                        <small class="text-muted">Expires</small>
+                        <div class="fw-medium">{{ user.subscription_expires.strftime('%B %d, %Y') }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if user.total_revenue %}
+                    <div class="mb-2">
+                        <small class="text-muted">Total Revenue</small>
+                        <div class="fw-medium text-success">${{ "%.2f"|format(user.total_revenue) }}</div>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="text-center">
+                        <span class="badge bg-secondary p-2">Free User</span>
+                        <div class="mt-2">
+                            <button class="btn btn-primary btn-sm" onclick="grantSubscription({{ user.id }})">
+                                <span class="material-symbols-outlined me-1" style="font-size: 16px;">workspace_premium</span>
+                                Grant Subscription
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <span class="material-symbols-outlined me-2">analytics</span>
+                        Activity Stats
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 text-center">
+                        <div class="col-6">
+                            <div class="h5 mb-0 text-primary">{{ progress_count }}</div>
+                            <small class="text-muted">Videos Started</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="h5 mb-0 text-success">{{ completed_count }}</div>
+                            <small class="text-muted">Completed</small>
+                        </div>
+                        <div class="col-12">
+                            <div class="h5 mb-0 text-warning">{{ favorites_count }}</div>
+                            <small class="text-muted">Favorites</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editUserForm">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" id="editUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="editEmail" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Display Name</label>
+                        <input type="text" class="form-control" id="editDisplayName">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Timezone</label>
+                        <select class="form-select" id="editTimezone">
+                            <option value="America/New_York">Eastern Time (ET)</option>
+                            <option value="America/Chicago">Central Time (CT)</option>
+                            <option value="America/Denver">Mountain Time (MT)</option>
+                            <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                            <option value="UTC">UTC</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="editIsAdmin">
+                                <label class="form-check-label" for="editIsAdmin">Admin User</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="editCanStream">
+                                <label class="form-check-label" for="editCanStream">Can Stream</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveUserChanges()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentUserId = null;
+
+function editUser(userId) {
+    currentUserId = userId;
+    
+    // Fetch user data
+    fetch(`/admin/user/${userId}/edit`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.user) {
+                const user = data.user;
+                document.getElementById('editUsername').value = user.username;
+                document.getElementById('editEmail').value = user.email;
+                document.getElementById('editDisplayName').value = user.display_name || '';
+                document.getElementById('editTimezone').value = user.timezone || 'America/Chicago';
+                document.getElementById('editIsAdmin').checked = user.is_admin;
+                document.getElementById('editCanStream').checked = user.can_stream;
+                
+                new bootstrap.Modal(document.getElementById('editUserModal')).show();
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error loading user data', 'error');
+        });
+}
+
+function saveUserChanges() {
+    if (!currentUserId) return;
+    
+    const formData = {
+        username: document.getElementById('editUsername').value,
+        email: document.getElementById('editEmail').value,
+        display_name: document.getElementById('editDisplayName').value,
+        timezone: document.getElementById('editTimezone').value,
+        is_admin: document.getElementById('editIsAdmin').checked,
+        can_stream: document.getElementById('editCanStream').checked
+    };
+    
+    fetch(`/admin/user/${currentUserId}/edit`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('User updated successfully', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error saving changes', 'error');
+    });
+}
+
+function grantSubscription(userId) {
+    // Simple grant for now - you can make this more sophisticated
+    const plan = prompt('Enter plan type (monthly/annual/lifetime):', 'monthly');
+    if (!plan) return;
+    
+    fetch(`/admin/user/${userId}/grant-subscription`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ plan: plan, duration: 1 })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast('Error: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error granting subscription', 'error');
+    });
+}
+</script>
+{% endblock %}
