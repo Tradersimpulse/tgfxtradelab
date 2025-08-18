@@ -195,6 +195,64 @@ class User(UserMixin, db.Model):
     activities = db.relationship('UserActivity', backref='user', lazy=True, cascade='all, delete-orphan')
     notifications = db.relationship('Notification', backref='user', lazy=True, cascade='all, delete-orphan')
 
+    def has_active_subscription(self):
+        """Check if user has an active subscription - updated for lifetime"""
+        if not self.has_subscription:
+            return False
+        
+        # Lifetime subscription never expires
+        if hasattr(self, 'subscription_plan') and self.subscription_plan == 'lifetime':
+            return True
+        
+        if hasattr(self, 'subscription_status') and self.subscription_status in ['active', 'trialing']:
+            return True
+            
+        if hasattr(self, 'subscription_expires') and self.subscription_expires and self.subscription_expires > datetime.utcnow():
+            return True
+            
+        return False
+
+    def get_subscription_status_display(self):
+        """Get human-readable subscription status - updated for lifetime"""
+        if not self.has_subscription:
+            return "Free"
+        
+        if hasattr(self, 'subscription_plan') and self.subscription_plan == 'lifetime':
+            return "Lifetime"
+        
+        if not hasattr(self, 'subscription_status'):
+            return "Free"
+            
+        status_map = {
+            'active': 'Active',
+            'trialing': 'Trial',
+            'past_due': 'Past Due',
+            'canceled': 'Canceled',
+            'unpaid': 'Unpaid',
+            'incomplete': 'Incomplete'
+        }
+        
+        return status_map.get(self.subscription_status, 'Unknown')
+
+    def get_subscription_plan_display(self):
+        """Get human-readable subscription plan - updated for lifetime"""
+        if not hasattr(self, 'subscription_plan') or not self.subscription_plan:
+            return 'Free Plan'
+            
+        plan_map = {
+            'monthly': 'Monthly ($29/month)',
+            'annual': 'Annual ($299/year)',
+            'lifetime': 'Lifetime Access ($499 one-time)'
+        }
+        
+        return plan_map.get(self.subscription_plan, 'Unknown Plan')
+
+    def is_lifetime_subscriber(self):
+        """Check if user has lifetime subscription"""
+        return (hasattr(self, 'subscription_plan') and 
+                self.subscription_plan == 'lifetime' and 
+                self.has_subscription)
+
 
 class SubscriptionEvent(db.Model):
     __tablename__ = 'subscription_events'
