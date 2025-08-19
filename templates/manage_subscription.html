@@ -488,9 +488,20 @@
 
 <script>
 function startSubscription(planType) {
+    const hasActiveSubscription = {{ 'true' if current_user.has_subscription else 'false' }};
+    const currentPlan = '{{ current_user.subscription_plan or "none" }}';
+    
     // Show confirmation for lifetime plan
     if (planType === 'lifetime') {
-        if (!confirm('🎉 You\'re about to get LIFETIME access to TGFX Trade Lab!\n\n✅ One-time payment of $499\n✅ Never pay again\n✅ All future content included\n✅ VIP community access\n\nProceed to checkout?')) {
+        let confirmMessage = '🎉 You\'re about to get LIFETIME access to TGFX Trade Lab!\n\n✅ One-time payment of $499\n✅ Never pay again\n✅ All future content included\n✅ VIP community access\n\n';
+        
+        if (hasActiveSubscription) {
+            confirmMessage += '⚠️ This will cancel your current subscription and you\'ll be charged the full lifetime amount.\n\n';
+        }
+        
+        confirmMessage += 'Proceed to checkout?';
+        
+        if (!confirm(confirmMessage)) {
             return;
         }
     }
@@ -506,28 +517,54 @@ function startSubscription(planType) {
     const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
     loadingModal.show();
     
-    // Create checkout session
-    fetch('/api/create-checkout-session', {
+    // Determine which endpoint to use based on current subscription status
+    let endpoint, requestBody;
+    
+    if (!hasActiveSubscription) {
+        // No subscription - create new checkout session
+        endpoint = '/api/create-checkout-session';
+        requestBody = { plan_type: planType };
+    } else if (planType === 'lifetime') {
+        // Lifetime upgrade - special handling
+        endpoint = '/api/user/upgrade-to-lifetime';
+        requestBody = {};
+    } else if (currentPlan === 'monthly' && planType === 'annual') {
+        // Monthly to Annual upgrade - use proration
+        endpoint = '/api/user/upgrade-to-annual';
+        requestBody = {};
+    } else {
+        // Other plan changes - use change plan endpoint
+        endpoint = '/api/user/change-plan';
+        requestBody = { plan: planType };
+    }
+    
+    // Make the API call
+    fetch(endpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCsrfToken()
         },
-        body: JSON.stringify({
-            plan_type: planType
-        })
+        body: JSON.stringify(requestBody)
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Redirect to Stripe checkout
-            window.location.href = data.checkout_url;
+            if (data.checkout_url) {
+                // Redirect to Stripe checkout (for new subscriptions or lifetime)
+                window.location.href = data.checkout_url;
+            } else {
+                // Plan change completed - reload page to show updated status
+                loadingModal.hide();
+                alert(data.message || 'Subscription updated successfully!');
+                window.location.reload();
+            }
         } else {
             // Hide loading modal
             loadingModal.hide();
             
             // Show error
-            alert('Error: ' + (data.error || 'Failed to create checkout session'));
+            alert('Error: ' + (data.error || 'Failed to process subscription change'));
             
             // Reset button
             button.classList.remove('btn-loading');
