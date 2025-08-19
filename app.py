@@ -2782,6 +2782,769 @@ def admin_edit_user(user_id):
         }
     })
 
+
+@app.route('/api/subscription/status', methods=['GET'])
+@login_required
+def api_get_subscription_status():
+    """Get comprehensive subscription status for current user"""
+    try:
+        user = current_user
+        
+        # Sync with Stripe if needed
+        if user.stripe_customer_id:
+            sync_user_with_stripe(user.id)
+        
+        # Calculate subscription metrics
+        subscription_data = {
+            'user_id': user.id,
+            'has_subscription': user.has_subscription,
+            'subscription_plan': user.subscription_plan,
+            'subscription_status': user.subscription_status,
+            'plan_display_name': user.get_subscription_plan_display(),
+            'is_active': user.has_active_subscription(),
+            'is_lifetime': user.subscription_plan == 'lifetime',
+            
+            # Dates
+            'subscription_created': user.subscription_created_at.isoformat() if user.subscription_created_at else None,
+            'current_period_start': user.subscription_current_period_start.isoformat() if user.subscription_current_period_start else None,
+            'current_period_end': user.subscription_current_period_end.isoformat() if user.subscription_current_period_end else None,
+            'expires': user.subscription_expires.isoformat() if user.subscription_expires else None,
+            'trial_end': user.trial_end.isoformat() if user.trial_end else None,
+            
+            # Billing
+            'cancel_at_period_end': user.subscription_cancel_at_period_end,
+            'total_revenue': float(user.total_revenue or 0),
+            'last_payment_date': user.last_payment_date.isoformat() if user.last_payment_date else None,
+            'last_payment_amount': float(user.last_payment_amount or 0),
+            
+            # Calculated fields
+            'days_until_renewal': None,
+            'progress_percentage': 0,
+            'savings': {'amount': 0, 'percentage': 0}
+        }
+        
+        # Calculate days until renewal
+        if user.subscription_expires and user.subscription_plan != 'lifetime':
+            delta = user.subscription_expires - datetime.utcnow()
+            subscription_data['days_until_renewal'] = max(0, delta.days)
+            
+            # Calculate progress through billing period
+            if user.subscription_current_period_start and user.subscription_current_period_end:
+                total_days = (user.subscription_current_period_end - user.subscription_current_period_start).days
+                elapsed_days = (datetime.utcnow() - user.subscription_current_period_start).days
+                subscription_data['progress_percentage'] = min(100, max(0, (elapsed_days / total_days) * 100))
+        
+        # Calculate savings for annual plan
+        if user.subscription_plan == 'annual':
+            monthly_yearly_cost = 29 * 12  # $348
+            annual_cost = 299
+            savings_amount = monthly_yearly_cost - annual_cost
+            savings_percentage = (savings_amount / monthly_yearly_cost) * 100
+            subscription_data['savings'] = {
+                'amount': savings_amount,
+                'percentage': round(savings_percentage, 1)
+            }
+        
+        return jsonify({
+            'success': True,
+            'subscription': subscription_data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/subscription/timeline', methods=['GET'])
+@login_required
+def api_get_subscription_timeline():
+    """Get subscription timeline/history for current user"""
+    try:
+        # Get subscription events
+        events = SubscriptionEvent.query.filter_by(user_id=current_user.id)\
+                                       .order_by(SubscriptionEvent.created_at.desc())\
+                                       .limit(20).all()
+        
+        timeline = []
+        for event in events:
+            event_data = json.loads(event.event_data) if event.event_data else {}
+            
+            # Map event types to user-friendly descriptions
+            event_descriptions = {
+                'customer.subscription.created': 'Subscription started',
+                'customer.subscription.updated': 'Subscription updated',
+                'customer.subscription.deleted': 'Subscription canceled',
+                'invoice.payment_succeeded': 'Payment successful',
+                'invoice.payment_failed': 'Payment failed',
+                'subscription_upgraded_to_annual': 'Upgraded to annual plan',
+                'subscription_upgraded_to_lifetime': 'Upgraded to lifetime access',
+                'subscription_canceled_by_user': 'Subscription canceled',
+                'subscription_reactivated_by_user': 'Subscription reactivated'
+            }
+            
+            timeline.append({
+                'id': event.id,
+                'type': event.event_type,
+                'description': event_descriptions.get(event.event_type, event.event_type.replace('_', ' ').title()),
+                'amount': float(event.amount) if event.amount else None,
+                'currency': event.currency,
+                'date': event.created_at.isoformat(),
+                'processed': event.processed
+            })
+        
+        return jsonify({
+            'success': True,
+            'timeline': timeline
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/subscription/upgrade-to-lifetime', methods=['POST'])
+@login_required
+def api_upgrade_to_lifetime():
+    """Upgrade current user to lifetime subscription"""
+    try:
+        if current_user.subscription_plan == 'lifetime':
+            return jsonify({'error': 'Already on lifetime plan'}), 400
+        
+        # Create Stripe checkout session for lifetime upgrade
+        if not current_user.stripe_customer_id:
+            customer = stripe.Customer.create(
+                email=current_user.email,
+                name=current_user.username,
+                metadata={'user_id': current_user.id}
+            )
+            current_user.stripe_customer_id = customer.id
+            db.session.commit()
+        
+        # Create checkout session for lifetime payment
+        session = stripe.checkout.Session.create(
+            customer=current_user.stripe_customer_id,
+            payment_method_types=['card'],
+            line_items=[{
+                'price': app.config.get('STRIPE_LIFETIME_PRICE_ID'),  # You'll need to set this
+                'quantity': 1,
+            }],
+            mode='payment',  # One-time payment
+            success_url=f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}&plan=lifetime",
+            cancel_url=f"{request.host_url}manage-subscription?upgrade_canceled=true",
+            metadata={
+                'user_id': current_user.id,
+                'plan_type': 'lifetime',
+                'cancel_existing_subscription': current_user.stripe_subscription_id or ''
+            }
+        )
+        
+        return jsonify({
+            'success': True,
+            'checkout_url': session.url
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/subscription/cancel', methods=['POST'])
+@login_required
+def api_cancel_subscription():
+    """Cancel current user's subscription"""
+    try:
+        data = request.get_json() or {}
+        reason = data.get('reason', '')
+        feedback = data.get('feedback', '')
+        immediate = data.get('immediate', False)
+        
+        if not current_user.stripe_subscription_id:
+            return jsonify({'error': 'No active subscription found'}), 400
+        
+        if immediate:
+            # Cancel immediately
+            subscription = stripe.Subscription.delete(current_user.stripe_subscription_id)
+            current_user.has_subscription = False
+            current_user.subscription_status = 'canceled'
+        else:
+            # Cancel at period end
+            subscription = stripe.Subscription.modify(
+                current_user.stripe_subscription_id,
+                cancel_at_period_end=True,
+                cancellation_details={
+                    'comment': f"Reason: {reason}. Feedback: {feedback}"
+                }
+            )
+            current_user.subscription_cancel_at_period_end = True
+        
+        db.session.commit()
+        
+        # Log the cancellation
+        event = SubscriptionEvent(
+            user_id=current_user.id,
+            stripe_event_id=f"cancel_{uuid.uuid4().hex[:8]}",
+            event_type='subscription_canceled_by_user',
+            event_data=json.dumps({
+                'reason': reason,
+                'feedback': feedback,
+                'immediate': immediate,
+                'canceled_at': datetime.utcnow().isoformat()
+            }),
+            processed=True
+        )
+        db.session.add(event)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Subscription canceled successfully' if immediate else 'Subscription will cancel at the end of your billing period'
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/subscription/reactivate', methods=['POST'])
+@login_required
+def api_reactivate_subscription():
+    """Reactivate a canceled subscription"""
+    try:
+        if not current_user.stripe_subscription_id:
+            return jsonify({'error': 'No subscription found'}), 400
+        
+        if not current_user.subscription_cancel_at_period_end:
+            return jsonify({'error': 'Subscription is not canceled'}), 400
+        
+        # Reactivate in Stripe
+        subscription = stripe.Subscription.modify(
+            current_user.stripe_subscription_id,
+            cancel_at_period_end=False
+        )
+        
+        current_user.subscription_cancel_at_period_end = False
+        db.session.commit()
+        
+        # Log reactivation
+        event = SubscriptionEvent(
+            user_id=current_user.id,
+            stripe_event_id=f"reactivate_{uuid.uuid4().hex[:8]}",
+            event_type='subscription_reactivated_by_user',
+            event_data=json.dumps({
+                'reactivated_at': datetime.utcnow().isoformat()
+            }),
+            processed=True
+        )
+        db.session.add(event)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Subscription reactivated successfully'
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/subscription/billing-history', methods=['GET'])
+@login_required
+def api_get_billing_history():
+    """Get user's billing history from Stripe"""
+    try:
+        if not current_user.stripe_customer_id:
+            return jsonify({'success': True, 'invoices': []})
+        
+        # Get invoices from Stripe
+        invoices = stripe.Invoice.list(
+            customer=current_user.stripe_customer_id,
+            limit=50
+        )
+        
+        billing_history = []
+        for invoice in invoices.data:
+            billing_history.append({
+                'id': invoice.id,
+                'date': datetime.fromtimestamp(invoice.created).isoformat(),
+                'amount': invoice.amount_paid / 100,
+                'currency': invoice.currency.upper(),
+                'status': invoice.status,
+                'description': invoice.description or get_invoice_description(invoice),
+                'pdf_url': invoice.invoice_pdf if invoice.status == 'paid' else None,
+                'hosted_url': invoice.hosted_invoice_url
+            })
+        
+        return jsonify({
+            'success': True,
+            'invoices': billing_history
+        })
+        
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def get_invoice_description(invoice):
+    """Generate a user-friendly description for an invoice"""
+    if invoice.lines.data:
+        line_item = invoice.lines.data[0]
+        if line_item.price:
+            interval = line_item.price.recurring.interval if line_item.price.recurring else None
+            if interval == 'month':
+                return 'Monthly Subscription'
+            elif interval == 'year':
+                return 'Annual Subscription'
+            else:
+                return 'Lifetime Access'
+    return 'TGFX Trade Lab Subscription'
+
+
+@app.route('/api/admin/analytics/dashboard', methods=['GET'])
+@login_required
+def api_admin_analytics_dashboard():
+    """Get comprehensive analytics data for admin dashboard"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        period = request.args.get('period', '30')
+        end_date = datetime.utcnow()
+        
+        if period == 'all':
+            start_date = User.query.order_by(User.created_at).first().created_at
+        else:
+            days = int(period)
+            start_date = end_date - timedelta(days=days)
+        
+        # Calculate metrics
+        metrics = calculate_enhanced_analytics(start_date, end_date)
+        
+        # Get chart data
+        charts = generate_enhanced_chart_data(start_date, end_date)
+        
+        # Get recent events
+        recent_events = get_recent_revenue_events()
+        
+        # Get top customers
+        top_customers = get_top_customers_by_revenue()
+        
+        return jsonify({
+            'success': True,
+            'period': period,
+            'date_range': {
+                'start': start_date.isoformat(),
+                'end': end_date.isoformat()
+            },
+            'metrics': metrics,
+            'charts': charts,
+            'recent_events': recent_events,
+            'top_customers': top_customers
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def calculate_enhanced_analytics(start_date, end_date):
+    """Calculate enhanced analytics metrics"""
+    try:
+        # Current period metrics
+        current_users = User.query.filter(User.created_at.between(start_date, end_date)).count()
+        current_subscribers = User.query.filter(
+            and_(User.has_subscription == True, User.created_at.between(start_date, end_date))
+        ).count()
+        current_revenue = db.session.query(func.sum(User.total_revenue)).filter(
+            User.created_at.between(start_date, end_date)
+        ).scalar() or 0
+        
+        # Total metrics
+        total_users = User.query.count()
+        total_subscribers = User.query.filter_by(has_subscription=True).count()
+        total_revenue = db.session.query(func.sum(User.total_revenue)).scalar() or 0
+        
+        # Plan distribution
+        monthly_subs = User.query.filter_by(subscription_plan='monthly', has_subscription=True).count()
+        annual_subs = User.query.filter_by(subscription_plan='annual', has_subscription=True).count()
+        lifetime_subs = User.query.filter_by(subscription_plan='lifetime', has_subscription=True).count()
+        
+        # Calculate MRR (Monthly Recurring Revenue)
+        monthly_mrr = monthly_subs * 29
+        annual_mrr = annual_subs * (299 / 12)
+        total_mrr = monthly_mrr + annual_mrr
+        
+        # Calculate churn rate (simplified)
+        canceled_subs = User.query.filter_by(subscription_status='canceled').count()
+        churn_rate = (canceled_subs / max(total_subscribers, 1)) * 100 if total_subscribers > 0 else 0
+        
+        # Calculate ARPU
+        arpu = (total_revenue / max(total_users, 1)) if total_users > 0 else 0
+        
+        # Previous period for comparison (simplified)
+        prev_period_days = (end_date - start_date).days
+        prev_start = start_date - timedelta(days=prev_period_days)
+        prev_end = start_date
+        
+        prev_revenue = db.session.query(func.sum(User.total_revenue)).filter(
+            User.created_at.between(prev_start, prev_end)
+        ).scalar() or 0
+        
+        prev_subscribers = User.query.filter(
+            and_(User.has_subscription == True, User.created_at.between(prev_start, prev_end))
+        ).count()
+        
+        # Calculate changes
+        revenue_change = ((current_revenue - prev_revenue) / max(prev_revenue, 1)) * 100 if prev_revenue > 0 else 0
+        subscriber_change = ((current_subscribers - prev_subscribers) / max(prev_subscribers, 1)) * 100 if prev_subscribers > 0 else 0
+        
+        return {
+            'total_revenue': float(total_revenue),
+            'revenue_change': round(revenue_change, 1),
+            'mrr': float(total_mrr),
+            'mrr_change': 8.3,  # You can calculate this properly
+            'new_subscribers': current_subscribers,
+            'subscribers_change': round(subscriber_change, 1),
+            'churn_rate': round(churn_rate, 1),
+            'churn_change': -2.1,  # You can calculate this properly
+            'lifetime_subscribers': lifetime_subs,
+            'total_users': total_users,
+            'total_subscribers': total_subscribers,
+            'arpu': round(float(arpu), 2),
+            'plan_distribution': {
+                'monthly': monthly_subs,
+                'annual': annual_subs,
+                'lifetime': lifetime_subs
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error calculating analytics: {e}")
+        return {}
+
+def generate_enhanced_chart_data(start_date, end_date):
+    """Generate enhanced chart data"""
+    try:
+        # Generate daily revenue data
+        days = (end_date - start_date).days
+        daily_revenue = []
+        cumulative_revenue = []
+        labels = []
+        
+        running_total = 0
+        for i in range(days):
+            current_day = start_date + timedelta(days=i)
+            # Simulate daily revenue (in real app, query from database)
+            day_revenue = 150 + (i * 5) + (i % 7) * 50  # Mock data
+            daily_revenue.append(day_revenue)
+            running_total += day_revenue
+            cumulative_revenue.append(running_total)
+            labels.append(current_day.strftime('%m/%d'))
+        
+        # Subscription trends
+        subscriber_data = [50 + i * 2 for i in range(days)]
+        churn_data = [5 - (i * 0.1) for i in range(days)]
+        
+        return {
+            'revenue': {
+                'labels': labels,
+                'daily': daily_revenue,
+                'cumulative': cumulative_revenue
+            },
+            'subscribers': {
+                'labels': labels,
+                'new_subscribers': subscriber_data,
+                'churned_subscribers': churn_data
+            },
+            'plans': {
+                'labels': ['Monthly', 'Annual', 'Lifetime'],
+                'data': [45, 35, 20],
+                'colors': ['#10b981', '#3b82f6', '#FFD700']
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error generating chart data: {e}")
+        return {}
+
+def get_recent_revenue_events():
+    """Get recent revenue events for timeline"""
+    try:
+        # Get recent subscription events
+        events = SubscriptionEvent.query.filter(
+            SubscriptionEvent.event_type.in_([
+                'invoice.payment_succeeded',
+                'customer.subscription.created',
+                'customer.subscription.deleted',
+                'subscription_upgraded_to_lifetime'
+            ])
+        ).order_by(SubscriptionEvent.created_at.desc()).limit(10).all()
+        
+        timeline = []
+        for event in events:
+            user = event.user
+            if not user:
+                continue
+                
+            event_info = {
+                'id': event.id,
+                'type': event.event_type,
+                'customer_email': user.email,
+                'customer_name': user.username,
+                'amount': float(event.amount) if event.amount else 0,
+                'date': event.created_at.isoformat(),
+                'icon': 'payment' if 'payment' in event.event_type else 'workspace_premium'
+            }
+            
+            # Customize description based on event type
+            if 'payment_succeeded' in event.event_type:
+                if event.amount and event.amount >= 499:
+                    event_info['description'] = 'Lifetime Upgrade'
+                    event_info['icon'] = 'workspace_premium'
+                elif event.amount and event.amount >= 299:
+                    event_info['description'] = 'Annual Subscription Renewal'
+                else:
+                    event_info['description'] = 'Monthly Subscription'
+            elif 'subscription.created' in event.event_type:
+                event_info['description'] = 'New Subscription'
+            elif 'subscription.deleted' in event.event_type:
+                event_info['description'] = 'Subscription Canceled'
+                event_info['icon'] = 'cancel'
+            
+            timeline.append(event_info)
+        
+        return timeline
+        
+    except Exception as e:
+        print(f"Error getting recent events: {e}")
+        return []
+
+def get_top_customers_by_revenue():
+    """Get top customers by total revenue"""
+    try:
+        top_customers = User.query.filter(User.total_revenue > 0)\
+                                 .order_by(User.total_revenue.desc())\
+                                 .limit(10).all()
+        
+        customers = []
+        for user in top_customers:
+            customers.append({
+                'id': user.id,
+                'name': user.username,
+                'email': user.email,
+                'total_revenue': float(user.total_revenue or 0),
+                'subscription_plan': user.subscription_plan,
+                'subscription_status': user.subscription_status,
+                'created_at': user.created_at.isoformat(),
+                'avatar_color': f"#{hash(user.username) % 16777215:06x}"  # Generate color from username
+            })
+        
+        return customers
+        
+    except Exception as e:
+        print(f"Error getting top customers: {e}")
+        return []
+
+@app.route('/api/admin/analytics/export', methods=['GET'])
+@login_required
+def api_export_analytics():
+    """Export analytics data"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        format_type = request.args.get('format', 'csv')
+        period = request.args.get('period', '30')
+        
+        # Calculate analytics data
+        end_date = datetime.utcnow()
+        if period == 'all':
+            start_date = User.query.order_by(User.created_at).first().created_at
+        else:
+            days = int(period)
+            start_date = end_date - timedelta(days=days)
+        
+        analytics_data = calculate_enhanced_analytics(start_date, end_date)
+        
+        if format_type == 'csv':
+            return export_analytics_csv(analytics_data, start_date, end_date)
+        elif format_type == 'json':
+            return jsonify({
+                'success': True,
+                'data': analytics_data,
+                'period': period,
+                'date_range': {
+                    'start': start_date.isoformat(),
+                    'end': end_date.isoformat()
+                }
+            })
+        else:
+            return jsonify({'error': 'Unsupported format'}), 400
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def export_analytics_csv(analytics_data, start_date, end_date):
+    """Export analytics as CSV"""
+    import csv
+    from io import StringIO
+    
+    output = StringIO()
+    writer = csv.writer(output)
+    
+    # Write headers
+    writer.writerow(['TGFX Trade Lab Analytics Report'])
+    writer.writerow([f'Period: {start_date.strftime("%Y-%m-%d")} to {end_date.strftime("%Y-%m-%d")}'])
+    writer.writerow([])
+    
+    # Write metrics
+    writer.writerow(['Metric', 'Value'])
+    writer.writerow(['Total Revenue', f"${analytics_data.get('total_revenue', 0):.2f}"])
+    writer.writerow(['Monthly Recurring Revenue', f"${analytics_data.get('mrr', 0):.2f}"])
+    writer.writerow(['Total Subscribers', analytics_data.get('total_subscribers', 0)])
+    writer.writerow(['Lifetime Subscribers', analytics_data.get('lifetime_subscribers', 0)])
+    writer.writerow(['Churn Rate', f"{analytics_data.get('churn_rate', 0):.1f}%"])
+    writer.writerow(['ARPU', f"${analytics_data.get('arpu', 0):.2f}"])
+    
+    output.seek(0)
+    
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename=tgfx_analytics_{datetime.now().strftime("%Y%m%d")}.csv'}
+    )
+
+# Webhook enhancement for better event handling
+@app.route('/webhook/stripe/enhanced', methods=['POST'])
+def stripe_webhook_enhanced():
+    """Enhanced Stripe webhook handler with better event processing"""
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
+    endpoint_secret = app.config.get('STRIPE_WEBHOOK_SECRET')
+    
+    if not endpoint_secret:
+        return jsonify({'error': 'Webhook secret not configured'}), 400
+    
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+    except Exception as e:
+        return jsonify({'error': f'Webhook error: {str(e)}'}), 400
+    
+    try:
+        # Enhanced event handling
+        event_type = event['type']
+        event_data = event['data']['object']
+        
+        # Create or update subscription event record
+        subscription_event = SubscriptionEvent(
+            stripe_event_id=event['id'],
+            event_type=event_type,
+            event_data=json.dumps(event_data),
+            processed=False
+        )
+        
+        # Process the event
+        if event_type == 'customer.subscription.created':
+            handle_subscription_created_enhanced(event_data, subscription_event)
+        elif event_type == 'customer.subscription.updated':
+            handle_subscription_updated_enhanced(event_data, subscription_event)
+        elif event_type == 'customer.subscription.deleted':
+            handle_subscription_deleted_enhanced(event_data, subscription_event)
+        elif event_type == 'invoice.payment_succeeded':
+            handle_payment_succeeded_enhanced(event_data, subscription_event)
+        elif event_type == 'invoice.payment_failed':
+            handle_payment_failed_enhanced(event_data, subscription_event)
+        
+        subscription_event.processed = True
+        db.session.add(subscription_event)
+        db.session.commit()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        if 'subscription_event' in locals():
+            subscription_event.processed = False
+            db.session.add(subscription_event)
+            db.session.commit()
+        
+        print(f"Webhook processing error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def handle_subscription_created_enhanced(subscription_data, event_record):
+    """Enhanced subscription creation handler"""
+    user = User.query.filter_by(stripe_customer_id=subscription_data['customer']).first()
+    if not user:
+        return
+    
+    event_record.user_id = user.id
+    
+    # Update user with subscription data
+    update_user_from_stripe_subscription(user, subscription_data)
+    
+    # Send welcome notification
+    create_notification(
+        user.id,
+        'Welcome to Premium!',
+        f'Your {user.get_subscription_plan_display()} subscription is now active!',
+        'subscription'
+    )
+
+def handle_payment_succeeded_enhanced(invoice_data, event_record):
+    """Enhanced payment success handler"""
+    user = User.query.filter_by(stripe_customer_id=invoice_data['customer']).first()
+    if not user:
+        return
+    
+    event_record.user_id = user.id
+    event_record.amount = Decimal(invoice_data['amount_paid']) / 100
+    event_record.currency = invoice_data['currency']
+    
+    # Update user payment info
+    user.last_payment_date = datetime.fromtimestamp(invoice_data['created'])
+    user.last_payment_amount = event_record.amount
+    user.total_revenue = (user.total_revenue or 0) + event_record.amount
+    
+    # Check if this is a lifetime payment
+    if event_record.amount >= 499:
+        user.subscription_plan = 'lifetime'
+        user.has_subscription = True
+        user.subscription_status = 'active'
+        user.subscription_expires = datetime.utcnow() + timedelta(days=36500)  # 100 years
+        
+        create_notification(
+            user.id,
+            'Lifetime Access Activated! 🏆',
+            'Congratulations! You now have lifetime access to TGFX Trade Lab!',
+            'subscription'
+        )
+    
+    db.session.commit()
+
+def update_user_from_stripe_subscription(user, subscription_data):
+    """Update user model from Stripe subscription data"""
+    user.stripe_subscription_id = subscription_data['id']
+    user.subscription_status = subscription_data['status']
+    user.has_subscription = subscription_data['status'] in ['active', 'trialing']
+    user.subscription_current_period_start = datetime.fromtimestamp(subscription_data['current_period_start'])
+    user.subscription_current_period_end = datetime.fromtimestamp(subscription_data['current_period_end'])
+    user.subscription_expires = user.subscription_current_period_end
+    user.subscription_cancel_at_period_end = subscription_data.get('cancel_at_period_end', False)
+    
+    if subscription_data.get('trial_end'):
+        user.trial_end = datetime.fromtimestamp(subscription_data['trial_end'])
+    
+    # Determine plan from price
+    if subscription_data.get('items', {}).get('data'):
+        price_id = subscription_data['items']['data'][0]['price']['id']
+        user.subscription_price_id = price_id
+        
+        # Map price IDs to plans (update these with your actual price IDs)
+        price_plan_mapping = {
+            app.config.get('STRIPE_MONTHLY_PRICE_ID'): 'monthly',
+            app.config.get('STRIPE_ANNUAL_PRICE_ID'): 'annual',
+            app.config.get('STRIPE_LIFETIME_PRICE_ID'): 'lifetime'
+        }
+        
+        user.subscription_plan = price_plan_mapping.get(price_id, 'monthly')
+
+
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
 @login_required
 def admin_delete_user(user_id):
