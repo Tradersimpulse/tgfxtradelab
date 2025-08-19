@@ -1,685 +1,1019 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revenue Analytics - TGFX Trade Lab Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            --info-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            --gold-gradient: linear-gradient(135deg, #FFD700, #FFA500);
+        }
 
-{% block title %}Revenue Analytics - TGFX Trade Lab Admin{% endblock %}
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+        }
 
-{% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center">
-            <h1 class="text-gradient-primary">
-                <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">analytics</span>
-                Revenue Analytics
-            </h1>
-            <div>
-                <button class="btn btn-outline-primary me-2" onclick="refreshAnalytics()">
-                    <span class="material-symbols-outlined me-2">refresh</span>
-                    Refresh Data
-                </button>
-                <div class="btn-group">
-                    <button class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown">
-                        <span class="material-symbols-outlined me-2">download</span>
-                        Export
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-dark">
-                        <li><a class="dropdown-item" onclick="exportRevenue('csv')">Export CSV</a></li>
-                        <li><a class="dropdown-item" onclick="exportRevenue('pdf')">Export PDF</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
 
-<!-- Time Period Selector -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div class="row align-items-center">
-                    <div class="col-md-4">
-                        <label class="form-label">Time Period</label>
-                        <select class="form-select" id="timePeriod" onchange="updateAnalytics()">
-                            <option value="7">Last 7 Days</option>
-                            <option value="30" selected>Last 30 Days</option>
-                            <option value="90">Last 90 Days</option>
-                            <option value="365">Last Year</option>
-                            <option value="all">All Time</option>
-                        </select>
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+        }
+
+        .metric-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--primary-gradient);
+        }
+
+        .metric-card.success::before { background: var(--success-gradient); }
+        .metric-card.warning::before { background: var(--warning-gradient); }
+        .metric-card.danger::before { background: var(--danger-gradient); }
+        .metric-card.info::before { background: var(--info-gradient); }
+        .metric-card.gold::before { background: var(--gold-gradient); }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .metric-change {
+            font-size: 0.875rem;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .metric-change.positive {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .metric-change.negative {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            padding: 20px;
+        }
+
+        .subscription-plan-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .subscription-plan-card:hover {
+            border-color: rgba(102, 126, 234, 0.5);
+            transform: translateY(-5px);
+        }
+
+        .subscription-plan-card.popular {
+            border-color: #f59e0b;
+            position: relative;
+        }
+
+        .subscription-plan-card.popular::before {
+            content: 'Most Popular';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--warning-gradient);
+            color: #000;
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .revenue-timeline {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .timeline-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 1.2rem;
+        }
+
+        .timeline-icon.success { background: var(--success-gradient); }
+        .timeline-icon.warning { background: var(--warning-gradient); }
+        .timeline-icon.danger { background: var(--danger-gradient); }
+
+        .customer-row {
+            transition: all 0.3s ease;
+        }
+
+        .customer-row:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active { background: var(--success-gradient); color: white; }
+        .status-past-due { background: var(--warning-gradient); color: white; }
+        .status-canceled { background: var(--danger-gradient); color: white; }
+        .status-lifetime { background: var(--gold-gradient); color: #000; }
+
+        .btn-gradient {
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-gradient:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 0.875rem;
+        }
+
+        .filter-tab.active,
+        .filter-tab:hover {
+            background: var(--primary-gradient);
+            color: white;
+            text-decoration: none;
+        }
+
+        .progress-bar-custom {
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 1s ease;
+        }
+
+        .export-dropdown {
+            position: relative;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(102, 126, 234, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
+        }
+
+        .pulse-btn {
+            animation: pulse 2s infinite;
+        }
+
+        .sparkline {
+            width: 100px;
+            height: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h1 class="mb-2">
+                            <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">analytics</span>
+                            Revenue Analytics
+                        </h1>
+                        <p class="text-muted mb-0">Comprehensive revenue insights and subscription metrics</p>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Custom Range</label>
-                        <div class="input-group">
-                            <input type="date" class="form-control" id="startDate">
-                            <input type="date" class="form-control" id="endDate">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-outline-light" onclick="refreshData()">
+                            <span class="material-symbols-outlined me-2">refresh</span>
+                            Refresh
+                        </button>
+                        <div class="export-dropdown">
+                            <button class="btn btn-gradient dropdown-toggle" data-bs-toggle="dropdown">
+                                <span class="material-symbols-outlined me-2">download</span>
+                                Export
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-dark">
+                                <li><a class="dropdown-item" href="#" onclick="exportData('csv')">📊 Export CSV</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportData('pdf')">📄 Export PDF</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportData('excel')">📈 Export Excel</a></li>
+                            </ul>
                         </div>
                     </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                        <button class="btn btn-outline-info" onclick="applyCustomRange()">
-                            Apply Custom Range
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- Key Metrics Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-gradient-success text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">attach_money</span>
-                    <div>
-                        <h3 class="mb-0" id="totalRevenue">${{ analytics.total_revenue }}</h3>
-                        <p class="mb-0">Total Revenue</p>
-                        <small class="text-light" id="revenueChange">{{ analytics.revenue_change }}% vs last period</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-gradient-primary text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">trending_up</span>
-                    <div>
-                        <h3 class="mb-0" id="mrr">${{ analytics.mrr }}</h3>
-                        <p class="mb-0">Monthly Recurring Revenue</p>
-                        <small class="text-light" id="mrrChange">{{ analytics.mrr_change }}% vs last month</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-gradient-warning text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">group_add</span>
-                    <div>
-                        <h3 class="mb-0" id="newSubscribers">{{ analytics.new_subscribers }}</h3>
-                        <p class="mb-0">New Subscribers</p>
-                        <small class="text-light" id="subscribersChange">{{ analytics.subscribers_change }}% vs last period</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-gradient-danger text-white">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">trending_down</span>
-                    <div>
-                        <h3 class="mb-0" id="churnRate">{{ analytics.churn_rate }}%</h3>
-                        <p class="mb-0">Churn Rate</p>
-                        <small class="text-light" id="churnChange">{{ analytics.churn_change }}% vs last period</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Charts Row -->
-<div class="row mb-4">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <span class="material-symbols-outlined me-2">show_chart</span>
-                    Revenue Over Time
-                </h5>
-            </div>
-            <div class="card-body">
-                <canvas id="revenueChart" height="100"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <span class="material-symbols-outlined me-2">donut_large</span>
-                    Subscription Plans
-                </h5>
-            </div>
-            <div class="card-body">
-                <canvas id="plansChart" height="200"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Detailed Analytics Row -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <span class="material-symbols-outlined me-2">bar_chart</span>
-                    Monthly Cohort Analysis
-                </h5>
-            </div>
-            <div class="card-body">
-                <canvas id="cohortChart" height="150"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <span class="material-symbols-outlined me-2">account_balance_wallet</span>
-                    Average Revenue Per User
-                </h5>
-            </div>
-            <div class="card-body">
-                <canvas id="arpuChart" height="150"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Subscription Analytics Table -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <span class="material-symbols-outlined me-2">table_view</span>
-                    Subscription Analytics Breakdown
-                </h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-dark table-striped mb-0">
-                        <thead>
-                            <tr>
-                                <th>Metric</th>
-                                <th>Current Period</th>
-                                <th>Previous Period</th>
-                                <th>Change</th>
-                                <th>Trend</th>
-                            </tr>
-                        </thead>
-                        <tbody id="analyticsTableBody">
-                            <tr>
-                                <td><strong>Total Subscribers</strong></td>
-                                <td id="currentSubscribers">{{ analytics.total_subscribers }}</td>
-                                <td id="prevSubscribers">{{ analytics.prev_total_subscribers }}</td>
-                                <td id="subscribersChangePercent">
-                                    <span class="badge bg-{{ 'success' if analytics.subscribers_change > 0 else 'danger' }}">
-                                        {{ analytics.subscribers_change }}%
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="material-symbols-outlined text-{{ 'success' if analytics.subscribers_change > 0 else 'danger' }}">
-                                        {{ 'trending_up' if analytics.subscribers_change > 0 else 'trending_down' }}
-                                    </span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Active Subscriptions</strong></td>
-                                <td id="activeSubscriptions">{{ analytics.active_subscriptions }}</td>
-                                <td id="prevActiveSubscriptions">{{ analytics.prev_active_subscriptions }}</td>
-                                <td id="activeSubsChangePercent">
-                                    <span class="badge bg-{{ 'success' if analytics.active_subs_change > 0 else 'danger' }}">
-                                        {{ analytics.active_subs_change }}%
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="material-symbols-outlined text-{{ 'success' if analytics.active_subs_change > 0 else 'danger' }}">
-                                        {{ 'trending_up' if analytics.active_subs_change > 0 else 'trending_down' }}
-                                    </span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Canceled Subscriptions</strong></td>
-                                <td id="canceledSubscriptions">{{ analytics.canceled_subscriptions }}</td>
-                                <td id="prevCanceledSubscriptions">{{ analytics.prev_canceled_subscriptions }}</td>
-                                <td id="canceledSubsChangePercent">
-                                    <span class="badge bg-{{ 'danger' if analytics.canceled_subs_change > 0 else 'success' }}">
-                                        {{ analytics.canceled_subs_change }}%
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="material-symbols-outlined text-{{ 'danger' if analytics.canceled_subs_change > 0 else 'success' }}">
-                                        {{ 'trending_up' if analytics.canceled_subs_change > 0 else 'trending_down' }}
-                                    </span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Average Order Value</strong></td>
-                                <td id="avgOrderValue">${{ analytics.avg_order_value }}</td>
-                                <td id="prevAvgOrderValue">${{ analytics.prev_avg_order_value }}</td>
-                                <td id="aovChangePercent">
-                                    <span class="badge bg-{{ 'success' if analytics.aov_change > 0 else 'danger' }}">
-                                        {{ analytics.aov_change }}%
-                                    </span>
-                                </td>
-                                <td>
-                                    <span class="material-symbols-outlined text-{{ 'success' if analytics.aov_change > 0 else 'danger' }}">
-                                        {{ 'trending_up' if analytics.aov_change > 0 else 'trending_down' }}
-                                    </span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Recent Transactions -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <span class="material-symbols-outlined me-2">receipt_long</span>
-                    Recent Transactions
-                </h5>
-                <button class="btn btn-sm btn-outline-primary" onclick="loadRecentTransactions()">
-                    <span class="material-symbols-outlined me-2">refresh</span>
-                    Refresh
-                </button>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-dark table-striped mb-0">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Customer</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                                <th>Plan</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="transactionsTableBody">
-                            <!-- Transactions loaded via JavaScript -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-/* Custom 5-column layout for metrics cards */
-.col-md-2_4 {
-    flex: 0 0 auto;
-    width: 20%;
-}
-
-@media (max-width: 768px) {
-    .col-md-2_4 {
-        width: 100%;
-        margin-bottom: 1rem;
-    }
-}
-
-@media (min-width: 768px) and (max-width: 992px) {
-    .col-md-2_4 {
-        width: 50%;
-        margin-bottom: 1rem;
-    }
-}
-
-/* Adjust card content for smaller cards */
-.col-md-2_4 .card-body {
-    padding: 1rem 0.75rem;
-}
-
-.col-md-2_4 .material-symbols-outlined {
-    font-size: 1.8rem !important;
-}
-
-.col-md-2_4 h4 {
-    font-size: 1.5rem;
-}
-
-.col-md-2_4 .small {
-    font-size: 0.8rem;
-}
-</style>
-<script>
-// Chart instances
-let revenueChart, plansChart, cohortChart, arpuChart;
-
-// Initialize charts when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    initializeCharts();
-    loadRecentTransactions();
-    updateAnalytics();
-});
-
-function initializeCharts() {
-    // Revenue Chart
-    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-    revenueChart = new Chart(revenueCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Daily Revenue',
-                data: [],
-                borderColor: '#10B981',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                tension: 0.4,
-                fill: true
-            }, {
-                label: 'Cumulative Revenue',
-                data: [],
-                borderColor: '#3B82F6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.4,
-                yAxisID: 'y1'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                },
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    ticks: { 
-                        color: '#fff',
-                        callback: function(value) { return '$' + value.toFixed(0); }
-                    },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    ticks: { 
-                        color: '#fff',
-                        callback: function(value) { return '$' + value.toFixed(0); }
-                    },
-                    grid: { drawOnChartArea: false }
-                }
-            }
-        }
-    });
-
-    // Plans Chart
-    const plansCtx = document.getElementById('plansChart').getContext('2d');
-    plansChart = new Chart(plansCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Monthly', 'Annual', 'Lifetime', 'Free'],
-            datasets: [{
-                data: [0, 0, 0, 0],
-                backgroundColor: ['#10B981', '#3B82F6', '#FFD700', '#6B7280'],
-                borderColor: '#1a1a1a',
-                borderWidth: 2
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                }
-            }
-        }
-    });
-
-    // Cohort Chart
-    const cohortCtx = document.getElementById('cohortChart').getContext('2d');
-    cohortChart = new Chart(cohortCtx, {
-        type: 'bar',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'New Subscriptions',
-                data: [],
-                backgroundColor: '#10B981'
-            }, {
-                label: 'Churned Subscriptions',
-                data: [],
-                backgroundColor: '#EF4444'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                },
-                y: {
-                    ticks: { color: '#fff' },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                }
-            }
-        }
-    });
-
-    // ARPU Chart
-    const arpuCtx = document.getElementById('arpuChart').getContext('2d');
-    arpuChart = new Chart(arpuCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'ARPU',
-                data: [],
-                borderColor: '#F59E0B',
-                backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: { color: '#fff' }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: { color: '#fff' },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                },
-                y: {
-                    ticks: { 
-                        color: '#fff',
-                        callback: function(value) { return '$' + value.toFixed(2); }
-                    },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
-                }
-            }
-        }
-    });
-}
-
-function updateAnalytics() {
-    const timePeriod = document.getElementById('timePeriod').value;
-    
-    showToast('Updating analytics...', 'info');
-    
-    fetch(`/api/admin/analytics?period=${timePeriod}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                updateMetricsCards(data.metrics);
-                updateCharts(data.charts);
-                showToast('Analytics updated', 'success');
-            } else {
-                showToast('Failed to update analytics', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error updating analytics', 'error');
-        });
-}
-
-function updateMetricsCards(metrics) {
-    document.getElementById('totalRevenue').textContent = '$' + metrics.total_revenue;
-    document.getElementById('revenueChange').textContent = metrics.revenue_change + '% vs last period';
-    
-    document.getElementById('mrr').textContent = '$' + metrics.mrr;
-    document.getElementById('mrrChange').textContent = metrics.mrr_change + '% vs last month';
-    
-    document.getElementById('newSubscribers').textContent = metrics.new_subscribers;
-    document.getElementById('subscribersChange').textContent = metrics.subscribers_change + '% vs last period';
-    
-    document.getElementById('churnRate').textContent = metrics.churn_rate + '%';
-    document.getElementById('churnChange').textContent = metrics.churn_change + '% vs last period';
-}
-
-function updateCharts(chartData) {
-    // Update Revenue Chart
-    revenueChart.data.labels = chartData.revenue.labels;
-    revenueChart.data.datasets[0].data = chartData.revenue.daily;
-    revenueChart.data.datasets[1].data = chartData.revenue.cumulative;
-    revenueChart.update();
-    
-    // Update Plans Chart
-    plansChart.data.datasets[0].data = chartData.plans.data;
-    plansChart.update();
-    
-    // Update Cohort Chart
-    cohortChart.data.labels = chartData.cohort.labels;
-    cohortChart.data.datasets[0].data = chartData.cohort.new_subs;
-    cohortChart.data.datasets[1].data = chartData.cohort.churned_subs;
-    cohortChart.update();
-    
-    // Update ARPU Chart
-    arpuChart.data.labels = chartData.arpu.labels;
-    arpuChart.data.datasets[0].data = chartData.arpu.data;
-    arpuChart.update();
-}
-
-function loadRecentTransactions() {
-    fetch('/api/admin/recent-transactions')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const tbody = document.getElementById('transactionsTableBody');
-                tbody.innerHTML = '';
-                
-                data.transactions.forEach(transaction => {
-                    const row = `
-                        <tr>
-                            <td>${transaction.date}</td>
-                            <td>
-                                <div>
-                                    <div class="fw-bold">${transaction.customer_name}</div>
-                                    <small class="text-muted">${transaction.customer_email}</small>
+        <!-- Time Period Filters -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="filter-tabs">
+                            <a href="#" class="filter-tab active" data-period="7">Last 7 Days</a>
+                            <a href="#" class="filter-tab" data-period="30">Last 30 Days</a>
+                            <a href="#" class="filter-tab" data-period="90">Last 90 Days</a>
+                            <a href="#" class="filter-tab" data-period="365">Last Year</a>
+                            <a href="#" class="filter-tab" data-period="all">All Time</a>
+                        </div>
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <label class="form-label">Custom Range</label>
+                                <div class="input-group">
+                                    <input type="date" class="form-control" id="startDate">
+                                    <input type="date" class="form-control" id="endDate">
+                                    <button class="btn btn-outline-primary" onclick="applyCustomRange()">Apply</button>
                                 </div>
-                            </td>
-                            <td class="fw-bold">$${transaction.amount}</td>
-                            <td>
-                                <span class="badge bg-${transaction.status === 'succeeded' ? 'success' : 'danger'}">
-                                    ${transaction.status}
-                                </span>
-                            </td>
-                            <td>${transaction.plan}</td>
-                            <td>
-                                <button class="btn btn-sm btn-outline-info" onclick="viewTransaction('${transaction.id}')">
-                                    <span class="material-symbols-outlined">visibility</span>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Compare To</label>
+                                <select class="form-select">
+                                    <option>Previous Period</option>
+                                    <option>Same Period Last Year</option>
+                                    <option>No Comparison</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button class="btn btn-gradient pulse-btn" onclick="generateReport()">
+                                    <span class="material-symbols-outlined me-2">assessment</span>
+                                    Generate Report
                                 </button>
-                            </td>
-                        </tr>
-                    `;
-                    tbody.innerHTML += row;
-                });
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error loading transactions', 'error');
-        });
-}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-function refreshAnalytics() {
-    showToast('Refreshing analytics from Stripe...', 'info');
-    
-    fetch('/api/admin/analytics/refresh', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'}
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showToast('Analytics refreshed successfully', 'success');
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showToast('Failed to refresh analytics', 'error');
+        <!-- Key Metrics Row -->
+        <div class="row mb-4">
+            <div class="col-md-2">
+                <div class="card metric-card success h-100">
+                    <div class="card-body text-center">
+                        <span class="material-symbols-outlined mb-2 text-success" style="font-size: 2.5rem;">attach_money</span>
+                        <h3 class="metric-value text-success">$24,750</h3>
+                        <p class="text-muted mb-2">Total Revenue</p>
+                        <div class="metric-change positive">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">trending_up</span>
+                            +12.5%
+                        </div>
+                        <canvas class="sparkline mt-2" id="revenueSparkline"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card metric-card info h-100">
+                    <div class="card-body text-center">
+                        <span class="material-symbols-outlined mb-2 text-info" style="font-size: 2.5rem;">trending_up</span>
+                        <h3 class="metric-value text-info">$8,950</h3>
+                        <p class="text-muted mb-2">Monthly Recurring</p>
+                        <div class="metric-change positive">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">trending_up</span>
+                            +8.3%
+                        </div>
+                        <canvas class="sparkline mt-2" id="mrrSparkline"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card metric-card warning h-100">
+                    <div class="card-body text-center">
+                        <span class="material-symbols-outlined mb-2 text-warning" style="font-size: 2.5rem;">group_add</span>
+                        <h3 class="metric-value text-warning">142</h3>
+                        <p class="text-muted mb-2">New Subscribers</p>
+                        <div class="metric-change positive">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">trending_up</span>
+                            +15.2%
+                        </div>
+                        <canvas class="sparkline mt-2" id="subscribersSparkline"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card metric-card danger h-100">
+                    <div class="card-body text-center">
+                        <span class="material-symbols-outlined mb-2 text-danger" style="font-size: 2.5rem;">trending_down</span>
+                        <h3 class="metric-value text-danger">3.2%</h3>
+                        <p class="text-muted mb-2">Churn Rate</p>
+                        <div class="metric-change negative">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">trending_down</span>
+                            -2.1%
+                        </div>
+                        <canvas class="sparkline mt-2" id="churnSparkline"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card metric-card gold h-100">
+                    <div class="card-body text-center">
+                        <span class="material-symbols-outlined mb-2 text-warning" style="font-size: 2.5rem;">workspace_premium</span>
+                        <h3 class="metric-value" style="color: #FFD700;">28</h3>
+                        <p class="text-muted mb-2">Lifetime Members</p>
+                        <div class="metric-change positive">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">trending_up</span>
+                            +5 this month
+                        </div>
+                        <canvas class="sparkline mt-2" id="lifetimeSparkline"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card metric-card h-100">
+                    <div class="card-body text-center">
+                        <span class="material-symbols-outlined mb-2" style="font-size: 2.5rem; color: #a855f7;">account_balance_wallet</span>
+                        <h3 class="metric-value" style="color: #a855f7;">$174</h3>
+                        <p class="text-muted mb-2">Avg Revenue/User</p>
+                        <div class="metric-change positive">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">trending_up</span>
+                            +5.2%
+                        </div>
+                        <canvas class="sparkline mt-2" id="arpuSparkline"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <span class="material-symbols-outlined me-2">show_chart</span>
+                            Revenue Trends
+                        </h5>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-light active" data-chart="revenue">Revenue</button>
+                            <button class="btn btn-outline-light" data-chart="subscribers">Subscribers</button>
+                            <button class="btn btn-outline-light" data-chart="churn">Churn</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="mainChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="material-symbols-outlined me-2">donut_large</span>
+                            Subscription Plans Distribution
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="plansChart" height="300"></canvas>
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>Monthly</span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="progress-bar-custom" style="width: 120px;">
+                                        <div class="progress-fill" style="width: 45%; background: #10b981;"></div>
+                                    </div>
+                                    <span class="text-muted">45%</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>Annual</span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="progress-bar-custom" style="width: 120px;">
+                                        <div class="progress-fill" style="width: 35%; background: #3b82f6;"></div>
+                                    </div>
+                                    <span class="text-muted">35%</span>
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>Lifetime</span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="progress-bar-custom" style="width: 120px;">
+                                        <div class="progress-fill" style="width: 20%; background: #FFD700;"></div>
+                                    </div>
+                                    <span class="text-muted">20%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Revenue Timeline & Top Customers -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="material-symbols-outlined me-2">timeline</span>
+                            Recent Revenue Events
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="revenue-timeline">
+                            <div class="timeline-item">
+                                <div class="timeline-icon success">
+                                    <span class="material-symbols-outlined">payment</span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="mb-1">Annual Subscription Renewal</h6>
+                                            <p class="text-muted mb-0">john.doe@example.com</p>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="fw-bold text-success">+$299</div>
+                                            <small class="text-muted">2 hours ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="timeline-item">
+                                <div class="timeline-icon warning">
+                                    <span class="material-symbols-outlined">workspace_premium</span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="mb-1">Lifetime Upgrade</h6>
+                                            <p class="text-muted mb-0">trader.pro@gmail.com</p>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="fw-bold text-warning">+$499</div>
+                                            <small class="text-muted">5 hours ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="timeline-item">
+                                <div class="timeline-icon success">
+                                    <span class="material-symbols-outlined">payment</span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="mb-1">Monthly Subscription</h6>
+                                            <p class="text-muted mb-0">newbie.trader@yahoo.com</p>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="fw-bold text-success">+$29</div>
+                                            <small class="text-muted">1 day ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="timeline-item">
+                                <div class="timeline-icon danger">
+                                    <span class="material-symbols-outlined">cancel</span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <h6 class="mb-1">Subscription Canceled</h6>
+                                            <p class="text-muted mb-0">former.user@hotmail.com</p>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="fw-bold text-danger">-$29/mo</div>
+                                            <small class="text-muted">2 days ago</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <span class="material-symbols-outlined me-2">leaderboard</span>
+                            Top Customers by Revenue
+                        </h5>
+                        <button class="btn btn-sm btn-outline-light">View All</button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Customer</th>
+                                        <th>Plan</th>
+                                        <th>Revenue</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="customer-row">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-warning rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 32px; height: 32px;">
+                                                    <span class="text-dark fw-bold">J</span>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">John Trader</div>
+                                                    <small class="text-muted">john@example.com</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><span class="status-badge status-lifetime">Lifetime</span></td>
+                                        <td class="fw-bold">$1,299</td>
+                                        <td><span class="status-badge status-active">Active</span></td>
+                                    </tr>
+                                    <tr class="customer-row">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-info rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 32px; height: 32px;">
+                                                    <span class="text-white fw-bold">S</span>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">Sarah Wilson</div>
+                                                    <small class="text-muted">sarah@gmail.com</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><span class="status-badge status-active">Annual</span></td>
+                                        <td class="fw-bold">$897</td>
+                                        <td><span class="status-badge status-active">Active</span></td>
+                                    </tr>
+                                    <tr class="customer-row">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-success rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 32px; height: 32px;">
+                                                    <span class="text-white fw-bold">M</span>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">Mike Chen</div>
+                                                    <small class="text-muted">mike@yahoo.com</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><span class="status-badge status-active">Monthly</span></td>
+                                        <td class="fw-bold">$348</td>
+                                        <td><span class="status-badge status-active">Active</span></td>
+                                    </tr>
+                                    <tr class="customer-row">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-danger rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 32px; height: 32px;">
+                                                    <span class="text-white fw-bold">L</span>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">Lisa Johnson</div>
+                                                    <small class="text-muted">lisa@hotmail.com</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><span class="status-badge status-active">Annual</span></td>
+                                        <td class="fw-bold">$299</td>
+                                        <td><span class="status-badge status-past-due">Past Due</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Analytics Table -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <span class="material-symbols-outlined me-2">table_view</span>
+                            Detailed Subscription Analytics
+                        </h5>
+                        <div class="d-flex gap-2">
+                            <input type="search" class="form-control" placeholder="Search customers..." style="width: 200px;">
+                            <button class="btn btn-outline-light">
+                                <span class="material-symbols-outlined">filter_list</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-dark table-striped mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Metric</th>
+                                        <th>Current Period</th>
+                                        <th>Previous Period</th>
+                                        <th>Change</th>
+                                        <th>Trend</th>
+                                        <th>Goal</th>
+                                        <th>Progress</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Total Revenue</strong></td>
+                                        <td class="fw-bold text-success">$24,750</td>
+                                        <td class="text-muted">$22,000</td>
+                                        <td>
+                                            <span class="metric-change positive">
+                                                <span class="material-symbols-outlined" style="font-size: 1rem;">trending_up</span>
+                                                +12.5%
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <canvas class="sparkline" id="revenueDetailSparkline"></canvas>
+                                        </td>
+                                        <td class="text-info">$30,000</td>
+                                        <td>
+                                            <div class="progress-bar-custom">
+                                                <div class="progress-fill" style="width: 82%; background: var(--success-gradient);"></div>
+                                            </div>
+                                            <small class="text-muted">82%</small>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Active Subscribers</strong></td>
+                                        <td class="fw-bold text-info">324</td>
+                                        <td class="text-muted">298</td>
+                                        <td>
+                                            <span class="metric-change positive">
+                                                <span class="material-symbols-outlined" style="font-size: 1rem;">trending_up</span>
+                                                +8.7%
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <canvas class="sparkline" id="subscribersDetailSparkline"></canvas>
+                                        </td>
+                                        <td class="text-info">400</td>
+                                        <td>
+                                            <div class="progress-bar-custom">
+                                                <div class="progress-fill" style="width: 81%; background: var(--info-gradient);"></div>
+                                            </div>
+                                            <small class="text-muted">81%</small>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Monthly Churn Rate</strong></td>
+                                        <td class="fw-bold text-warning">3.2%</td>
+                                        <td class="text-muted">5.1%</td>
+                                        <td>
+                                            <span class="metric-change positive">
+                                                <span class="material-symbols-outlined" style="font-size: 1rem;">trending_down</span>
+                                                -37.3%
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <canvas class="sparkline" id="churnDetailSparkline"></canvas>
+                                        </td>
+                                        <td class="text-info">< 2.0%</td>
+                                        <td>
+                                            <div class="progress-bar-custom">
+                                                <div class="progress-fill" style="width: 62%; background: var(--warning-gradient);"></div>
+                                            </div>
+                                            <small class="text-muted">62%</small>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Chart instances
+        let mainChart, plansChart;
+        let sparklineCharts = {};
+
+        // Initialize charts
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeMainChart();
+            initializePlansChart();
+            initializeSparklines();
+            setupFilters();
+        });
+
+        function initializeMainChart() {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            mainChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+                    datasets: [{
+                        label: 'Revenue',
+                        data: [12000, 15000, 13000, 18000, 22000, 20000, 24750],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#fff' }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { 
+                                color: '#fff',
+                                callback: function(value) { return '$' + value.toLocaleString(); }
+                            }
+                        }
+                    }
+                }
+            });
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showToast('Error refreshing analytics', 'error');
-    });
-}
 
-function applyCustomRange() {
-    const startDate = document.getElementById('startDate').value;
-    const endDate = document.getElementById('endDate').value;
-    
-    if (!startDate || !endDate) {
-        showToast('Please select both start and end dates', 'warning');
-        return;
-    }
-    
-    fetch(`/api/admin/analytics?start_date=${startDate}&end_date=${endDate}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                updateMetricsCards(data.metrics);
-                updateCharts(data.charts);
-                showToast('Custom range applied', 'success');
-            } else {
-                showToast('Failed to apply custom range', 'error');
+        function initializePlansChart() {
+            const ctx = document.getElementById('plansChart').getContext('2d');
+            plansChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Monthly', 'Annual', 'Lifetime'],
+                    datasets: [{
+                        data: [45, 35, 20],
+                        backgroundColor: ['#10b981', '#3b82f6', '#FFD700'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        function initializeSparklines() {
+            const sparklineData = {
+                revenue: [100, 120, 110, 140, 160, 150, 180, 200],
+                mrr: [80, 85, 90, 95, 100, 105, 110, 115],
+                subscribers: [50, 55, 60, 65, 70, 75, 80, 85],
+                churn: [10, 8, 6, 4, 5, 3, 2, 1],
+                lifetime: [1, 2, 3, 5, 8, 13, 21, 28],
+                arpu: [150, 155, 160, 165, 170, 175, 180, 174]
+            };
+
+            Object.keys(sparklineData).forEach(key => {
+                const canvas = document.getElementById(key + 'Sparkline');
+                if (canvas) {
+                    createSparkline(canvas, sparklineData[key]);
+                }
+            });
+
+            // Detail sparklines
+            createSparkline(document.getElementById('revenueDetailSparkline'), sparklineData.revenue);
+            createSparkline(document.getElementById('subscribersDetailSparkline'), sparklineData.subscribers);
+            createSparkline(document.getElementById('churnDetailSparkline'), sparklineData.churn.reverse());
+        }
+
+        function createSparkline(canvas, data) {
+            if (!canvas) return;
+            
+            new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: data.map((_, i) => i),
+                    datasets: [{
+                        data: data,
+                        borderColor: '#667eea',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { display: false }
+                    },
+                    elements: {
+                        point: { radius: 0 }
+                    }
+                }
+            });
+        }
+
+        function setupFilters() {
+            // Time period filter tabs
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    const period = this.dataset.period;
+                    updateChartsForPeriod(period);
+                });
+            });
+
+            // Chart type switcher
+            document.querySelectorAll('[data-chart]').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('[data-chart]').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    const chartType = this.dataset.chart;
+                    switchMainChart(chartType);
+                });
+            });
+        }
+
+        function updateChartsForPeriod(period) {
+            // Simulate API call to update charts based on period
+            showToast(`Updated charts for ${period} days`, 'info');
+        }
+
+        function switchMainChart(type) {
+            const datasets = {
+                revenue: {
+                    label: 'Revenue',
+                    data: [12000, 15000, 13000, 18000, 22000, 20000, 24750],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)'
+                },
+                subscribers: {
+                    label: 'Subscribers',
+                    data: [250, 280, 260, 300, 320, 310, 324],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)'
+                },
+                churn: {
+                    label: 'Churn Rate (%)',
+                    data: [8.5, 7.2, 6.8, 5.5, 4.9, 4.2, 3.2],
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)'
+                }
+            };
+
+            mainChart.data.datasets[0] = datasets[type];
+            mainChart.update();
+        }
+
+        function refreshData() {
+            const btn = event.target.closest('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Refreshing...';
+            btn.disabled = true;
+
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                showToast('Data refreshed successfully!', 'success');
+            }, 2000);
+        }
+
+        function exportData(format) {
+            showToast(`Exporting data as ${format.toUpperCase()}...`, 'info');
+            // In real implementation, this would trigger a download
+        }
+
+        function applyCustomRange() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (!startDate || !endDate) {
+                showToast('Please select both start and end dates', 'warning');
+                return;
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error applying custom range', 'error');
-        });
-}
 
-function exportRevenue(format) {
-    const timePeriod = document.getElementById('timePeriod').value;
-    window.open(`/api/admin/analytics/export?format=${format}&period=${timePeriod}`, '_blank');
-}
+            showToast(`Applied custom range: ${startDate} to ${endDate}`, 'success');
+        }
 
-function viewTransaction(transactionId) {
-    // Implementation for viewing transaction details
-    showToast('Transaction details coming soon', 'info');
-}
-</script>
-{% endblock %}
+        function generateReport() {
+            showToast('Generating comprehensive report...', 'info');
+            // In real implementation, this would generate and download a report
+        }
+
+        function showToast(message, type = 'info') {
+            const colors = {
+                success: '#10b981',
+                warning: '#f59e0b',
+                danger: '#ef4444',
+                info: '#3b82f6'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = 'position-fixed top-0 end-0 m-3 p-3 rounded';
+            toast.style.cssText = `
+                background: ${colors[type] || colors.info};
+                color: white;
+                z-index: 9999;
+                max-width: 300px;
+                animation: slideIn 0.3s ease;
+            `;
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close btn-close-white ms-2" onclick="this.parentElement.remove()"></button>
+            `;
+
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5000);
+        }
+
+        // Add CSS animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
