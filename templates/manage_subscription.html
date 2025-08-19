@@ -1,1665 +1,448 @@
 {% extends "base.html" %}
 
-{% block title %}Manage Subscription - Traders Impulse{% endblock %}
-
-{% block head %}
-<style>
-    body {
-        background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%) !important;
-    }
-
-    /* Hero section */
-    .subscription-hero {
-        background: linear-gradient(135deg, rgba(79, 128, 255, 0.1) 0%, rgba(123, 104, 238, 0.1) 100%);
-        border-radius: 24px;
-        border: 1px solid rgba(79, 128, 255, 0.2);
-        backdrop-filter: blur(20px);
-        padding: 3rem 2rem;
-        margin-bottom: 3rem;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .subscription-hero::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(79, 128, 255, 0.4), transparent);
-    }
-
-    .subscription-hero h1 {
-        font-size: 3rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #fff 0%, #4F80FF 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin-bottom: 1rem;
-    }
-
-    .subscription-hero p {
-        font-size: 1.25rem;
-        color: rgba(255, 255, 255, 0.8);
-        margin-bottom: 0;
-    }
-
-    /* NEW: Lockout protection alert */
-    .lockout-protection-alert {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
-        border: 1px solid rgba(239, 68, 68, 0.3);
-        border-radius: 20px;
-        backdrop-filter: blur(20px);
-        padding: 2rem;
-        margin-bottom: 2rem;
-        display: none;
-        animation: slideDown 0.4s ease-out;
-    }
-
-    .lockout-protection-alert.show {
-        display: block;
-    }
-
-    .lockout-protection-alert h5 {
-        color: #EF4444;
-        font-weight: 700;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-    }
-
-    .lockout-protection-alert h5 .material-symbols-outlined {
-        margin-right: 0.75rem;
-        font-size: 1.5rem;
-    }
-
-    .lockout-protection-alert p {
-        color: rgba(255, 255, 255, 0.9);
-        margin-bottom: 1rem;
-        line-height: 1.6;
-    }
-
-    .locked-accounts-list {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        padding: 1rem;
-        margin: 1rem 0;
-    }
-
-    .locked-account-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.75rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        color: rgba(255, 255, 255, 0.9);
-    }
-
-    .locked-account-item:last-child {
-        border-bottom: none;
-    }
-
-    .locked-account-id {
-        font-family: 'Monaco', 'Menlo', monospace;
-        font-weight: 600;
-        color: #EF4444;
-    }
-
-    .locked-account-time {
-        font-size: 0.875rem;
-        color: rgba(255, 255, 255, 0.7);
-    }
-
-    @keyframes slideDown {
-        from {
-            opacity: 0;
-            transform: translateY(-20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    /* Current subscription card */
-    .current-subscription {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 24px;
-        backdrop-filter: blur(20px);
-        position: relative;
-        overflow: hidden;
-        margin-bottom: 3rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .current-subscription::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: linear-gradient(135deg, #4F80FF 0%, #7B68EE 100%);
-    }
-
-    .current-subscription:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        border-color: rgba(79, 128, 255, 0.3);
-    }
-
-    .subscription-header {
-        background: rgba(255, 255, 255, 0.03);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 2rem;
-        border-radius: 24px 24px 0 0;
-    }
-
-    .subscription-body {
-        padding: 2.5rem;
-    }
-
-    .subscription-info {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 2rem;
-        margin-bottom: 2rem;
-    }
-
-    .info-item {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 16px;
-        padding: 1.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        transition: all 0.3s;
-    }
-
-    .info-item:hover {
-        background: rgba(255, 255, 255, 0.08);
-        transform: translateY(-2px);
-    }
-
-    .info-label {
-        font-size: 0.875rem;
-        color: rgba(255, 255, 255, 0.6);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-    }
-
-    .info-value {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: #fff;
-    }
-
-    .plan-name {
-        font-size: 2rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #4F80FF 0%, #7B68EE 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin-bottom: 1rem;
-    }
-
-    /* Plan change cards - NEW */
-    .plan-change-card {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 2rem;
-        transition: all 0.3s;
-        height: 100%;
-    }
-
-    .plan-change-card:hover {
-        background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(79, 128, 255, 0.3);
-        transform: translateY(-5px);
-    }
-
-    .plan-change-card h4 {
-        color: #4F80FF;
-        font-weight: 700;
-        margin-bottom: 1rem;
-    }
-
-    .plan-pricing {
-        margin-bottom: 1rem;
-    }
-
-    .plan-price {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #10B981;
-    }
-
-    .plan-actions {
-        margin-top: auto;
-    }
-
-    /* Proration styles - NEW */
-    .proration-summary {
-        background: rgba(79, 128, 255, 0.1);
-        border: 1px solid rgba(79, 128, 255, 0.3);
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .proration-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.75rem 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .proration-item:last-child {
-        border-bottom: none;
-        font-weight: 700;
-        font-size: 1.1rem;
-    }
-
-    .proration-upgrade {
-        background: rgba(16, 185, 129, 0.1);
-        border-color: rgba(16, 185, 129, 0.3);
-    }
-
-    .proration-downgrade {
-        background: rgba(239, 68, 68, 0.1);
-        border-color: rgba(239, 68, 68, 0.3);
-    }
-
-    .amount-positive {
-        color: #10B981;
-    }
-
-    .amount-negative {
-        color: #EF4444;
-    }
-
-    /* Billing toggle */
-    .billing-section {
-        text-align: center;
-        margin-bottom: 3rem;
-    }
-
-    .billing-toggle {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 50px;
-        padding: 6px;
-        display: inline-flex;
-        backdrop-filter: blur(20px);
-        position: relative;
-    }
-
-    .billing-toggle-btn {
-        padding: 12px 24px;
-        border-radius: 50px;
-        border: none;
-        background: transparent;
-        color: rgba(255, 255, 255, 0.7);
-        cursor: pointer;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        font-weight: 600;
-        position: relative;
-        z-index: 2;
-    }
-
-    .billing-toggle-btn.active {
-        background: linear-gradient(135deg, #4F80FF 0%, #7B68EE 100%);
-        color: #fff;
-        box-shadow: 0 4px 15px rgba(79, 128, 255, 0.4);
-        transform: scale(1.05);
-    }
-
-    .save-badge {
-        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
-        color: #fff;
-        font-size: 11px;
-        padding: 4px 8px;
-        border-radius: 20px;
-        margin-left: 8px;
-        font-weight: 700;
-        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-        animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-    }
-
-    /* Modern price cards */
-    .pricing-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-        gap: 2rem;
-        margin-bottom: 3rem;
-    }
-
-    .price-card {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 24px;
-        backdrop-filter: blur(20px);
-        padding: 2.5rem;
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-        height: fit-content;
-    }
-
-    .price-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    }
-
-    .price-card:hover {
-        transform: translateY(-10px) scale(1.02);
-        border-color: rgba(79, 128, 255, 0.4);
-        background: rgba(255, 255, 255, 0.08);
-        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
-    }
-
-    .price-card.featured {
-        border: 2px solid rgba(79, 128, 255, 0.5);
-        background: rgba(79, 128, 255, 0.1);
-    }
-
-    .price-card.featured::before {
-        background: linear-gradient(90deg, transparent, rgba(79, 128, 255, 0.6), transparent);
-    }
-
-    .plan-badge {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-        color: #fff;
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 700;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-    }
-
-    .plan-title {
-        font-size: 1.75rem;
-        font-weight: 800;
-        color: #fff;
-        margin-bottom: 1rem;
-        text-align: center;
-    }
-
-    .price-display {
-        text-align: center;
-        margin: 2rem 0;
-        padding: 2rem 0;
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.03);
-    }
-
-    .price-amount {
-        font-size: 3.5rem;
-        font-weight: 900;
-        background: linear-gradient(135deg, #4F80FF 0%, #7B68EE 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        line-height: 1;
-    }
-
-    .price-period {
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 1rem;
-        font-weight: 500;
-        margin-top: 0.5rem;
-    }
-
-    .features-list {
-        list-style: none;
-        padding: 0;
-        margin: 2rem 0;
-    }
-
-    .features-list li {
-        display: flex;
-        align-items: center;
-        padding: 0.75rem 0;
-        color: rgba(255, 255, 255, 0.9);
-        font-weight: 500;
-    }
-
-    .feature-check {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 1rem;
-        flex-shrink: 0;
-        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-    }
-
-    .feature-check::before {
-        content: '✓';
-        color: #fff;
-        font-weight: 700;
-        font-size: 14px;
-    }
-
-    .subscribe-btn {
-        width: 100%;
-        padding: 1rem 2rem;
-        font-size: 1.1rem;
-        font-weight: 700;
-        border-radius: 16px !important;
-        background: linear-gradient(135deg, #4F80FF 0%, #7B68EE 100%) !important;
-        border: none;
-        color: #fff;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .subscribe-btn:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 15px 30px rgba(79, 128, 255, 0.4);
-    }
-
-    .subscribe-btn:disabled {
-        background: rgba(255, 255, 255, 0.1) !important;
-        color: rgba(255, 255, 255, 0.5);
-        cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
-    }
-
-    /* Cancellation alert */
-    .cancellation-alert {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
-        border: 1px solid rgba(239, 68, 68, 0.3);
-        border-radius: 20px;
-        backdrop-filter: blur(20px);
-        padding: 2rem;
-        margin-bottom: 2rem;
-    }
-
-    .cancellation-alert h5 {
-        color: #EF4444;
-        font-weight: 700;
-        margin-bottom: 1rem;
-    }
-
-    .cancellation-alert p {
-        color: rgba(255, 255, 255, 0.9);
-        margin-bottom: 1.5rem;
-    }
-
-    /* Action buttons */
-    .action-buttons {
-        display: flex;
-        gap: 1rem;
-        flex-wrap: wrap;
-    }
-
-    .action-buttons .btn {
-        flex: 1;
-        min-width: 200px;
-    }
-
-    /* NEW: Disabled action buttons styling */
-    .action-buttons .btn:disabled {
-        background: rgba(255, 255, 255, 0.05) !important;
-        color: rgba(255, 255, 255, 0.3) !important;
-        border-color: rgba(255, 255, 255, 0.1) !important;
-        cursor: not-allowed;
-        transform: none;
-        box-shadow: none;
-    }
-
-    .action-buttons .btn.lockout-disabled {
-        background: rgba(239, 68, 68, 0.1) !important;
-        color: rgba(239, 68, 68, 0.6) !important;
-        border-color: rgba(239, 68, 68, 0.3) !important;
-        position: relative;
-    }
-
-    .action-buttons .btn.lockout-disabled::before {
-        content: '🔒';
-        margin-right: 0.5rem;
-    }
-
-    /* Loading modal */
-    .modal-content {
-        background: rgba(20, 20, 30, 0.95) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 20px;
-        backdrop-filter: blur(20px);
-        color: #fff;
-    }
-
-    .modal-header {
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .modal-footer {
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .modal-body {
-        text-align: center;
-        padding: 3rem 2rem;
-    }
-
-    .spinner-border {
-        width: 3rem;
-        height: 3rem;
-        border-width: 4px;
-    }
-
-    /* Trial section styling */
-    .trial-section {
-        background: rgba(16, 185, 129, 0.1);
-        border: 1px solid rgba(16, 185, 129, 0.3);
-        border-radius: 12px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        transition: all 0.3s;
-    }
-    
-    .trial-section:hover {
-        background: rgba(16, 185, 129, 0.15);
-        border-color: rgba(16, 185, 129, 0.4);
-    }
-    
-    /* Custom checkbox styling for trial */
-    .trial-section .form-check-input {
-        width: 1.25rem;
-        height: 1.25rem;
-        border: 2px solid rgba(16, 185, 129, 0.5);
-        background-color: transparent;
-    }
-    
-    .trial-section .form-check-input:checked {
-        background-color: #10B981;
-        border-color: #10B981;
-        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3e%3cpath fill-rule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clip-rule='evenodd'/%3e%3c/svg%3e");
-    }
-    
-    .trial-section .form-check-input:focus {
-        border-color: #10B981;
-        box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.25);
-    }
-
-    /* White text for trial disclaimer */
-    .trial-section .text-muted {
-        color: rgba(255, 255, 255, 0.9) !important;
-    }
-    
-    /* Trial selected card styling */
-    .price-card.trial-selected {
-        border-color: rgba(16, 185, 129, 0.6) !important;
-        background: rgba(16, 185, 129, 0.05) !important;
-        transform: translateY(-5px) scale(1.02);
-    }
-    
-    .price-card.trial-selected::before {
-        background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.6), transparent) !important;
-    }
-    
-    /* Trial badge for buttons */
-    .subscribe-btn.trial-btn {
-        background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
-        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-    }
-    
-    .subscribe-btn.trial-btn:hover {
-        box-shadow: 0 8px 25px rgba(16, 185, 129, 0.5);
-        transform: translateY(-3px) scale(1.05);
-    }
-    
-    /* Trial status indicators */
-    .trial-status {
-        display: inline-flex;
-        align-items: center;
-        background: rgba(16, 185, 129, 0.1);
-        color: #10B981;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        font-size: 0.875rem;
-        font-weight: 600;
-        border: 1px solid rgba(16, 185, 129, 0.3);
-    }
-    
-    .trial-status .material-symbols-outlined {
-        font-size: 16px;
-        margin-right: 0.5rem;
-    }
-    
-    /* Trial countdown */
-    .trial-countdown {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
-        border: 1px solid rgba(239, 68, 68, 0.3);
-        border-radius: 12px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        text-align: center;
-    }
-    
-    .trial-countdown h6 {
-        color: #EF4444;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-    }
-    
-    .trial-countdown .time-remaining {
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: #fff;
-    }
-
-    /* Trial used notice */
-    .trial-used-notice {
-        text-align: center;
-        padding: 0.5rem;
-        margin-bottom: 1rem;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 768px) {
-        .subscription-hero {
-            padding: 2rem 1.5rem;
-            text-align: center;
-        }
-
-        .subscription-hero h1 {
-            font-size: 2rem;
-        }
-
-        .pricing-grid {
-            grid-template-columns: 1fr;
-            gap: 1.5rem;
-        }
-
-        .price-card {
-            padding: 2rem;
-        }
-
-        .subscription-info {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-        }
-
-        .action-buttons {
-            flex-direction: column;
-        }
-
-        .action-buttons .btn {
-            min-width: auto;
-        }
-
-        .trial-section {
-            padding: 0.75rem;
-        }
-        
-        .trial-section .form-check-label {
-            font-size: 0.9rem;
-        }
-
-        .lockout-protection-alert {
-            padding: 1.5rem;
-        }
-
-        .locked-account-item {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.5rem;
-        }
-
-        .plan-change-card {
-            margin-bottom: 1rem;
-        }
-    }
-
-    /* Animation classes */
-    .fade-in-up {
-        animation: fadeInUp 0.6s ease-out;
-    }
-
-    .fade-in-up:nth-child(2) { animation-delay: 0.1s; }
-    .fade-in-up:nth-child(3) { animation-delay: 0.2s; }
-    .fade-in-up:nth-child(4) { animation-delay: 0.3s; }
-
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-</style>
-{% endblock %}
+{% block title %}Premium Subscription - TGFX Trade Lab{% endblock %}
 
 {% block content %}
-<!-- Hero Section -->
-<div class="subscription-hero fade-in-up">
-    <div class="row align-items-center">
-        <div class="col-lg-8">
-            <h1>Subscription Management</h1>
-            <p>Manage your TradersImpulse subscription and unlock powerful trading controls</p>
-        </div>
-        <div class="col-lg-4 text-lg-end">
-            <span class="material-symbols-outlined" style="font-size: 4rem; color: rgba(79, 128, 255, 0.3);">
-                credit_card
-            </span>
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="text-center">
+            <h1 class="text-gradient-primary mb-3">
+                <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">workspace_premium</span>
+                Upgrade to Premium
+            </h1>
+            <p class="text-muted mb-0 lead">Unlock exclusive trading content and accelerate your learning</p>
         </div>
     </div>
 </div>
 
-<!-- NEW: Lockout Protection Alert -->
-<div class="lockout-protection-alert" id="lockout-protection-alert">
-    <h5>
-        <span class="material-symbols-outlined">lock</span>
-        Account Protection Active
-    </h5>
-    <p>You have accounts with active lockout periods. Subscription cancellation is temporarily disabled to prevent bypassing risk management controls.</p>
-    <div class="locked-accounts-list" id="locked-accounts-list">
-        <!-- Locked accounts will be populated here via JavaScript -->
-    </div>
-    <p><strong>💡 Note:</strong> This protection ensures your trading discipline remains intact. You can cancel your subscription after all lockout periods expire.</p>
-</div>
-
-{% if subscription %}
-<!-- Current Subscription -->
-<div class="current-subscription fade-in-up">
-    <div class="subscription-header">
-        <div class="d-flex align-items-center justify-content-between">
-            <h2 class="mb-0">
-                <span class="material-symbols-outlined me-2" style="vertical-align: middle;">
-                    workspace_premium
-                </span>
-                Current Subscription
-            </h2>
-            <span class="badge {% if subscription.status == 'active' %}bg-success{% else %}bg-warning{% endif %}" style="font-size: 1rem; padding: 0.75rem 1.5rem;">
-                {{ subscription.status|capitalize }}
-            </span>
-        </div>
-    </div>
-    
-    <div class="subscription-body">
-        <div class="plan-name">{{ subscription.plan_name }} Plan</div>
-        
-        <div class="subscription-info">
-            <div class="info-item">
-                <div class="info-label">Trading Accounts</div>
-                <div class="info-value">{{ subscription.max_accounts_allowed }}</div>
-            </div>
-            
-            {% if subscription.current_period_end %}
-            <div class="info-item">
-                <div class="info-label">Renewal Date</div>
-                <div class="info-value">{{ subscription.current_period_end.strftime('%B %d, %Y') }}</div>
-            </div>
-            {% endif %}
-            
-            <div class="info-item">
-                <div class="info-label">Plan Status</div>
-                <div class="info-value">
-                    {% if subscription.cancel_at_period_end %}
-                        <span style="color: #EF4444;">Cancelling</span>
-                    {% else %}
-                        <span style="color: #10B981;">Active</span>
-                    {% endif %}
+<!-- Current Status (if user has subscription) -->
+{% if current_user.has_subscription %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-success">
+            <div class="d-flex align-items-center">
+                <span class="material-symbols-outlined me-3" style="font-size: 2rem;">check_circle</span>
+                <div>
+                    <h5 class="mb-1">You're already a Premium member!</h5>
+                    <p class="mb-0">
+                        Your {{ current_user.get_subscription_plan_display() }} subscription is active
+                        {% if current_user.subscription_expires and current_user.subscription_plan != 'lifetime' %}
+                        until {{ current_user.subscription_expires.strftime('%B %d, %Y') }}
+                        {% elif current_user.subscription_plan == 'lifetime' %}
+                        for life!
+                        {% endif %}
+                    </p>
                 </div>
             </div>
-        </div>
-
-        {% if subscription.cancel_at_period_end %}
-        <div class="cancellation-alert">
-            <h5>
-                <span class="material-symbols-outlined me-2" style="vertical-align: middle;">
-                    warning
-                </span>
-                Cancellation Scheduled
-            </h5>
-            <p>Your subscription is set to cancel at the end of the current billing period. You'll still have access until {{ subscription.current_period_end.strftime('%B %d, %Y') }}.</p>
-            <button id="resume-subscription" class="btn btn-success">
-                <span class="material-symbols-outlined me-2" style="font-size: 18px; vertical-align: middle;">
-                    restart_alt
-                </span>
-                Resume Subscription
-            </button>
-        </div>
-        {% else %}
-        <div class="action-buttons">
-            <button class="btn btn-outline-primary" id="change-plan-btn">
-                <span class="material-symbols-outlined me-2" style="font-size: 18px; vertical-align: middle;">
-                    tune
-                </span>
-                Change Plan
-            </button>
-            <button class="btn btn-outline-danger" id="cancel-subscription-btn">
-                <span class="material-symbols-outlined me-2" style="font-size: 18px; vertical-align: middle;">
-                    cancel
-                </span>
-                Cancel Subscription
-            </button>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- NEW: Prorated Plan Change Section -->
-<div class="modern-card fade-in-up" id="plan-change-section" style="display: none;">
-    <div class="subscription-header">
-        <h2 class="card-title-modern">
-            <span class="material-symbols-outlined me-2">upgrade</span>
-            Change Your Plan
-        </h2>
-    </div>
-    <div class="subscription-body">
-        <p style="color: rgba(255, 255, 255, 0.8); margin-bottom: 2rem;">
-            Upgrade immediately with prorated billing, or schedule a downgrade for your next billing cycle.
-        </p>
-        
-        <!-- Billing Toggle for Plan Changes -->
-        <div class="billing-section">
-            <div class="billing-toggle">
-                <button class="billing-toggle-btn active" id="change-monthly-toggle">
-                    Monthly
-                </button>
-                <button class="billing-toggle-btn" id="change-annual-toggle">
-                    Annual 
-                    <span class="save-badge">Save 20%</span>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Plan Options -->
-        <div class="row">
-            {% for plan in plans %}
-            {% if plan.id != subscription.plan_id %}
-            <div class="col-md-6 mb-3">
-                <div class="plan-change-card" data-plan-id="{{ plan.id }}">
-                    <h4>{{ plan.name }} Plan</h4>
-                    <div class="plan-pricing">
-                        <span class="plan-price monthly-price">${{ plan.monthly_cost }}/month</span>
-                        <span class="plan-price annual-price" style="display: none;">${{ plan.annual_cost }}/month (billed annually)</span>
-                    </div>
-                    <p>Up to {{ plan.max_accounts_allowed }} trading accounts</p>
-                    
-                    <div class="plan-actions">
-                        <button class="btn btn-outline-primary w-100 preview-change-btn" 
-                                data-plan-id="{{ plan.id }}"
-                                data-plan-name="{{ plan.name }}">
-                            <span class="material-symbols-outlined me-2">preview</span>
-                            Preview Change
-                        </button>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-            {% endfor %}
         </div>
     </div>
 </div>
 {% endif %}
 
-<!-- Plans Section -->
-<div id="plans-section" {% if subscription and not subscription.cancel_at_period_end %}style="display: none;"{% endif %}>
-    <!-- Billing Toggle -->
-    <div class="billing-section fade-in-up">
-        <h2 class="mb-4">Choose Your Plan</h2>
-        <div class="billing-toggle">
-            <button class="billing-toggle-btn active" id="monthly-toggle">
-                Monthly
-            </button>
-            <button class="billing-toggle-btn" id="annual-toggle">
-                Annual 
-                <span class="save-badge">Save 20%</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- Pricing Cards -->
-    <div class="pricing-grid">
-        {% for plan in plans %}
-        <div class="price-card fade-in-up {% if subscription and subscription.plan_id == plan.id %}featured{% endif %}">
-            {% if subscription and subscription.plan_id == plan.id %}
-            <div class="plan-badge">Current Plan</div>
-            {% endif %}
-            
-            <div class="plan-title">{{ plan.name }}</div>
-            
-            <div class="price-display">
-                <div class="price-monthly">
-                    <div class="price-amount">${{ plan.monthly_cost }}</div>
-                    <div class="price-period">per month</div>
-                </div>
-                <div class="price-annual" style="display:none;">
-                    <div class="price-amount">${{ plan.annual_cost }}</div>
-                    <div class="price-period">per month, billed annually</div>
-                </div>
+<!-- Pricing Cards -->
+<div class="row justify-content-center mb-5">
+    <!-- Free Plan -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card h-100 {% if not current_user.has_subscription %}border-primary{% endif %}">
+            <div class="card-header text-center py-4">
+                <h3 class="text-white mb-2">Free</h3>
+                <div class="display-4 text-gradient-primary mb-2">$0</div>
+                <p class="text-muted mb-0">Forever</p>
             </div>
-
-            <ul class="features-list">
-                <li>
-                    <div class="feature-check"></div>
-                    Up to {{ plan.max_accounts_allowed }} trading accounts
-                </li>
-                <li>
-                    <div class="feature-check"></div>
-                    Full access to all trading controls
-                </li>
-                <li>
-                    <div class="feature-check"></div>
-                    Customizable lockout periods
-                </li>
-                <li>
-                    <div class="feature-check"></div>
-                    Account statistics & analytics
-                </li>
-                {% if plan.max_accounts_allowed > 1 %}
-                <li>
-                    <div class="feature-check"></div>
-                    Multi-account support
-                </li>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Access to free video lessons
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Basic progress tracking
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Favorite videos feature
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Community access
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-muted">cancel</span>
+                        <span class="text-muted">Premium video content</span>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-muted">cancel</span>
+                        <span class="text-muted">Downloadable resources</span>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-muted">cancel</span>
+                        <span class="text-muted">Priority support</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-footer text-center">
+                {% if not current_user.has_subscription %}
+                <span class="badge bg-primary">Current Plan</span>
+                {% else %}
+                <button class="btn btn-outline-secondary" disabled>Your Free Plan</button>
                 {% endif %}
-                <li>
-                    <div class="feature-check"></div>
-                    24/7 customer support
-                </li>
-            </ul>
-
-            {% if subscription and subscription.plan_id == plan.id %}
-            <button class="subscribe-btn" disabled>
-                <span class="material-symbols-outlined me-2" style="font-size: 18px; vertical-align: middle;">
-                    check_circle
-                </span>
-                Current Plan
-            </button>
-            {% else %}
-            <!-- TRIAL OPTION FOR NEW SUBSCRIBERS -->
-            {% if not subscription %}
-            <div class="trial-section">
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="request-trial-{{ plan.id }}" 
-                           data-plan-id="{{ plan.id }}">
-                    <label class="form-check-label" for="request-trial-{{ plan.id }}" 
-                           style="color: rgba(255, 255, 255, 0.9);">
-                        <strong style="color: #10B981;">🎉 Start with 3-day FREE trial</strong>
-                    </label>
-                </div>
-                <small class="text-muted">No commitment, cancel anytime during trial</small>
             </div>
-            {% endif %}
-
-            <button class="subscribe-btn"
-                    data-plan-id="{{ plan.id }}"
-                    data-monthly-price-id="{{ plan.stripe_monthly_price_id }}"
-                    data-annual-price-id="{{ plan.stripe_annual_price_id }}">
-                <span class="material-symbols-outlined me-2" style="font-size: 18px; vertical-align: middle;">
-                    {% if subscription %}upgrade{% else %}check_circle{% endif %}
-                </span>
-                {% if subscription %}Upgrade to{% else %}Select{% endif %} {{ plan.name }}
-            </button>
-            {% endif %}
         </div>
-        {% endfor %}
     </div>
-</div>
-
-<!-- Proration Preview Modal -->
-<div class="modal fade" id="prorationModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Plan Change Preview</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    
+    <!-- Premium Monthly Plan -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card h-100 {% if current_user.subscription_plan == 'monthly' %}border-success{% else %}border-primary{% endif %}">
+            <div class="card-header text-center py-4 bg-gradient-primary">
+                <h3 class="text-white mb-2">Monthly</h3>
+                <div class="display-4 text-white mb-2">$29</div>
+                <p class="text-white mb-0 opacity-75">per month</p>
             </div>
-            <div class="modal-body">
-                <div id="proration-loading" class="text-center py-4">
-                    <div class="spinner-border text-primary mb-3"></div>
-                    <p>Calculating proration...</p>
-                </div>
-                
-                <div id="proration-details" style="display: none;">
-                    <!-- Proration details will be populated here -->
-                </div>
-                
-                <div id="proration-error" style="display: none;" class="alert alert-danger">
-                    <!-- Error message will be shown here -->
-                </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        <strong>Everything in Free</strong>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Access to all premium videos
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Downloadable course materials
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Advanced progress analytics
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Priority customer support
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Monthly live Q&A sessions
+                    </li>
+                </ul>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="confirm-change-btn" style="display: none;">
-                    Confirm Change
+            <div class="card-footer text-center">
+                {% if current_user.subscription_plan == 'monthly' %}
+                <span class="badge bg-success">Current Plan</span>
+                {% else %}
+                <button class="btn btn-primary btn-lg w-100" onclick="startSubscription('monthly')">
+                    <span class="material-symbols-outlined me-2">credit_card</span>
+                    Subscribe Monthly
                 </button>
+                <p class="text-muted small mt-2 mb-0">Cancel anytime</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Premium Annual Plan -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card h-100 border-warning position-relative {% if current_user.subscription_plan == 'annual' %}border-success{% endif %}">
+            <!-- Popular Badge -->
+            <div class="position-absolute top-0 start-50 translate-middle">
+                <span class="badge bg-warning text-dark px-3 py-2">Most Popular</span>
+            </div>
+            
+            <div class="card-header text-center py-4 bg-gradient-warning">
+                <h3 class="text-dark mb-2">Annual</h3>
+                <div class="d-flex align-items-center justify-content-center mb-2">
+                    <span class="text-muted text-decoration-line-through me-2">$348</span>
+                    <div class="display-4 text-dark">$299</div>
+                </div>
+                <p class="text-dark mb-1">per year</p>
+                <span class="badge bg-success">Save $49</span>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        <strong>Everything in Monthly</strong>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        2 months free (14% savings)
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Exclusive annual member content
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Trading strategy PDFs
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        One-on-one monthly consultation
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Priority in live sessions
+                    </li>
+                </ul>
+            </div>
+            <div class="card-footer text-center">
+                {% if current_user.subscription_plan == 'annual' %}
+                <span class="badge bg-success">Current Plan</span>
+                {% else %}
+                <button class="btn btn-warning btn-lg w-100" onclick="startSubscription('annual')">
+                    <span class="material-symbols-outlined me-2">payments</span>
+                    Subscribe Annually
+                </button>
+                <p class="text-muted small mt-2 mb-0">Best value • Cancel anytime</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Lifetime Plan -->
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="card h-100 border-gold position-relative {% if current_user.subscription_plan == 'lifetime' %}border-success{% endif %}">
+            <!-- Ultimate Badge -->
+            <div class="position-absolute top-0 start-50 translate-middle">
+                <span class="badge bg-gold text-dark px-3 py-2">🏆 Ultimate</span>
+            </div>
+            
+            <div class="card-header text-center py-4 bg-gradient-gold">
+                <h3 class="text-dark mb-2">Lifetime</h3>
+                <div class="d-flex align-items-center justify-content-center mb-2">
+                    <span class="text-muted text-decoration-line-through me-2">$2,999+</span>
+                    <div class="display-4 text-dark">$499</div>
+                </div>
+                <p class="text-dark mb-1">one-time payment</p>
+                <span class="badge bg-success">Save $2,500+</span>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        <strong>Everything in Annual</strong>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        <strong>Lifetime access to all content</strong>
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        All future courses included
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Exclusive lifetime member perks
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        Direct access to instructors
+                    </li>
+                    <li class="mb-3">
+                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                        VIP community access
+                    </li>
+                </ul>
+            </div>
+            <div class="card-footer text-center">
+                {% if current_user.subscription_plan == 'lifetime' %}
+                <span class="badge bg-success">Current Plan</span>
+                <p class="text-success small mt-2 mb-0">🎉 Lifetime Access Active!</p>
+                {% else %}
+                <button class="btn btn-gold btn-lg w-100" onclick="startSubscription('lifetime')">
+                    <span class="material-symbols-outlined me-2">workspace_premium</span>
+                    Get Lifetime Access
+                </button>
+                <p class="text-muted small mt-2 mb-0">One-time payment • No recurring fees</p>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- Loading Modal -->
-<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-body">
-                <div class="spinner-border text-primary mb-3" role="status">
-                    <span class="visually-hidden">Loading...</span>
+<!-- Features Comparison Table -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header text-center">
+                <h3 class="text-gradient-primary mb-2">
+                    <span class="material-symbols-outlined me-2">compare</span>
+                    Feature Comparison
+                </h3>
+                <p class="text-muted mb-0">See what's included in each plan</p>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark">
+                        <thead>
+                            <tr>
+                                <th>Feature</th>
+                                <th class="text-center">Free</th>
+                                <th class="text-center">Monthly</th>
+                                <th class="text-center">Annual</th>
+                                <th class="text-center">Lifetime</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Basic Video Lessons</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>Premium Video Content</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>Downloadable Resources</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>Monthly Live Q&A</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>One-on-One Consultation</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>All Future Content</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>VIP Community Access</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                            <tr>
+                                <td>Direct Instructor Access</td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
+                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-                <h5>Processing payment...</h5>
-                <p class="text-muted mb-0">Please do not close this window.</p>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script src="https://js.stripe.com/v3/"></script>
-<script>
-    $(document).ready(function() {
-        const stripe = Stripe('{{ stripe_public_key }}');
-        let isAnnual = false;
-        let lockoutStatus = {
-            hasLockedAccounts: false,
-            lockedAccounts: [],
-            checkInterval: null
-        };
-        let currentPreviewData = null;
-
-        // Initialize animations
-        setTimeout(() => {
-            $('.fade-in-up').each(function(index) {
-                $(this).css('animation-delay', (index * 0.1) + 's');
-            });
-        }, 100);
-
-        // Check lockout status on page load
-        checkUserLockoutStatus();
-
-        // Set up periodic lockout status checks
-        lockoutStatus.checkInterval = setInterval(checkUserLockoutStatus, 30000);
-
-        // Check trial eligibility on page load
-        checkTrialEligibility();
-
-        // Toggle between monthly and annual billing (main plans)
-        $('#monthly-toggle').click(function() {
-            $(this).addClass('active');
-            $('#annual-toggle').removeClass('active');
-            $('.price-monthly').show();
-            $('.price-annual').hide();
-            isAnnual = false;
-        });
-
-        $('#annual-toggle').click(function() {
-            $(this).addClass('active');
-            $('#monthly-toggle').removeClass('active');
-            $('.price-monthly').hide();
-            $('.price-annual').show();
-            isAnnual = true;
-        });
-
-        // Toggle between monthly and annual billing (plan changes)
-        $('#change-monthly-toggle').click(function() {
-            $(this).addClass('active');
-            $('#change-annual-toggle').removeClass('active');
-            $('.monthly-price').show();
-            $('.annual-price').hide();
-        });
-
-        $('#change-annual-toggle').click(function() {
-            $(this).addClass('active');
-            $('#change-monthly-toggle').removeClass('active');
-            $('.monthly-price').hide();
-            $('.annual-price').show();
-        });
-
-        // Show plans section when change plan button is clicked
-        $('#change-plan-btn').click(function() {
-            $('#plan-change-section').slideDown(500);
-            setTimeout(() => {
-                $('html, body').animate({
-                    scrollTop: $('#plan-change-section').offset().top - 100
-                }, 600);
-            }, 200);
-        });
-
-        // Handle preview change button clicks
-        $('.preview-change-btn').on('click', function() {
-            const planId = $(this).data('plan-id');
-            const planName = $(this).data('plan-name');
-            const isAnnualChange = $('#change-annual-toggle').hasClass('active');
-            
-            previewPlanChange(planId, planName, isAnnualChange);
-        });
-
-        // Handle confirm change button
-        $('#confirm-change-btn').on('click', function() {
-            if (currentPreviewData) {
-                confirmPlanChange(currentPreviewData);
-            }
-        });
-
-        // Handle trial checkbox changes
-        $('.trial-section .form-check-input').on('change', function() {
-            const planCard = $(this).closest('.price-card');
-            const subscribeBtn = planCard.find('.subscribe-btn');
-            
-            if ($(this).is(':checked')) {
-                subscribeBtn.html(`
-                    <span class="material-symbols-outlined me-2" style="font-size: 18px; vertical-align: middle;">
-                        schedule
-                    </span>
-                    Start 3-Day Free Trial
-                `).addClass('trial-btn');
-                planCard.addClass('trial-selected');
-            } else {
-                subscribeBtn.html(`
-                    <span class="material-symbols-outlined me-2" style="font-size: 18px; vertical-align: middle;">
-                        check_circle
-                    </span>
-                    Select Plan
-                `).removeClass('trial-btn');
-                planCard.removeClass('trial-selected');
-            }
-        });
-
-        // Enhanced subscription button click handler with trial support
-        $('.subscribe-btn').click(function() {
-            if ($(this).prop('disabled')) return;
-            
-            const planId = $(this).data('plan-id');
-            const button = $(this);
-            
-            // Check if trial is requested (only for new subscribers)
-            const trialCheckbox = $(`#request-trial-${planId}`);
-            const requestTrial = trialCheckbox.length > 0 && trialCheckbox.is(':checked');
-            
-            // Add loading state
-            button.html(`
-                <span class="spinner-border spinner-border-sm me-2" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </span>
-                Processing...
-            `).prop('disabled', true);
-
-            // Show loading modal with trial-specific messaging
-            if (requestTrial) {
-                $('#loadingModal .modal-body h5').text('Setting up your free trial...');
-                $('#loadingModal .modal-body p').text('We\'re preparing your 3-day trial access.');
-            } else {
-                $('#loadingModal .modal-body h5').text('Processing payment...');
-                $('#loadingModal .modal-body p').text('Please do not close this window.');
-            }
-            $('#loadingModal').modal('show');
-
-            // Create checkout session with trial request
-            $.ajax({
-                url: '/create-checkout-session',
-                type: 'POST',
-                data: {
-                    plan_id: planId,
-                    is_annual: isAnnual,
-                    request_trial: requestTrial
-                },
-                success: function(result) {
-                    // Show trial confirmation if applicable
-                    if (result.trial_days > 0) {
-                        showToast(`🎉 ${result.trial_days}-day free trial approved!`, 'success');
-                    }
-                    
-                    // Redirect to Stripe Checkout
-                    stripe.redirectToCheckout({
-                        sessionId: result.id
-                    }).then(function (result) {
-                        // If redirection fails, show the error
-                        $('#loadingModal').modal('hide');
-                        showToast(result.error.message, 'error');
-                        
-                        // Reset button
-                        resetSubscribeButton(button, requestTrial);
-                    });
-                },
-                error: function(xhr, status, error) {
-                    $('#loadingModal').modal('hide');
-                    
-                    // Handle trial-specific errors
-                    if (xhr.responseJSON && xhr.responseJSON.trial_denied) {
-                        showToast('Trial not available: ' + xhr.responseJSON.error, 'warning');
-                        // Uncheck the trial checkbox
-                        if (trialCheckbox.length > 0) {
-                            trialCheckbox.prop('checked', false);
-                            // Reset the button style
-                            const planCard = trialCheckbox.closest('.price-card');
-                            planCard.removeClass('trial-selected');
-                            button.removeClass('trial-btn');
-                        }
-                    } else {
-                        showToast('Error creating checkout session: ' + error, 'error');
-                    }
-                    
-                    resetSubscribeButton(button, requestTrial);
-                }
-            });
-        });
-
-        // Enhanced cancel subscription handler with lockout protection
-        $('#cancel-subscription-btn').click(function() {
-            // Check if accounts are locked before allowing cancellation
-            if (lockoutStatus.hasLockedAccounts) {
-                showToast('🔒 Cannot cancel subscription while accounts have active lockouts', 'error');
-                
-                // Scroll to lockout alert to show user why cancellation is blocked
-                $('html, body').animate({
-                    scrollTop: $('#lockout-protection-alert').offset().top - 100
-                }, 600);
-                return;
-            }
-            
-            // Proceed to cancellation page if no lockouts
-            window.location.href = '{{ url_for("subscription_cancel") }}';
-        });
-
-        // Handle resume subscription button
-        $('#resume-subscription').click(function() {
-            const button = $(this);
-            const originalText = button.html();
-            
-            button.html(`
-                <span class="spinner-border spinner-border-sm me-2" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </span>
-                Resuming...
-            `).prop('disabled', true);
-
-            $.ajax({
-                url: '/subscription/resume',
-                type: 'POST',
-                success: function(result) {
-                    if (result.success) {
-                        showToast('Subscription resumed successfully!', 'success');
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showToast('Error resuming subscription: ' + result.error, 'error');
-                        button.html(originalText).prop('disabled', false);
-                    }
-                },
-                error: function() {
-                    showToast('Error connecting to server. Please try again.', 'error');
-                    button.html(originalText).prop('disabled', false);
-                }
-            });
-        });
-
-        // Clean up intervals when leaving page
-        $(window).on('beforeunload', function() {
-            if (lockoutStatus.checkInterval) {
-                clearInterval(lockoutStatus.checkInterval);
-            }
-        });
-
-        // Plan change functions
-        function previewPlanChange(planId, planName, isAnnualChange) {
-            // Show modal and loading state
-            $('#prorationModal').modal('show');
-            $('#proration-loading').show();
-            $('#proration-details').hide();
-            $('#proration-error').hide();
-            $('#confirm-change-btn').hide();
-            
-            // Make API call to preview changes
-            $.ajax({
-                url: '/api/preview-subscription-change',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({
-                    plan_id: planId,
-                    is_annual: isAnnualChange
-                }),
-                success: function(data) {
-                    $('#proration-loading').hide();
-                    
-                    if (data.success) {
-                        currentPreviewData = {
-                            planId: planId,
-                            planName: planName,
-                            isAnnual: isAnnualChange,
-                            isUpgrade: data.is_upgrade
-                        };
-                        
-                        displayProrationDetails(data);
-                        $('#proration-details').show();
-                        $('#confirm-change-btn').show();
-                    } else {
-                        showProrationError(data.error);
-                    }
-                },
-                error: function(xhr) {
-                    $('#proration-loading').hide();
-                    const response = xhr.responseJSON;
-                    showProrationError(response ? response.error : 'Failed to preview plan change');
-                }
-            });
-        }
-
-        function displayProrationDetails(data) {
-            const isUpgrade = data.is_upgrade;
-            const summaryClass = isUpgrade ? 'proration-upgrade' : 'proration-downgrade';
-            const actionText = isUpgrade ? 'Upgrade' : 'Downgrade';
-            const timingText = isUpgrade ? 'immediately' : 'at your next billing cycle';
-            
-            let html = `
-                <div class="proration-summary ${summaryClass}">
-                    <h5>${actionText} to ${data.target_plan} (${data.billing_cycle})</h5>
-                    <p>This change will take effect ${timingText}.</p>
+<!-- Value Proposition for Lifetime -->
+{% if not current_user.subscription_plan == 'lifetime' %}
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card bg-gradient-gold text-dark">
+            <div class="card-body text-center py-5">
+                <h3 class="mb-3">🚀 Why Choose Lifetime Access?</h3>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="h2">💰</div>
+                        <h5>Massive Savings</h5>
+                        <p>Pay once, save $2,500+ over time compared to monthly subscriptions</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="h2">🎓</div>
+                        <h5>All Future Content</h5>
+                        <p>Get every new course, update, and feature we ever release</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="h2">🔒</div>
+                        <h5>Price Protection</h5>
+                        <p>Lock in this price forever - never worry about price increases</p>
+                    </div>
                 </div>
-                
-                <div class="proration-breakdown">
-                    <h6>Billing Summary</h6>
-            `;
-            
-            if (isUpgrade) {
-                html += `
-                    <div class="proration-item">
-                        <span>Credit for unused ${data.current_plan} time:</span>
-                        <span class="amount-negative">-${data.formatted_credit}</span>
-                    </div>
-                    <div class="proration-item">
-                        <span>Prorated ${data.target_plan} charge:</span>
-                        <span class="amount-positive">+${data.formatted_new_charge}</span>
-                    </div>
-                    <div class="proration-item">
-                        <span><strong>Amount due today:</strong></span>
-                        <span class="amount-positive"><strong>${data.formatted_amount}</strong></span>
-                    </div>
-                `;
-            } else {
-                html += `
-                    <div class="proration-item">
-                        <span>Current plan continues until:</span>
-                        <span>${new Date(data.next_invoice_date * 1000).toLocaleDateString()}</span>
-                    </div>
-                    <div class="proration-item">
-                        <span>New plan starts:</span>
-                        <span>${new Date(data.next_invoice_date * 1000).toLocaleDateString()}</span>
-                    </div>
-                    <div class="proration-item">
-                        <span><strong>No immediate charge</strong></span>
-                        <span class="amount-positive"><strong>$0.00</strong></span>
-                    </div>
-                `;
-            }
-            
-            html += '</div>';
-            
-            if (!isUpgrade) {
-                html += `
-                    <div class="alert alert-warning mt-3">
-                        <strong>Note:</strong> This downgrade will take effect at your next billing cycle. 
-                        You'll keep all current features until then.
-                    </div>
-                `;
-            }
-            
-            $('#proration-details').html(html);
-            
-            // Update confirm button text
-            const buttonText = isUpgrade ? `Upgrade Now (${data.formatted_amount})` : 'Schedule Downgrade';
-            $('#confirm-change-btn').text(buttonText);
-        }
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
-        function showProrationError(errorMessage) {
-            $('#proration-error').html(`<strong>Error:</strong> ${errorMessage}`).show();
-        }
-
-        function confirmPlanChange(previewData) {
-            const isUpgrade = previewData.isUpgrade;
-            const endpoint = isUpgrade ? '/api/upgrade-subscription' : '/api/downgrade-subscription';
-            
-            // Disable button and show loading
-            const confirmBtn = $('#confirm-change-btn');
-            const originalText = confirmBtn.text();
-            confirmBtn.prop('disabled', true).html(`
-                <span class="spinner-border spinner-border-sm me-2"></span>
-                Processing...
-            `);
-            
-            $.ajax({
-                url: endpoint,
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify({
-                    plan_id: previewData.planId,
-                    is_annual: previewData.isAnnual
-                }),
-                success: function(data) {
-                    if (data.success) {
-                        $('#prorationModal').modal('hide');
-                        showToast(data.message, 'success');
-                        
-                        // Reload page after short delay to show updated subscription
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 2000);
-                    } else {
-                        showToast(data.error, 'error');
-                        confirmBtn.prop('disabled', false).text(originalText);
-                    }
-                },
-                error: function(xhr) {
-                    const response = xhr.responseJSON;
-                    const errorMsg = response ? response.error : 'Failed to process plan change';
-                    showToast(errorMsg, 'error');
-                    confirmBtn.prop('disabled', false).text(originalText);
-                }
-            });
-        }
-
-        // Check user lockout status function
-        function checkUserLockoutStatus() {
-            $.ajax({
-                url: '/api/user-lockout-status',
-                type: 'GET',
-                success: function(data) {
-                    lockoutStatus.hasLockedAccounts = data.has_locked_accounts;
-                    lockoutStatus.lockedAccounts = data.locked_accounts;
-
-                    // Show/hide lockout protection alert
-                    const lockoutAlert = $('#lockout-protection-alert');
-                    const cancelBtn = $('#cancel-subscription-btn');
-                    
-                    if (data.has_locked_accounts) {
-                        // Show lockout alert
-                        lockoutAlert.addClass('show');
-                        
-                        // Disable cancel button and add lockout styling
-                        cancelBtn.prop('disabled', true)
-                                .addClass('lockout-disabled')
-                                .attr('title', `Cannot cancel: ${data.locked_count} account(s) have active lockouts`);
-                        
-                        // Update locked accounts list
-                        updateLockedAccountsList(data.locked_accounts);
-                        
-                    } else {
-                        // Hide lockout alert
-                        lockoutAlert.removeClass('show');
-                        
-                        // Enable cancel button and remove lockout styling
-                        cancelBtn.prop('disabled', false)
-                                .removeClass('lockout-disabled')
-                                .attr('title', 'Cancel subscription');
-                    }
-                },
-                error: function() {
-                    console.log('Failed to check user lockout status');
-                }
-            });
-        }
-
-        // Update locked accounts list in the alert
-        function updateLockedAccountsList(lockedAccounts) {
-            const listContainer = $('#locked-accounts-list');
-            listContainer.empty();
-
-            if (lockedAccounts.length === 0) {
-                return;
-            }
-
-            lockedAccounts.forEach(account => {
-                const lockoutTime = new Date(account.lockout_until);
-                const timeRemaining = lockoutTime - new Date();
-                
-                let timeDisplay = '';
-                if (timeRemaining > 0) {
-                    const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
-                    const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-                    timeDisplay = `${hours}h ${minutes}m remaining`;
-                } else {
-                    timeDisplay = 'Expiring soon';
-                }
-
-                const accountItem = $(`
-                    <div class="locked-account-item">
-                        <span class="locked-account-id">${account.account_id}</span>
-                        <span class="locked-account-time">${timeDisplay}</span>
-                    </div>
-                `);
-                
-                listContainer.append(accountItem);
-            });
-        }
-
-        // Helper function to reset subscribe button
-        function resetSubscribeButton(button, wasTrial) {
-            const isUpgrade = button.closest('.price-card').find('.plan-badge').length > 0;
-            
-            if (wasTrial) {
-                button.html(`
-                    <span class="material-symbols-outlined me-2" style="font-size: 18px; vertical-align: middle;">
-                        schedule
-                    </span>
-                    Start 3-Day Free Trial
-                `).removeClass('trial-btn');
-            } else {
-                button.html(`
-                    <span class="material-symbols-outlined me-2" style="font-size: 18px; vertical-align: middle;">
-                        ${isUpgrade ? 'upgrade' : 'check_circle'}
-                    </span>
-                    ${isUpgrade ? 'Upgrade Plan' : 'Select Plan'}
-                `);
-            }
-            button.prop('disabled', false);
-        }
-
-        // Check trial eligibility
-        function checkTrialEligibility() {
-            $.ajax({
-                url: '/api/trial-status',
-                type: 'GET',
-                success: function(result) {
-                    if (result.trial_used) {
-                        // Hide trial options if user already used trial
-                        $('.trial-section').slideUp(300, function() {
-                            $(this).after('<div class="trial-used-notice"><small class="text-muted"><em>📋 Trial already used for this account</em></small></div>');
-                        });
-                    } else if (result.trial_active) {
-                        // Show current trial status
-                        $('.trial-section').before(`
-                            <div class="trial-status mb-3">
-                                <span class="material-symbols-outlined">schedule</span>
-                                Active Trial: ${result.days_remaining} days remaining
-                            </div>
-                        `);
-                    }
-                },
-                error: function() {
-                    // If we can't check, hide trial options to be safe
-                    $('.trial-section').hide();
-                    console.log('Could not check trial eligibility - hiding trial options');
-                }
-            });
-        }
-
-        // Simple toast notification function
-        window.showToast = window.showToast || function(message, type) {
-            const toast = document.createElement('div');
-            toast.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: ${type === 'error' ? '#EF4444' : type === 'warning' ? '#F59E0B' : '#10B981'};
-                color: white;
-                padding: 12px 20px;
-                border-radius: 8px;
-                z-index: 10000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                animation: slideIn 0.3s ease-out;
-                max-width: 400px;
-                word-wrap: break-word;
-            `;
-            toast.textContent = message;
-            
-            document.body.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.animation = 'slideOut 0.3s ease-in';
-                setTimeout(() => {
-                    if (document.body.contains(toast)) {
-                        document.body.removeChild(toast);
-                    }
-                }, 300);
-            }, 4000);
-        };
-    });
-</script>
+<!-- Rest of the existing content (FAQ, Trust Indicators, etc.) -->
+<!-- ... (keep existing FAQ and other sections) ... -->
 
 <style>
-@keyframes slideIn {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
+.border-gold {
+    border-color: #FFD700 !important;
 }
 
-@keyframes slideOut {
-    from {
-        transform: translateX(0);
-        opacity: 1;
-    }
-    to {
-        transform: translateX(100%);
-        opacity: 0;
-    }
+.bg-gradient-gold {
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+}
+
+.btn-gold {
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    border: none;
+    color: #000;
+    font-weight: bold;
+}
+
+.btn-gold:hover {
+    background: linear-gradient(135deg, #FFA500, #FFD700);
+    color: #000;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(255, 215, 0, 0.3);
+}
+
+.badge.bg-gold {
+    background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+    color: #000 !important;
+}
+
+.card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.table th, .table td {
+    vertical-align: middle;
 }
 </style>
+
+<script>
+function startSubscription(planType) {
+    selectedPlan = planType;
+    
+    // Show different messaging for lifetime
+    if (planType === 'lifetime') {
+        if (!confirm('🎉 You\'re about to get LIFETIME access to TGFX Trade Lab!\n\n✅ One-time payment of $499\n✅ Never pay again\n✅ All future content included\n✅ VIP community access\n\nProceed to checkout?')) {
+            return;
+        }
+    }
+    
+    // Show payment modal or redirect to checkout
+    const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+    modal.show();
+    
+    // Initialize Stripe Elements
+    initializeStripeElements();
+}
+
+// Rest of existing JavaScript functions...
+</script>
 {% endblock %}
