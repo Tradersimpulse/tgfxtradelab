@@ -1675,31 +1675,11 @@
                             Settings
                         </a>
                         
-                        <!-- Billing & Subscription Management -->
-                        <a href="{{ url_for('subscription') }}" class="nav-dropdown-item {% if request.endpoint == 'subscription' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">workspace_premium</span>
-                            Plans & Pricing
-                        </a>
-                        
                         <a href="{{ url_for('manage_subscription') }}" class="nav-dropdown-item {% if request.endpoint == 'manage_subscription' %}active{% endif %}">
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">credit_card</span>
                             Manage Subscription
                         </a>
                         
-                        <a href="{{ url_for('manage_subscription') }}" class="nav-dropdown-item {% if request.endpoint == 'billing_history' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">receipt_long</span>
-                            Billing History
-                        </a>
-                        
-                        <a href="{{ url_for('payment_methods') }}" class="nav-dropdown-item {% if request.endpoint == 'payment_methods' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">payment</span>
-                            Payment Methods
-                        </a>
-                        
-                        <a href="{{ url_for('donate') }}" class="nav-dropdown-item {% if request.endpoint == 'donate' %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">volunteer_activism</span>
-                            Support Us
-                        </a>
                     </div>
                 </div>
             </div>
@@ -1741,19 +1721,9 @@
                             User Management
                         </a>
                         
-                        <a href="{{ url_for('admin_revenue') }}" class="nav-dropdown-item {% if 'admin_revenue' in request.endpoint %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">analytics</span>
-                            Revenue Analytics
-                        </a>
-                        
                         <a href="{{ url_for('admin_subscriptions') }}" class="nav-dropdown-item {% if 'admin_subscriptions' in request.endpoint %}active{% endif %}">
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">subscriptions</span>
                             Subscriptions
-                        </a>
-                        
-                        <a href="{{ url_for('admin_payment_issues') }}" class="nav-dropdown-item {% if 'admin_payment_issues' in request.endpoint %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">error</span>
-                            Payment Issues
                         </a>
                         
                         <!-- Stream Control -->
