@@ -131,7 +131,7 @@
                 {% if current_user.subscription_plan == 'monthly' %}
                 <span class="badge bg-success">Current Plan</span>
                 {% else %}
-                <button class="btn btn-primary btn-lg w-100" onclick="startSubscription('monthly')">
+                <button class="btn btn-primary btn-lg w-100" onclick="startSubscription('monthly')" id="monthly-btn">
                     <span class="material-symbols-outlined me-2">credit_card</span>
                     Subscribe Monthly
                 </button>
@@ -149,13 +149,13 @@
                 <span class="badge bg-warning text-dark px-3 py-2">Most Popular</span>
             </div>
             
-            <div class="card-header text-center py-4 bg-gradient-warning">
-                <h3 class="text-dark mb-2">Annual</h3>
+            <div class="card-header text-center py-4 bg-gradient-annual">
+                <h3 class="text-white mb-2">Annual</h3>
                 <div class="d-flex align-items-center justify-content-center mb-2">
-                    <span class="text-muted text-decoration-line-through me-2">$348</span>
-                    <div class="display-4 text-dark">$777</div>
+                    <span class="text-white-muted text-decoration-line-through me-2">$960</span>
+                    <div class="display-4 text-white">$777</div>
                 </div>
-                <p class="text-dark mb-1">per year</p>
+                <p class="text-white mb-1">per year</p>
                 <span class="badge bg-success">Save $183</span>
             </div>
             <div class="card-body">
@@ -166,7 +166,7 @@
                     </li>
                     <li class="mb-3">
                         <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        2 months free (14% savings)
+                        2 months free (19% savings)
                     </li>
                     <li class="mb-3">
                         <span class="material-symbols-outlined me-2 text-success">check_circle</span>
@@ -190,7 +190,7 @@
                 {% if current_user.subscription_plan == 'annual' %}
                 <span class="badge bg-success">Current Plan</span>
                 {% else %}
-                <button class="btn btn-warning btn-lg w-100" onclick="startSubscription('annual')">
+                <button class="btn btn-annual btn-lg w-100" onclick="startSubscription('annual')" id="annual-btn">
                     <span class="material-symbols-outlined me-2">payments</span>
                     Subscribe Annually
                 </button>
@@ -250,7 +250,7 @@
                 <span class="badge bg-success">Current Plan</span>
                 <p class="text-success small mt-2 mb-0">🎉 Lifetime Access Active!</p>
                 {% else %}
-                <button class="btn btn-gold btn-lg w-100" onclick="startSubscription('lifetime')">
+                <button class="btn btn-gold btn-lg w-100" onclick="startSubscription('lifetime')" id="lifetime-btn">
                     <span class="material-symbols-outlined me-2">workspace_premium</span>
                     Get Lifetime Access
                 </button>
@@ -379,10 +379,46 @@
 </div>
 {% endif %}
 
-<!-- Rest of the existing content (FAQ, Trust Indicators, etc.) -->
-<!-- ... (keep existing FAQ and other sections) ... -->
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5>Redirecting to secure checkout...</h5>
+                <p class="text-muted mb-0">Please wait while we prepare your subscription</p>
+            </div>
+        </div>
+    </div>
+</div>
 
 <style>
+/* Annual Plan Styling - White text */
+.bg-gradient-annual {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+}
+
+.text-white-muted {
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.btn-annual {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+    border: none;
+    color: white;
+    font-weight: bold;
+}
+
+.btn-annual:hover {
+    background: linear-gradient(135deg, #e67e22, #f39c12);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(243, 156, 18, 0.3);
+}
+
+/* Gold styling for lifetime */
 .border-gold {
     border-color: #FFD700 !important;
 }
@@ -410,6 +446,7 @@
     color: #000 !important;
 }
 
+/* Card animations */
 .card {
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
@@ -422,28 +459,115 @@
 .table th, .table td {
     vertical-align: middle;
 }
+
+/* Button loading state */
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.btn-loading::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 </style>
 
 <script>
 function startSubscription(planType) {
-    selectedPlan = planType;
-    
-    // Show different messaging for lifetime
+    // Show confirmation for lifetime plan
     if (planType === 'lifetime') {
         if (!confirm('🎉 You\'re about to get LIFETIME access to TGFX Trade Lab!\n\n✅ One-time payment of $499\n✅ Never pay again\n✅ All future content included\n✅ VIP community access\n\nProceed to checkout?')) {
             return;
         }
     }
     
-    // Show payment modal or redirect to checkout
-    const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
-    modal.show();
+    // Show loading state
+    const button = document.getElementById(planType + '-btn');
+    const originalText = button.innerHTML;
+    button.classList.add('btn-loading');
+    button.innerHTML = '<span class="material-symbols-outlined me-2">hourglass_empty</span>Processing...';
+    button.disabled = true;
     
-    // Initialize Stripe Elements
-    initializeStripeElements();
+    // Show loading modal
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    loadingModal.show();
+    
+    // Create checkout session
+    fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({
+            plan_type: planType
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Redirect to Stripe checkout
+            window.location.href = data.checkout_url;
+        } else {
+            // Hide loading modal
+            loadingModal.hide();
+            
+            // Show error
+            alert('Error: ' + (data.error || 'Failed to create checkout session'));
+            
+            // Reset button
+            button.classList.remove('btn-loading');
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        
+        // Hide loading modal
+        loadingModal.hide();
+        
+        // Show error
+        alert('Network error. Please try again.');
+        
+        // Reset button
+        button.classList.remove('btn-loading');
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
 }
 
-// Rest of existing JavaScript functions...
+function getCsrfToken() {
+    // Get CSRF token from meta tag or cookie
+    const token = document.querySelector('meta[name="csrf-token"]');
+    return token ? token.getAttribute('content') : '';
+}
+
+// Handle page visibility change to reset buttons if user comes back from Stripe
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        // Reset all buttons when page becomes visible
+        const buttons = document.querySelectorAll('.btn-loading');
+        buttons.forEach(button => {
+            button.classList.remove('btn-loading');
+            button.disabled = false;
+            // You might want to refresh the page to show updated subscription status
+        });
+    }
+});
 </script>
 {% endblock %}
-
