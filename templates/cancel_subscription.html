@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cancel Subscription - Traders Impulse</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <style>
+        .locked-account { 
+            background: #fef2f2; 
+            border: 1px solid #fecaca; 
+            padding: 0.5rem; 
+            border-radius: 0.375rem; 
+            margin: 0.25rem 0; 
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="px-6 py-4 bg-red-50 border-b border-red-200">
+                <h2 class="text-xl font-bold text-red-800">Cancel Subscription</h2>
+            </div>
+            
+            <div class="p-6">
+                {% if subscription %}
+                    {% if has_locked_accounts %}
+                        <!-- Lockout Warning -->
+                        <div class="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-red-800">Cannot Cancel During Lockout</h3>
+                                    <div class="mt-2 text-sm text-red-700">
+                                        <p>You cannot cancel your subscription while the following accounts have active lockouts:</p>
+                                        <div class="mt-2">
+                                            {% for locked_account in locked_accounts %}
+                                                <div class="locked-account">
+                                                    <strong>{{ locked_account.account_id }}</strong> - 
+                                                    Locked until {{ locked_account.lockout_until.strftime('%B %d, %Y at %I:%M %p') }}
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                        <p class="mt-2">Please wait for all lockouts to expire before cancelling your subscription.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-center">
+                            <a href="{{ url_for('subscription_manage') }}" 
+                               class="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
+                                Back to Subscription Management
+                            </a>
+                        </div>
+                    {% else %}
+                        <!-- Normal Cancellation Form -->
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-2">Current Subscription</h3>
+                            <div class="bg-gray-50 rounded-md p-4">
+                                <p><strong>Plan:</strong> {{ subscription.plan_name }}</p>
+                                {% if billing_info %}
+                                    <p><strong>Next Billing:</strong> 
+                                        {{ billing_info.currency }}${{ "%.2f"|format(billing_info.next_amount) }} 
+                                        on {{ billing_info.next_date.strftime('%B %d, %Y') }}
+                                    </p>
+                                {% endif %}
+                                <p><strong>Status:</strong> 
+                                    <span class="text-green-600">Active</span>
+                                    {% if subscription.cancel_at_period_end %}
+                                        <span class="text-orange-600">(Scheduled for cancellation)</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+
+                        {% if subscription.cancel_at_period_end %}
+                            <!-- Already Cancelled -->
+                            <div class="bg-orange-50 border border-orange-200 rounded-md p-4 mb-6">
+                                <h4 class="text-orange-800 font-medium">Cancellation Scheduled</h4>
+                                <p class="text-orange-700 text-sm mt-1">
+                                    Your subscription is already scheduled for cancellation at the end of your current billing period.
+                                </p>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <button id="resumeBtn" 
+                                        class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                                    Resume Subscription
+                                </button>
+                                <a href="{{ url_for('subscription_manage') }}" 
+                                   class="block w-full text-center bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
+                                    Back to Subscription Management
+                                </a>
+                            </div>
+                        {% else %}
+                            <!-- Cancellation Options -->
+                            <div class="mb-6">
+                                <h4 class="text-md font-medium text-gray-900 mb-3">Cancellation Options</h4>
+                                
+                                <div class="space-y-4">
+                                    <!-- End of Period Option -->
+                                    <div class="border border-gray-200 rounded-md p-4">
+                                        <label class="flex items-start">
+                                            <input type="radio" name="cancellation_type" value="end_period" 
+                                                   class="mt-1 mr-3" checked>
+                                            <div>
+                                                <div class="font-medium">Cancel at End of Billing Period</div>
+                                                <div class="text-sm text-gray-600">
+                                                    Continue to use all features until your next billing date. 
+                                                    No refund, but you keep access until then.
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    
+                                    <!-- Immediate Option -->
+                                    <div class="border border-gray-200 rounded-md p-4">
+                                        <label class="flex items-start">
+                                            <input type="radio" name="cancellation_type" value="immediate" 
+                                                   class="mt-1 mr-3">
+                                            <div>
+                                                <div class="font-medium">Cancel Immediately</div>
+                                                <div class="text-sm text-gray-600">
+                                                    End subscription now with prorated refund for unused time.
+                                                    Access will be removed immediately.
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-6">
+                                <h4 class="text-md font-medium text-gray-900 mb-2">What happens when you cancel?</h4>
+                                <ul class="text-sm text-gray-600 space-y-1">
+                                    <li>• Your trading containers will be stopped</li>
+                                    <li>• Account data will be preserved for 30 days</li>
+                                    <li>• You can reactivate anytime with full data restoration</li>
+                                    <li>• You'll receive a cancellation confirmation email</li>
+                                </ul>
+                            </div>
+
+                            <div class="space-y-3">
+                                <button id="cancelBtn" 
+                                        class="w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">
+                                    Confirm Cancellation
+                                </button>
+                                <a href="{{ url_for('subscription_manage') }}" 
+                                   class="block w-full text-center bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">
+                                    Keep Subscription
+                                </a>
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                {% else %}
+                    <div class="text-center">
+                        <p class="text-gray-600 mb-4">No active subscription found.</p>
+                        <a href="{{ url_for('subscription_manage') }}" 
+                           class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                            View Subscription Options
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Handle cancellation
+        {% if subscription and not subscription.cancel_at_period_end and not has_locked_accounts %}
+        document.getElementById('cancelBtn').addEventListener('click', async function() {
+            const immediateCancel = document.querySelector('input[name="cancellation_type"]:checked').value === 'immediate';
+            
+            const confirmMessage = immediateCancel 
+                ? 'Are you sure you want to cancel immediately? This will stop your access right away and process a prorated refund.'
+                : 'Are you sure you want to cancel at the end of your billing period? You will keep access until then.';
+                
+            if (!confirm(confirmMessage)) return;
+
+            this.disabled = true;
+            this.textContent = 'Processing...';
+
+            try {
+                const response = await fetch('{{ url_for("subscription_cancel") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        immediate: immediateCancel
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    let message = data.message;
+                    if (data.email_sent) {
+                        message += ' A confirmation email has been sent.';
+                    }
+                    if (data.refund_amount > 0) {
+                        message += ` Refund of $${data.refund_amount.toFixed(2)} will be processed.`;
+                    }
+                    
+                    alert(message);
+                    window.location.href = '{{ url_for("subscription_manage") }}';
+                } else {
+                    alert('Error: ' + data.error);
+                    this.disabled = false;
+                    this.textContent = 'Confirm Cancellation';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+                this.disabled = false;
+                this.textContent = 'Confirm Cancellation';
+            }
+        });
+        {% endif %}
+
+        // Handle resume
+        {% if subscription and subscription.cancel_at_period_end %}
+        document.getElementById('resumeBtn').addEventListener('click', async function() {
+            if (!confirm('Resume your subscription? Billing will continue as normal.')) return;
+
+            this.disabled = true;
+            this.textContent = 'Processing...';
+
+            try {
+                const response = await fetch('{{ url_for("subscription_resume") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('Subscription resumed successfully!');
+                    window.location.href = '{{ url_for("subscription_manage") }}';
+                } else {
+                    alert('Error: ' + data.error);
+                    this.disabled = false;
+                    this.textContent = 'Resume Subscription';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+                this.disabled = false;
+                this.textContent = 'Resume Subscription';
+            }
+        });
+        {% endif %}
+    </script>
+</body>
+</html>
