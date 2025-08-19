@@ -681,28 +681,29 @@ function startSubscription(planType) {
     const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
     loadingModal.show();
     
-    // Determine which endpoint to use based on current subscription status
+    // For existing subscribers with specific upgrade paths, try upgrade endpoints first
+    // Otherwise, use checkout session for new subscriptions
     let endpoint, requestBody;
     
-    if (!hasActiveSubscription) {
-        // No subscription - create new checkout session
-        endpoint = '/api/create-checkout-session';
-        requestBody = { plan_type: planType };
-    } else if (planType === 'lifetime') {
-        // Lifetime upgrade - special handling
-        endpoint = '/api/user/upgrade-to-lifetime';
-        requestBody = {};
-    } else if (currentPlan === 'monthly' && planType === 'annual') {
-        // Monthly to Annual upgrade - use proration
+    if (hasActiveSubscription && currentPlan === 'monthly' && planType === 'annual') {
+        // Try monthly to annual upgrade first
         endpoint = '/api/user/upgrade-to-annual';
         requestBody = {};
+    } else if (hasActiveSubscription && planType === 'lifetime') {
+        // Try lifetime upgrade first  
+        endpoint = '/api/user/upgrade-to-lifetime';
+        requestBody = {};
     } else {
-        // Other plan changes - use change plan endpoint
-        endpoint = '/api/user/change-plan';
-        requestBody = { plan: planType };
+        // Default to checkout session for new subscriptions or other changes
+        endpoint = '/api/create-checkout-session';
+        requestBody = { plan_type: planType };
     }
     
-    // Make the API call
+    // Make the API call with fallback logic
+    makeSubscriptionRequest(endpoint, requestBody, planType, loadingModal, button, originalText);
+}
+
+function makeSubscriptionRequest(endpoint, requestBody, planType, loadingModal, button, originalText) {
     fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -724,10 +725,15 @@ function startSubscription(planType) {
                 window.location.reload();
             }
         } else {
-            // Hide loading modal
-            loadingModal.hide();
+            // If upgrade endpoint fails with "no active subscription", try checkout session instead
+            if (data.error && data.error.includes('No active subscription') && endpoint !== '/api/create-checkout-session') {
+                console.log('Upgrade failed, trying checkout session instead...');
+                makeSubscriptionRequest('/api/create-checkout-session', { plan_type: planType }, planType, loadingModal, button, originalText);
+                return;
+            }
             
-            // Show error
+            // Hide loading modal and show error
+            loadingModal.hide();
             alert('Error: ' + (data.error || 'Failed to process subscription change'));
             
             // Reset button
@@ -739,10 +745,15 @@ function startSubscription(planType) {
     .catch(error => {
         console.error('Error:', error);
         
-        // Hide loading modal
-        loadingModal.hide();
+        // If this was an upgrade endpoint, try checkout session as fallback
+        if (endpoint !== '/api/create-checkout-session') {
+            console.log('API error, trying checkout session as fallback...');
+            makeSubscriptionRequest('/api/create-checkout-session', { plan_type: planType }, planType, loadingModal, button, originalText);
+            return;
+        }
         
-        // Show error
+        // Hide loading modal and show error
+        loadingModal.hide();
         alert('Network error. Please try again.');
         
         // Reset button
