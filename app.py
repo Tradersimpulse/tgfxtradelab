@@ -2898,51 +2898,6 @@ def api_get_subscription_timeline():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/subscription/upgrade-to-lifetime', methods=['POST'])
-@login_required
-def api_upgrade_to_lifetime():
-    """Upgrade current user to lifetime subscription"""
-    try:
-        if current_user.subscription_plan == 'lifetime':
-            return jsonify({'error': 'Already on lifetime plan'}), 400
-        
-        # Create Stripe checkout session for lifetime upgrade
-        if not current_user.stripe_customer_id:
-            customer = stripe.Customer.create(
-                email=current_user.email,
-                name=current_user.username,
-                metadata={'user_id': current_user.id}
-            )
-            current_user.stripe_customer_id = customer.id
-            db.session.commit()
-        
-        # Create checkout session for lifetime payment
-        session = stripe.checkout.Session.create(
-            customer=current_user.stripe_customer_id,
-            payment_method_types=['card'],
-            line_items=[{
-                'price': app.config.get('STRIPE_LIFETIME_PRICE_ID'),  # You'll need to set this
-                'quantity': 1,
-            }],
-            mode='payment',  # One-time payment
-            success_url=f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}&plan=lifetime",
-            cancel_url=f"{request.host_url}manage-subscription?upgrade_canceled=true",
-            metadata={
-                'user_id': current_user.id,
-                'plan_type': 'lifetime',
-                'cancel_existing_subscription': current_user.stripe_subscription_id or ''
-            }
-        )
-        
-        return jsonify({
-            'success': True,
-            'checkout_url': session.url
-        })
-        
-    except stripe.error.StripeError as e:
-        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/subscription/cancel', methods=['POST'])
 @login_required
