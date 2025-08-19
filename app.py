@@ -3734,7 +3734,7 @@ def api_upgrade_to_annual():
 @app.route('/api/admin/stripe/subscription/<subscription_id>')
 @login_required
 def api_get_stripe_subscription(subscription_id):
-    """Get subscription details from Stripe"""
+    """Get subscription details from Stripe - Fixed Version"""
     if not current_user.is_admin:
         return jsonify({'error': 'Admin access required'}), 403
     
@@ -3749,43 +3749,51 @@ def api_get_stripe_subscription(subscription_id):
         # Get customer info
         customer = stripe.Customer.retrieve(subscription.customer)
         
-        # Extract items data properly
+        # Get subscription items (this is the fix - call the method properly)
         items_data = []
-        if subscription.items and subscription.items.data:
-            for item in subscription.items.data:
-                item_info = {
+        try:
+            # Get items using the proper Stripe method
+            items = stripe.SubscriptionItem.list(subscription=subscription_id)
+            
+            for item in items.data:
+                price_info = {
+                    'id': item.price.id,
+                    'unit_amount': item.price.unit_amount,
+                    'currency': item.price.currency,
+                    'nickname': getattr(item.price, 'nickname', None),
+                }
+                
+                # Add recurring info if it exists
+                if hasattr(item.price, 'recurring') and item.price.recurring:
+                    price_info['recurring'] = {
+                        'interval': item.price.recurring.interval,
+                        'interval_count': item.price.recurring.interval_count
+                    }
+                
+                items_data.append({
                     'id': item.id,
                     'quantity': item.quantity,
-                    'price': {
-                        'id': item.price.id,
-                        'unit_amount': item.price.unit_amount,
-                        'currency': item.price.currency,
-                        'nickname': item.price.nickname,
-                        'recurring': {
-                            'interval': item.price.recurring.interval if item.price.recurring else None,
-                            'interval_count': item.price.recurring.interval_count if item.price.recurring else None
-                        } if item.price.recurring else None
-                    }
-                }
-                items_data.append(item_info)
+                    'price': price_info
+                })
+        except Exception as items_error:
+            print(f"Error getting subscription items: {items_error}")
+            items_data = []
         
-        # Format subscription data with proper type conversion
+        # Format subscription data
         subscription_data = {
-            'id': str(subscription.id),
-            'status': str(subscription.status),
-            'customer_id': str(subscription.customer),
-            'customer_email': str(customer.email) if customer.email else None,
-            'created': int(subscription.created),
-            'current_period_start': int(subscription.current_period_start),
-            'current_period_end': int(subscription.current_period_end),
-            'cancel_at_period_end': bool(subscription.cancel_at_period_end),
+            'id': subscription.id,
+            'status': subscription.status,
+            'customer_id': subscription.customer,
+            'customer_email': getattr(customer, 'email', None),
+            'created': subscription.created,
+            'current_period_start': subscription.current_period_start,
+            'current_period_end': subscription.current_period_end,
+            'cancel_at_period_end': subscription.cancel_at_period_end,
+            'trial_end': getattr(subscription, 'trial_end', None),
+            'canceled_at': getattr(subscription, 'canceled_at', None),
             'items': {
                 'data': items_data
-            },
-            'trial_end': int(subscription.trial_end) if subscription.trial_end else None,
-            'canceled_at': int(subscription.canceled_at) if subscription.canceled_at else None,
-            'trial_start': int(subscription.trial_start) if subscription.trial_start else None,
-            'start_date': int(subscription.start_date) if subscription.start_date else None
+            }
         }
         
         return jsonify({
@@ -3798,7 +3806,7 @@ def api_get_stripe_subscription(subscription_id):
     except stripe.error.StripeError as e:
         return jsonify({'error': f'Stripe error: {str(e)}'}), 400
     except Exception as e:
-        print(f"Error in get_stripe_subscription: {e}")  # For debugging
+        print(f"Error in get_stripe_subscription: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/user/<int:user_id>/link-subscription', methods=['POST'])
