@@ -3731,6 +3731,369 @@ def api_upgrade_to_annual():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/admin/stripe/subscription/<subscription_id>')
+@login_required
+def api_get_stripe_subscription(subscription_id):
+    """Get subscription details from Stripe"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        # Validate subscription ID format
+        if not subscription_id.startswith('sub_'):
+            return jsonify({'error': 'Invalid subscription ID format'}), 400
+        
+        # Get subscription from Stripe
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        
+        # Get customer info
+        customer = stripe.Customer.retrieve(subscription.customer)
+        
+        # Format subscription data
+        subscription_data = {
+            'id': subscription.id,
+            'status': subscription.status,
+            'customer_id': subscription.customer,
+            'customer_email': customer.email,
+            'created': subscription.created,
+            'current_period_start': subscription.current_period_start,
+            'current_period_end': subscription.current_period_end,
+            'cancel_at_period_end': subscription.cancel_at_period_end,
+            'items': subscription.items,
+            'trial_end': subscription.trial_end,
+            'canceled_at': subscription.canceled_at
+        }
+        
+        return jsonify({
+            'success': True,
+            'subscription': subscription_data
+        })
+        
+    except stripe.error.InvalidRequestError:
+        return jsonify({'error': 'Subscription not found'}), 404
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/user/<int:user_id>/link-subscription', methods=['POST'])
+@login_required
+def api_link_user_subscription(user_id):
+    """Link a Stripe subscription to a user"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        data = request.get_json()
+        subscription_id = data.get('subscription_id')
+        
+        if not subscription_id:
+            return jsonify({'error': 'Subscription ID required'}), 400
+        
+        user = User.query.get_or_404(user_id)
+        
+        # Get subscription from Stripe to validate and get details
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        customer = stripe.Customer.retrieve(subscription.customer)
+        
+        # Update user with subscription data
+        user.stripe_customer_id = subscription.customer
+        user.stripe_subscription_id = subscription.id
+        user.subscription_status = subscription.status
+        user.has_subscription = subscription.status in ['active', 'trialing']
+        
+        # Set subscription dates
+        user.subscription_current_period_start = datetime.fromtimestamp(subscription.current_period_start)
+        user.subscription_current_period_end = datetime.fromtimestamp(subscription.current_period_end)
+        user.subscription_expires = user.subscription_current_period_end
+        user.subscription_cancel_at_period_end = subscription.cancel_at_period_end
+        
+        # Determine plan type from price
+        if subscription.items.data:
+            price_id = subscription.items.data[0].price.id
+            
+            # Map your actual Stripe price IDs here
+            price_ids = initialize_stripe_price_ids()
+            for plan_name, plan_price_id in price_ids.items():
+                if price_id == plan_price_id:
+                    user.subscription_plan = plan_name
+                    break
+            
+            user.subscription_price_id = price_id
+        
+        db.session.commit()
+        
+        # Log the linking event
+        try:
+            event = SubscriptionEvent(
+                user_id=user.id,
+                stripe_customer_id=user.stripe_customer_id,
+                stripe_subscription_id=user.stripe_subscription_id,
+                event_type='subscription_linked_by_admin',
+                event_data=json.dumps({
+                    'linked_by': current_user.username,
+                    'linked_at': datetime.utcnow().isoformat(),
+                    'subscription_status': subscription.status
+                }),
+                processed=True
+            )
+            db.session.add(event)
+            db.session.commit()
+        except:
+            pass  # Skip if SubscriptionEvent model doesn't exist
+        
+        return jsonify({
+            'success': True,
+            'message': f'Subscription {subscription_id} linked to user {user.username}',
+            'subscription_status': user.subscription_status,
+            'subscription_plan': user.subscription_plan
+        })
+        
+    except stripe.error.InvalidRequestError:
+        return jsonify({'error': 'Subscription not found in Stripe'}), 404
+    except stripe.error.StripeError as e:
+        return jsonify({'error': f'Stripe error: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/user/<int:user_id>/unlink-subscription', methods=['POST'])
+@login_required
+def api_unlink_user_subscription(user_id):
+    """Unlink Stripe subscription from a user"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        user = User.query.get_or_404(user_id)
+        
+        # Store old values for logging
+        old_subscription_id = user.stripe_subscription_id
+        old_customer_id = user.stripe_customer_id
+        
+        # Clear subscription data
+        user.stripe_customer_id = None
+        user.stripe_subscription_id = None
+        user.subscription_status = None
+        user.subscription_plan = None
+        user.subscription_price_id = None
+        user.has_subscription = False
+        user.subscription_current_period_start = None
+        user.subscription_current_period_end = None
+        user.subscription_expires = None
+        user.subscription_cancel_at_period_end = False
+        
+        db.session.commit()
+        
+        # Log the unlinking event
+        try:
+            event = SubscriptionEvent(
+                user_id=user.id,
+                stripe_customer_id=old_customer_id,
+                stripe_subscription_id=old_subscription_id,
+                event_type='subscription_unlinked_by_admin',
+                event_data=json.dumps({
+                    'unlinked_by': current_user.username,
+                    'unlinked_at': datetime.utcnow().isoformat(),
+                    'old_subscription_id': old_subscription_id
+                }),
+                processed=True
+            )
+            db.session.add(event)
+            db.session.commit()
+        except:
+            pass  # Skip if SubscriptionEvent model doesn't exist
+        
+        return jsonify({
+            'success': True,
+            'message': f'Subscription unlinked from user {user.username}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/user/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+def api_admin_edit_user(user_id):
+    """Get user data for editing (GET) or save user changes (POST)"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    user = User.query.get_or_404(user_id)
+    
+    if request.method == 'GET':
+        # Return user data for editing
+        return jsonify({
+            'success': True,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'display_name': user.display_name,
+                'timezone': user.timezone,
+                'is_admin': user.is_admin,
+                'can_stream': user.can_stream,
+                'has_subscription': user.has_subscription,
+                'subscription_status': user.subscription_status,
+                'subscription_plan': user.subscription_plan,
+                'subscription_expires': user.subscription_expires.isoformat() if user.subscription_expires else None,
+                'stripe_customer_id': user.stripe_customer_id,
+                'stripe_subscription_id': user.stripe_subscription_id,
+                'subscription_cancel_at_period_end': user.subscription_cancel_at_period_end,
+                'total_revenue': float(user.total_revenue or 0),
+                'created_at': user.created_at.isoformat()
+            }
+        })
+    
+    elif request.method == 'POST':
+        # Save user changes
+        try:
+            data = request.get_json()
+            
+            # Update basic user info
+            if 'username' in data:
+                # Check if username is already taken by another user
+                existing_user = User.query.filter_by(username=data['username']).first()
+                if existing_user and existing_user.id != user_id:
+                    return jsonify({'error': 'Username already exists'}), 400
+                user.username = data['username']
+            
+            if 'email' in data:
+                # Check if email is already taken by another user
+                existing_user = User.query.filter_by(email=data['email']).first()
+                if existing_user and existing_user.id != user_id:
+                    return jsonify({'error': 'Email already exists'}), 400
+                user.email = data['email']
+            
+            if 'display_name' in data:
+                user.display_name = data['display_name'] or None
+            
+            if 'timezone' in data:
+                user.timezone = data['timezone']
+            
+            if 'is_admin' in data:
+                user.is_admin = data['is_admin']
+            
+            if 'can_stream' in data:
+                user.can_stream = data['can_stream']
+            
+            # Update subscription info (manual override)
+            if 'subscription_plan' in data:
+                user.subscription_plan = data['subscription_plan'] or None
+            
+            if 'subscription_status' in data:
+                user.subscription_status = data['subscription_status'] or None
+            
+            if 'has_subscription' in data:
+                user.has_subscription = data['has_subscription']
+            
+            db.session.commit()
+            
+            # Log the change
+            try:
+                event = SubscriptionEvent(
+                    user_id=user.id,
+                    event_type='user_updated_by_admin',
+                    event_data=json.dumps({
+                        'updated_by': current_user.username,
+                        'updated_at': datetime.utcnow().isoformat(),
+                        'changes': data
+                    }),
+                    processed=True
+                )
+                db.session.add(event)
+                db.session.commit()
+            except:
+                pass  # Skip if SubscriptionEvent model doesn't exist
+            
+            return jsonify({
+                'success': True,
+                'message': 'User updated successfully'
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+
+# Enhanced sync endpoint that works with individual users
+@app.route('/api/admin/user/<int:user_id>/sync-stripe', methods=['POST'])
+@login_required
+def api_sync_user_with_stripe(user_id):
+    """Sync a specific user with Stripe"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        user = User.query.get_or_404(user_id)
+        
+        if sync_user_with_stripe(user_id):
+            return jsonify({
+                'success': True,
+                'message': f'User {user.username} synced with Stripe successfully'
+            })
+        else:
+            return jsonify({
+                'error': 'Failed to sync user with Stripe'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Export users endpoint
+@app.route('/api/admin/users/export')
+@login_required
+def api_export_users():
+    """Export users to CSV"""
+    if not current_user.is_admin:
+        return redirect(url_for('admin'))
+    
+    try:
+        import io
+        import csv
+        from flask import Response
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'ID', 'Username', 'Email', 'Display Name', 'Timezone',
+            'Is Admin', 'Can Stream', 'Has Subscription', 'Subscription Plan',
+            'Subscription Status', 'Total Revenue', 'Created At'
+        ])
+        
+        # Write user data
+        users = User.query.all()
+        for user in users:
+            writer.writerow([
+                user.id,
+                user.username,
+                user.email,
+                user.display_name or '',
+                user.timezone,
+                user.is_admin,
+                user.can_stream,
+                user.has_subscription,
+                user.subscription_plan or '',
+                user.subscription_status or '',
+                float(user.total_revenue or 0),
+                user.created_at.isoformat()
+            ])
+        
+        output.seek(0)
+        
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename=users_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+            }
+        )
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/user/change-plan', methods=['POST'])
 @login_required
 def api_change_plan():
