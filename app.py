@@ -3749,19 +3749,43 @@ def api_get_stripe_subscription(subscription_id):
         # Get customer info
         customer = stripe.Customer.retrieve(subscription.customer)
         
-        # Format subscription data
+        # Extract items data properly
+        items_data = []
+        if subscription.items and subscription.items.data:
+            for item in subscription.items.data:
+                item_info = {
+                    'id': item.id,
+                    'quantity': item.quantity,
+                    'price': {
+                        'id': item.price.id,
+                        'unit_amount': item.price.unit_amount,
+                        'currency': item.price.currency,
+                        'nickname': item.price.nickname,
+                        'recurring': {
+                            'interval': item.price.recurring.interval if item.price.recurring else None,
+                            'interval_count': item.price.recurring.interval_count if item.price.recurring else None
+                        } if item.price.recurring else None
+                    }
+                }
+                items_data.append(item_info)
+        
+        # Format subscription data with proper type conversion
         subscription_data = {
-            'id': subscription.id,
-            'status': subscription.status,
-            'customer_id': subscription.customer,
-            'customer_email': customer.email,
-            'created': subscription.created,
-            'current_period_start': subscription.current_period_start,
-            'current_period_end': subscription.current_period_end,
-            'cancel_at_period_end': subscription.cancel_at_period_end,
-            'items': subscription.items,
-            'trial_end': subscription.trial_end,
-            'canceled_at': subscription.canceled_at
+            'id': str(subscription.id),
+            'status': str(subscription.status),
+            'customer_id': str(subscription.customer),
+            'customer_email': str(customer.email) if customer.email else None,
+            'created': int(subscription.created),
+            'current_period_start': int(subscription.current_period_start),
+            'current_period_end': int(subscription.current_period_end),
+            'cancel_at_period_end': bool(subscription.cancel_at_period_end),
+            'items': {
+                'data': items_data
+            },
+            'trial_end': int(subscription.trial_end) if subscription.trial_end else None,
+            'canceled_at': int(subscription.canceled_at) if subscription.canceled_at else None,
+            'trial_start': int(subscription.trial_start) if subscription.trial_start else None,
+            'start_date': int(subscription.start_date) if subscription.start_date else None
         }
         
         return jsonify({
@@ -3774,6 +3798,7 @@ def api_get_stripe_subscription(subscription_id):
     except stripe.error.StripeError as e:
         return jsonify({'error': f'Stripe error: {str(e)}'}), 400
     except Exception as e:
+        print(f"Error in get_stripe_subscription: {e}")  # For debugging
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/user/<int:user_id>/link-subscription', methods=['POST'])
