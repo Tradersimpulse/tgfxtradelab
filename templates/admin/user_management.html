@@ -32,7 +32,7 @@
                 <div class="d-flex align-items-center">
                     <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">people</span>
                     <div>
-                        <h3 class="mb-0">{{ total_users }}</h3>
+                        <h3 class="mb-0">{{ users|length }}</h3>
                         <p class="mb-0">Total Users</p>
                     </div>
                 </div>
@@ -45,7 +45,7 @@
                 <div class="d-flex align-items-center">
                     <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">star</span>
                     <div>
-                        <h3 class="mb-0">{{ premium_users }}</h3>
+                        <h3 class="mb-0">{{ users|selectattr('has_subscription')|list|length }}</h3>
                         <p class="mb-0">Premium Users</p>
                     </div>
                 </div>
@@ -58,8 +58,8 @@
                 <div class="d-flex align-items-center">
                     <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">trending_up</span>
                     <div>
-                        <h3 class="mb-0">${{ monthly_revenue }}</h3>
-                        <p class="mb-0">Monthly Revenue</p>
+                        <h3 class="mb-0">${{ "%.0f"|format(users|sum(attribute='total_revenue') or 0) }}</h3>
+                        <p class="mb-0">Total Revenue</p>
                     </div>
                 </div>
             </div>
@@ -71,7 +71,7 @@
                 <div class="d-flex align-items-center">
                     <span class="material-symbols-outlined me-3" style="font-size: 2.5rem;">percent</span>
                     <div>
-                        <h3 class="mb-0">{{ conversion_rate }}%</h3>
+                        <h3 class="mb-0">{{ "%.1f"|format((users|selectattr('has_subscription')|list|length / users|length * 100) if users|length > 0 else 0) }}%</h3>
                         <p class="mb-0">Conversion Rate</p>
                     </div>
                 </div>
@@ -102,6 +102,7 @@
                             <option value="">All Plans</option>
                             <option value="monthly">Monthly</option>
                             <option value="annual">Annual</option>
+                            <option value="lifetime">Lifetime</option>
                             <option value="free">Free</option>
                         </select>
                     </div>
@@ -174,7 +175,7 @@
                                 </td>
                                 <td>
                                     <div>
-                                        <span class="badge bg-{{ 'success' if user.has_active_subscription() else 'secondary' }}">
+                                        <span class="badge bg-{{ 'success' if user.has_subscription else 'secondary' }}">
                                             {{ user.get_subscription_status_display() }}
                                         </span>
                                         {% if user.subscription_plan %}
@@ -275,12 +276,12 @@
     </div>
 </div>
 
-<!-- User Management Modal -->
+<!-- User Edit Modal -->
 <div class="modal fade" id="userModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content bg-dark">
             <div class="modal-header">
-                <h5 class="modal-title">User Management</h5>
+                <h5 class="modal-title" id="userModalTitle">Edit User</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="userModalBody">
@@ -324,9 +325,49 @@
 .table td {
     vertical-align: middle;
 }
+
+.subscription-info-card {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.subscription-status {
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.status-active { background-color: rgba(40, 167, 69, 0.2); border-left: 4px solid #28a745; }
+.status-canceled { background-color: rgba(220, 53, 69, 0.2); border-left: 4px solid #dc3545; }
+.status-past_due { background-color: rgba(255, 193, 7, 0.2); border-left: 4px solid #ffc107; }
+.status-none { background-color: rgba(108, 117, 125, 0.2); border-left: 4px solid #6c757d; }
+
+.form-section {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
 </style>
 
 <script>
+let currentEditingUserId = null;
+
 // Filter and search functionality
 function filterUsers() {
     const statusFilter = document.getElementById('statusFilter').value;
@@ -385,11 +426,30 @@ function toggleDetails() {
 
 // User management functions
 function viewUser(userId) {
-    fetch(`/api/admin/user/${userId}`)
+    fetch(`/admin/user/${userId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to load user');
+            return response.text();
+        })
+        .then(html => {
+            // If it's an HTML response, redirect
+            window.location.href = `/admin/user/${userId}`;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error loading user details', 'error');
+        });
+}
+
+function editUser(userId) {
+    currentEditingUserId = userId;
+    
+    fetch(`/api/admin/user/${userId}/edit`)
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                document.getElementById('userModalBody').innerHTML = generateUserDetailsHTML(data.user);
+            if (data.user) {
+                document.getElementById('userModalTitle').textContent = `Edit User: ${data.user.username}`;
+                document.getElementById('userModalBody').innerHTML = generateEditUserHTML(data.user);
                 new bootstrap.Modal(document.getElementById('userModal')).show();
             }
         })
@@ -399,15 +459,359 @@ function viewUser(userId) {
         });
 }
 
-function editUser(userId) {
-    // Implementation for editing user
-    showToast('Edit user functionality coming soon', 'info');
+function generateEditUserHTML(user) {
+    return `
+        <div class="row">
+            <!-- User Information Section -->
+            <div class="col-md-6">
+                <div class="form-section">
+                    <h6 class="text-primary mb-3">
+                        <span class="material-symbols-outlined me-2">person</span>
+                        User Information
+                    </h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" id="editUsername" value="${user.username}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="editEmail" value="${user.email}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Display Name</label>
+                        <input type="text" class="form-control" id="editDisplayName" value="${user.display_name || ''}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Timezone</label>
+                        <select class="form-select" id="editTimezone">
+                            <option value="America/New_York" ${user.timezone === 'America/New_York' ? 'selected' : ''}>Eastern Time</option>
+                            <option value="America/Chicago" ${user.timezone === 'America/Chicago' ? 'selected' : ''}>Central Time</option>
+                            <option value="America/Denver" ${user.timezone === 'America/Denver' ? 'selected' : ''}>Mountain Time</option>
+                            <option value="America/Los_Angeles" ${user.timezone === 'America/Los_Angeles' ? 'selected' : ''}>Pacific Time</option>
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="editIsAdmin" ${user.is_admin ? 'checked' : ''}>
+                                <label class="form-check-label" for="editIsAdmin">Admin Access</label>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="editCanStream" ${user.can_stream ? 'checked' : ''}>
+                                <label class="form-check-label" for="editCanStream">Can Stream</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Subscription Section -->
+            <div class="col-md-6">
+                <div class="form-section">
+                    <h6 class="text-warning mb-3">
+                        <span class="material-symbols-outlined me-2">payment</span>
+                        Subscription Management
+                    </h6>
+                    
+                    <!-- Current Subscription Status -->
+                    <div class="subscription-status status-${user.subscription_status || 'none'}" id="currentSubscriptionStatus">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Current Status:</strong> ${user.subscription_status || 'Free User'}
+                                ${user.subscription_plan ? `<br><small class="text-muted">Plan: ${user.subscription_plan}</small>` : ''}
+                            </div>
+                            <span class="badge bg-${user.has_subscription ? 'success' : 'secondary'}">
+                                ${user.has_subscription ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Link Stripe Subscription -->
+                    <div class="mb-3">
+                        <label class="form-label">Link Stripe Subscription</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="stripeSubscriptionId" 
+                                   placeholder="sub_1234567890abcdef" 
+                                   value="${user.stripe_subscription_id || ''}">
+                            <button class="btn btn-primary" type="button" onclick="fetchSubscriptionInfo()">
+                                <span class="material-symbols-outlined me-2">search</span>
+                                Fetch Info
+                            </button>
+                        </div>
+                        <div class="form-text">Enter a Stripe subscription ID to link it to this user</div>
+                    </div>
+                    
+                    <!-- Subscription Info Display -->
+                    <div id="subscriptionInfoDisplay" style="display: none;">
+                        <div class="subscription-info-card">
+                            <h6 class="text-light mb-3">Stripe Subscription Details</h6>
+                            <div id="subscriptionDetails">
+                                <!-- Populated by fetchSubscriptionInfo() -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Manual Subscription Management -->
+                    <div class="mt-4">
+                        <h6 class="text-info mb-3">Manual Subscription Override</h6>
+                        
+                        <div class="row">
+                            <div class="col-6">
+                                <label class="form-label">Subscription Plan</label>
+                                <select class="form-select" id="editSubscriptionPlan">
+                                    <option value="">No Subscription</option>
+                                    <option value="monthly" ${user.subscription_plan === 'monthly' ? 'selected' : ''}>Monthly</option>
+                                    <option value="annual" ${user.subscription_plan === 'annual' ? 'selected' : ''}>Annual</option>
+                                    <option value="lifetime" ${user.subscription_plan === 'lifetime' ? 'selected' : ''}>Lifetime</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" id="editSubscriptionStatus">
+                                    <option value="">No Status</option>
+                                    <option value="active" ${user.subscription_status === 'active' ? 'selected' : ''}>Active</option>
+                                    <option value="canceled" ${user.subscription_status === 'canceled' ? 'selected' : ''}>Canceled</option>
+                                    <option value="past_due" ${user.subscription_status === 'past_due' ? 'selected' : ''}>Past Due</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="editHasSubscription" ${user.has_subscription ? 'checked' : ''}>
+                            <label class="form-check-label" for="editHasSubscription">
+                                Has Active Subscription
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="d-flex justify-content-between mt-4">
+            <div>
+                <button class="btn btn-outline-danger" onclick="unlinkStripeSubscription()">
+                    <span class="material-symbols-outlined me-2">link_off</span>
+                    Unlink Stripe
+                </button>
+            </div>
+            <div>
+                <button class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" onclick="saveUserChanges()">
+                    <span class="material-symbols-outlined me-2">save</span>
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function fetchSubscriptionInfo() {
+    const subscriptionId = document.getElementById('stripeSubscriptionId').value.trim();
+    
+    if (!subscriptionId) {
+        showToast('Please enter a subscription ID', 'warning');
+        return;
+    }
+    
+    if (!subscriptionId.startsWith('sub_')) {
+        showToast('Invalid subscription ID format. Should start with "sub_"', 'error');
+        return;
+    }
+    
+    // Show loading state
+    const button = document.querySelector('#userModalBody button[onclick="fetchSubscriptionInfo()"]');
+    const originalText = button.innerHTML;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading...';
+    button.disabled = true;
+    
+    fetch(`/api/admin/stripe/subscription/${subscriptionId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.subscription) {
+                displaySubscriptionInfo(data.subscription);
+                document.getElementById('subscriptionInfoDisplay').style.display = 'block';
+                showToast('Subscription info loaded successfully', 'success');
+            } else {
+                showToast(data.error || 'Subscription not found', 'error');
+                document.getElementById('subscriptionInfoDisplay').style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error fetching subscription info', 'error');
+            document.getElementById('subscriptionInfoDisplay').style.display = 'none';
+        })
+        .finally(() => {
+            // Reset button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+}
+
+function displaySubscriptionInfo(subscription) {
+    const container = document.getElementById('subscriptionDetails');
+    
+    const statusBadgeClass = {
+        'active': 'bg-success',
+        'canceled': 'bg-danger', 
+        'past_due': 'bg-warning text-dark',
+        'incomplete': 'bg-secondary'
+    }[subscription.status] || 'bg-secondary';
+    
+    container.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Status:</strong> <span class="badge ${statusBadgeClass}">${subscription.status}</span></p>
+                <p><strong>Customer:</strong> ${subscription.customer_email || 'N/A'}</p>
+                <p><strong>Created:</strong> ${new Date(subscription.created * 1000).toLocaleDateString()}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Current Period:</strong><br>
+                   ${new Date(subscription.current_period_start * 1000).toLocaleDateString()} - 
+                   ${new Date(subscription.current_period_end * 1000).toLocaleDateString()}</p>
+                <p><strong>Cancel at Period End:</strong> ${subscription.cancel_at_period_end ? 'Yes' : 'No'}</p>
+            </div>
+        </div>
+        ${subscription.items && subscription.items.data.length > 0 ? `
+        <div class="mt-3">
+            <strong>Plan Details:</strong>
+            <ul class="list-unstyled mt-2">
+                ${subscription.items.data.map(item => `
+                    <li class="mb-1">
+                        <span class="badge bg-info me-2">$${(item.price.unit_amount / 100).toFixed(2)}</span>
+                        ${item.price.nickname || 'Subscription'} 
+                        (${item.price.recurring ? item.price.recurring.interval : 'one-time'})
+                    </li>
+                `).join('')}
+            </ul>
+        </div>
+        ` : ''}
+        <div class="mt-3">
+            <button class="btn btn-success btn-sm" onclick="linkSubscriptionToUser()">
+                <span class="material-symbols-outlined me-2">link</span>
+                Link to User
+            </button>
+        </div>
+    `;
+}
+
+function linkSubscriptionToUser() {
+    const subscriptionId = document.getElementById('stripeSubscriptionId').value.trim();
+    
+    if (!subscriptionId || !currentEditingUserId) {
+        showToast('Missing subscription ID or user ID', 'error');
+        return;
+    }
+    
+    fetch(`/api/admin/user/${currentEditingUserId}/link-subscription`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({subscription_id: subscriptionId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Subscription linked successfully', 'success');
+            // Refresh the edit form with updated data
+            editUser(currentEditingUserId);
+        } else {
+            showToast(data.error || 'Failed to link subscription', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error linking subscription', 'error');
+    });
+}
+
+function unlinkStripeSubscription() {
+    if (!confirm('Are you sure you want to unlink the Stripe subscription from this user?')) {
+        return;
+    }
+    
+    fetch(`/api/admin/user/${currentEditingUserId}/unlink-subscription`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Subscription unlinked successfully', 'success');
+            document.getElementById('stripeSubscriptionId').value = '';
+            document.getElementById('subscriptionInfoDisplay').style.display = 'none';
+            // Update current status display
+            updateCurrentSubscriptionDisplay('Free User', false);
+        } else {
+            showToast(data.error || 'Failed to unlink subscription', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error unlinking subscription', 'error');
+    });
+}
+
+function updateCurrentSubscriptionDisplay(status, hasSubscription) {
+    const statusDisplay = document.getElementById('currentSubscriptionStatus');
+    statusDisplay.className = `subscription-status status-${hasSubscription ? 'active' : 'none'}`;
+    statusDisplay.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <strong>Current Status:</strong> ${status}
+            </div>
+            <span class="badge bg-${hasSubscription ? 'success' : 'secondary'}">
+                ${hasSubscription ? 'Active' : 'Inactive'}
+            </span>
+        </div>
+    `;
+}
+
+function saveUserChanges() {
+    const userData = {
+        username: document.getElementById('editUsername').value,
+        email: document.getElementById('editEmail').value,
+        display_name: document.getElementById('editDisplayName').value,
+        timezone: document.getElementById('editTimezone').value,
+        is_admin: document.getElementById('editIsAdmin').checked,
+        can_stream: document.getElementById('editCanStream').checked,
+        subscription_plan: document.getElementById('editSubscriptionPlan').value,
+        subscription_status: document.getElementById('editSubscriptionStatus').value,
+        has_subscription: document.getElementById('editHasSubscription').checked
+    };
+    
+    fetch(`/api/admin/user/${currentEditingUserId}/edit`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(userData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('User updated successfully', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showToast(data.error || 'Failed to update user', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error updating user', 'error');
+    });
 }
 
 function syncUserWithStripe(userId) {
     showToast('Syncing user with Stripe...', 'info');
     
-    fetch(`/api/admin/user/${userId}/sync-stripe`, {
+    fetch(`/api/admin/sync-all-subscriptions`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
     })
@@ -433,14 +837,14 @@ function syncAllUsersWithStripe() {
     
     showToast('Syncing all users with Stripe...', 'info');
     
-    fetch('/api/admin/users/sync-all-stripe', {
+    fetch('/api/admin/sync-all-subscriptions', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast(`Synced ${data.synced_count} users successfully`, 'success');
+            showToast(`Synced ${data.synced || 'all'} users successfully`, 'success');
             setTimeout(() => location.reload(), 2000);
         } else {
             showToast(data.error || 'Failed to sync users', 'error');
@@ -453,18 +857,8 @@ function syncAllUsersWithStripe() {
 }
 
 function manageSubscription(userId) {
-    fetch(`/api/admin/user/${userId}/subscription`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                document.getElementById('subscriptionModalBody').innerHTML = generateSubscriptionManagementHTML(data);
-                new bootstrap.Modal(document.getElementById('subscriptionModal')).show();
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error loading subscription details', 'error');
-        });
+    // Redirect to existing subscription management
+    window.location.href = `/admin/user/${userId}`;
 }
 
 function cancelSubscription(userId) {
@@ -472,9 +866,10 @@ function cancelSubscription(userId) {
         return;
     }
     
-    fetch(`/api/admin/user/${userId}/cancel-subscription`, {
+    fetch(`/api/admin/user/${userId}/grant-subscription`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'}
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({plan: 'cancel'})
     })
     .then(response => response.json())
     .then(data => {
@@ -492,24 +887,32 @@ function cancelSubscription(userId) {
 }
 
 function grantSubscription(userId) {
-    // Implementation for granting subscription
     const modal = `
-        <div class="mb-3">
-            <label class="form-label">Subscription Plan</label>
-            <select class="form-select" id="grantPlan">
-                <option value="monthly">Monthly ($29/month)</option>
-                <option value="annual">Annual ($299/year)</option>
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Duration (months)</label>
-            <input type="number" class="form-control" id="grantDuration" value="1" min="1" max="12">
-        </div>
-        <div class="text-end">
-            <button class="btn btn-primary" onclick="confirmGrantSubscription(${userId})">Grant Subscription</button>
+        <div class="form-section">
+            <h6 class="text-success mb-3">Grant Subscription</h6>
+            <div class="mb-3">
+                <label class="form-label">Subscription Plan</label>
+                <select class="form-select" id="grantPlan">
+                    <option value="monthly">Monthly ($80/month)</option>
+                    <option value="annual">Annual ($777/year)</option>
+                    <option value="lifetime">Lifetime ($499 one-time)</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Duration (months) - Ignored for lifetime</label>
+                <input type="number" class="form-control" id="grantDuration" value="1" min="1" max="12">
+            </div>
+            <div class="text-end">
+                <button class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-success" onclick="confirmGrantSubscription(${userId})">
+                    <span class="material-symbols-outlined me-2">star</span>
+                    Grant Subscription
+                </button>
+            </div>
         </div>
     `;
     
+    document.getElementById('userModalTitle').textContent = 'Grant Subscription';
     document.getElementById('userModalBody').innerHTML = modal;
     new bootstrap.Modal(document.getElementById('userModal')).show();
 }
@@ -544,22 +947,8 @@ function loginAsUser(userId) {
         return;
     }
     
-    fetch(`/api/admin/login-as-user/${userId}`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'}
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.location.href = '/dashboard';
-        } else {
-            showToast(data.error || 'Failed to login as user', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showToast('Error logging in as user', 'error');
-    });
+    showToast('Switching to user account...', 'info');
+    window.location.href = `/admin/user/${userId}`;
 }
 
 function deleteUser(userId) {
@@ -592,76 +981,48 @@ function exportUsers() {
 }
 
 function viewPaymentHistory(userId) {
-    fetch(`/api/admin/user/${userId}/payment-history`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                document.getElementById('userModalBody').innerHTML = generatePaymentHistoryHTML(data.payments);
-                new bootstrap.Modal(document.getElementById('userModal')).show();
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error loading payment history', 'error');
-        });
+    showToast('Loading payment history...', 'info');
+    window.location.href = `/admin/user/${userId}`;
 }
 
-// Helper functions to generate HTML
-function generateUserDetailsHTML(user) {
-    return `
-        <div class="row">
-            <div class="col-md-6">
-                <h6 class="text-muted">User Information</h6>
-                <p><strong>Username:</strong> ${user.username}</p>
-                <p><strong>Email:</strong> ${user.email}</p>
-                <p><strong>Display Name:</strong> ${user.display_name || 'Not set'}</p>
-                <p><strong>Timezone:</strong> ${user.timezone}</p>
-                <p><strong>Admin:</strong> ${user.is_admin ? 'Yes' : 'No'}</p>
-                <p><strong>Can Stream:</strong> ${user.can_stream ? 'Yes' : 'No'}</p>
-            </div>
-            <div class="col-md-6">
-                <h6 class="text-muted">Subscription</h6>
-                <p><strong>Status:</strong> ${user.subscription_status || 'Free'}</p>
-                <p><strong>Plan:</strong> ${user.subscription_plan || 'None'}</p>
-                <p><strong>Expires:</strong> ${user.subscription_expires || 'N/A'}</p>
-                <p><strong>Stripe Customer:</strong> ${user.stripe_customer_id || 'Not linked'}</p>
-                <p><strong>Total Revenue:</strong> $${user.total_revenue || '0.00'}</p>
-            </div>
-        </div>
-    `;
-}
-
-function generateSubscriptionManagementHTML(data) {
-    // Implementation for subscription management interface
-    return `
-        <div class="text-center">
-            <p>Subscription management interface will be implemented here</p>
-            <p>User: ${data.user.username}</p>
-            <p>Current Plan: ${data.subscription.plan || 'Free'}</p>
-        </div>
-    `;
-}
-
-function generatePaymentHistoryHTML(payments) {
-    if (!payments || payments.length === 0) {
-        return '<div class="text-center p-4"><p>No payment history found</p></div>';
+// Toast notification function
+function showToast(message, type = 'info') {
+    // Create toast element if it doesn't exist
+    let toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toastContainer';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
     }
     
-    let html = '<div class="table-responsive"><table class="table table-dark"><thead><tr><th>Date</th><th>Amount</th><th>Status</th><th>Description</th></tr></thead><tbody>';
+    const toastId = 'toast_' + Date.now();
+    const toastColors = {
+        success: 'bg-success',
+        error: 'bg-danger', 
+        warning: 'bg-warning text-dark',
+        info: 'bg-info'
+    };
     
-    payments.forEach(payment => {
-        html += `
-            <tr>
-                <td>${payment.date}</td>
-                <td>$${payment.amount}</td>
-                <td><span class="badge bg-${payment.status === 'succeeded' ? 'success' : 'danger'}">${payment.status}</span></td>
-                <td>${payment.description}</td>
-            </tr>
-        `;
+    const toastHTML = `
+        <div id="${toastId}" class="toast ${toastColors[type] || toastColors.info}" role="alert">
+            <div class="toast-body text-white">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {delay: 4000});
+    toast.show();
+    
+    // Remove toast element after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
     });
-    
-    html += '</tbody></table></div>';
-    return html;
 }
 </script>
 {% endblock %}
