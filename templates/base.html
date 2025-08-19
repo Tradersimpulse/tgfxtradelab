@@ -1721,11 +1721,6 @@
                             User Management
                         </a>
                         
-                        <a href="{{ url_for('admin_subscriptions') }}" class="nav-dropdown-item {% if 'admin_subscriptions' in request.endpoint %}active{% endif %}">
-                            <span class="material-symbols-outlined me-2" style="font-size: 16px;">subscriptions</span>
-                            Subscriptions
-                        </a>
-                        
                         <!-- Stream Control -->
                         <a href="{{ url_for('admin_stream') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'stream' in request.endpoint %}active{% endif %}">
                             <span class="material-symbols-outlined me-2" style="font-size: 16px;">live_tv</span>
