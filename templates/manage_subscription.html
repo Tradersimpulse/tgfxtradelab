@@ -349,6 +349,77 @@
     </div>
 </div>
 
+<!-- Subscription Management for Active Subscribers -->
+{% if current_user.has_subscription %}
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="text-gradient-primary mb-0">
+                    <span class="material-symbols-outlined me-2">manage_accounts</span>
+                    Manage Your Subscription
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5>Current Plan: {{ current_user.get_subscription_plan_display() }}</h5>
+                        <p class="text-muted mb-3">
+                            {% if current_user.subscription_plan == 'lifetime' %}
+                            🎉 You have lifetime access - enjoy all current and future content forever!
+                            {% elif current_user.subscription_cancel_at_period_end %}
+                            ⚠️ Your subscription is set to cancel on {{ current_user.subscription_expires.strftime('%B %d, %Y') if current_user.subscription_expires else 'the end of your billing period' }}. You'll retain access until then.
+                            {% else %}
+                            {% if current_user.subscription_expires %}
+                            Your subscription will renew on {{ current_user.subscription_expires.strftime('%B %d, %Y') }}.
+                            {% endif %}
+                            {% endif %}
+                        </p>
+                        
+                        {% if current_user.subscription_plan != 'lifetime' %}
+                        <div class="d-flex flex-wrap gap-2">
+                            {% if current_user.subscription_cancel_at_period_end %}
+                            <!-- Reactivate Button -->
+                            <button class="btn btn-success" onclick="reactivateSubscription()">
+                                <span class="material-symbols-outlined me-2">restart_alt</span>
+                                Reactivate Subscription
+                            </button>
+                            {% else %}
+                            <!-- Cancel Button -->
+                            <button class="btn btn-outline-warning" onclick="showCancelModal()">
+                                <span class="material-symbols-outlined me-2">pause_circle</span>
+                                Cancel Subscription
+                            </button>
+                            {% endif %}
+                            
+                            <!-- Update Payment Method -->
+                            <button class="btn btn-outline-primary" onclick="updatePaymentMethod()">
+                                <span class="material-symbols-outlined me-2">credit_card</span>
+                                Update Payment Method
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-4 text-md-end">
+                        <div class="bg-dark-subtle rounded p-3">
+                            <h6 class="mb-2">Subscription Status</h6>
+                            {% if current_user.subscription_plan == 'lifetime' %}
+                            <span class="badge bg-gold text-dark fs-6">🏆 Lifetime Member</span>
+                            {% elif current_user.subscription_cancel_at_period_end %}
+                            <span class="badge bg-warning text-dark fs-6">Ending Soon</span>
+                            {% else %}
+                            <span class="badge bg-success fs-6">Active</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Value Proposition for Lifetime -->
 {% if not current_user.subscription_plan == 'lifetime' %}
 <div class="row mb-5">
@@ -389,6 +460,67 @@
                 </div>
                 <h5>Redirecting to secure checkout...</h5>
                 <p class="text-muted mb-0">Please wait while we prepare your subscription</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Subscription Modal -->
+<div class="modal fade" id="cancelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <span class="material-symbols-outlined me-2 text-warning">warning</span>
+                    Cancel Subscription
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <strong>Are you sure you want to cancel?</strong><br>
+                    {% if current_user.subscription_expires %}
+                    Your subscription will remain active until <strong>{{ current_user.subscription_expires.strftime('%B %d, %Y') }}</strong>, 
+                    after which you'll lose access to premium content.
+                    {% else %}
+                    You'll lose access to premium content at the end of your current billing period.
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3">
+                    <label for="cancelReason" class="form-label">Help us improve - why are you canceling? (Optional)</label>
+                    <select class="form-select" id="cancelReason">
+                        <option value="">Select a reason</option>
+                        <option value="too_expensive">Too expensive</option>
+                        <option value="not_using">Not using it enough</option>
+                        <option value="found_alternative">Found a better alternative</option>
+                        <option value="technical_issues">Technical issues</option>
+                        <option value="content_not_helpful">Content not helpful</option>
+                        <option value="temporary_break">Taking a temporary break</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="cancelFeedback" class="form-label">Additional feedback (Optional)</label>
+                    <textarea class="form-control" id="cancelFeedback" rows="3" placeholder="Tell us more about your experience..."></textarea>
+                </div>
+                
+                <div class="bg-light p-3 rounded mb-3">
+                    <h6 class="text-primary">Before you go...</h6>
+                    <ul class="mb-0 small">
+                        <li>You'll keep access until {{ current_user.subscription_expires.strftime('%B %d, %Y') if current_user.subscription_expires else 'your billing period ends' }}</li>
+                        <li>You can reactivate anytime before then</li>
+                        <li>All your progress and favorites will be saved</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Subscription</button>
+                <button type="button" class="btn btn-warning" onclick="confirmCancellation()">
+                    <span class="material-symbols-outlined me-2">cancel</span>
+                    Yes, Cancel Subscription
+                </button>
             </div>
         </div>
     </div>
@@ -585,6 +717,109 @@ function startSubscription(planType) {
         button.classList.remove('btn-loading');
         button.innerHTML = originalText;
         button.disabled = false;
+    });
+}
+
+function showCancelModal() {
+    const cancelModal = new bootstrap.Modal(document.getElementById('cancelModal'));
+    cancelModal.show();
+}
+
+function confirmCancellation() {
+    const reason = document.getElementById('cancelReason').value;
+    const feedback = document.getElementById('cancelFeedback').value;
+    
+    // Show loading in cancel button
+    const cancelBtn = document.querySelector('#cancelModal .btn-warning');
+    const originalText = cancelBtn.innerHTML;
+    cancelBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Canceling...';
+    cancelBtn.disabled = true;
+    
+    fetch('/api/user/cancel-subscription', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify({
+            reason: reason,
+            feedback: feedback
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Hide modal and show success message
+            bootstrap.Modal.getInstance(document.getElementById('cancelModal')).hide();
+            alert(data.message || 'Subscription canceled successfully.');
+            window.location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to cancel subscription'));
+            cancelBtn.innerHTML = originalText;
+            cancelBtn.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error. Please try again.');
+        cancelBtn.innerHTML = originalText;
+        cancelBtn.disabled = false;
+    });
+}
+
+function reactivateSubscription() {
+    if (!confirm('Reactivate your subscription?\n\nYour subscription will continue to renew automatically.')) {
+        return;
+    }
+    
+    fetch('/api/user/reactivate-subscription', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message || 'Subscription reactivated successfully!');
+            window.location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to reactivate subscription'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Network error. Please try again.');
+    });
+}
+
+function updatePaymentMethod() {
+    // Show loading
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    loadingModal.show();
+    
+    fetch('/api/user/update-payment-method', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.url) {
+            // Redirect to Stripe Customer Portal
+            window.location.href = data.url;
+        } else {
+            loadingModal.hide();
+            alert('Error: ' + (data.error || 'Failed to open payment method update'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        loadingModal.hide();
+        alert('Network error. Please try again.');
     });
 }
 
