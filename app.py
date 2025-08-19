@@ -3812,7 +3812,7 @@ def api_get_stripe_subscription(subscription_id):
 @app.route('/api/admin/user/<int:user_id>/link-subscription', methods=['POST'])
 @login_required
 def api_link_user_subscription(user_id):
-    """Link a Stripe subscription to a user"""
+    """Link a Stripe subscription to a user - FIXED VERSION"""
     if not current_user.is_admin:
         return jsonify({'error': 'Admin access required'}), 403
     
@@ -3841,18 +3841,44 @@ def api_link_user_subscription(user_id):
         user.subscription_expires = user.subscription_current_period_end
         user.subscription_cancel_at_period_end = subscription.cancel_at_period_end
         
-        # Determine plan type from price
-        if subscription.items.data:
-            price_id = subscription.items.data[0].price.id
+        # Determine plan type from price - FIXED
+        try:
+            # Get subscription items properly
+            items = stripe.SubscriptionItem.list(subscription=subscription_id)
             
-            # Map your actual Stripe price IDs here
-            price_ids = initialize_stripe_price_ids()
-            for plan_name, plan_price_id in price_ids.items():
-                if price_id == plan_price_id:
-                    user.subscription_plan = plan_name
-                    break
-            
-            user.subscription_price_id = price_id
+            if items.data:
+                price_id = items.data[0].price.id
+                user.subscription_price_id = price_id
+                
+                # Map your actual Stripe price IDs here
+                price_ids = initialize_stripe_price_ids()
+                for plan_name, plan_price_id in price_ids.items():
+                    if price_id == plan_price_id:
+                        user.subscription_plan = plan_name
+                        break
+                
+                # If no match found, determine by amount or interval
+                if not user.subscription_plan:
+                    price = items.data[0].price
+                    if price.unit_amount == 8000:  # $80.00 in cents
+                        user.subscription_plan = 'monthly'
+                    elif price.unit_amount == 77700:  # $777.00 in cents
+                        user.subscription_plan = 'annual'
+                    elif price.unit_amount == 49900:  # $499.00 in cents
+                        user.subscription_plan = 'lifetime'
+                    else:
+                        # Fallback to interval-based detection
+                        if hasattr(price, 'recurring') and price.recurring:
+                            if price.recurring.interval == 'month':
+                                user.subscription_plan = 'monthly'
+                            elif price.recurring.interval == 'year':
+                                user.subscription_plan = 'annual'
+                        else:
+                            user.subscription_plan = 'lifetime'  # One-time payment
+        except Exception as e:
+            print(f"Error determining subscription plan: {e}")
+            # Default fallback based on subscription status
+            user.subscription_plan = 'monthly'  # Safe default
         
         db.session.commit()
         
@@ -3872,8 +3898,9 @@ def api_link_user_subscription(user_id):
             )
             db.session.add(event)
             db.session.commit()
-        except:
-            pass  # Skip if SubscriptionEvent model doesn't exist
+        except Exception as e:
+            print(f"Warning: Could not log subscription event: {e}")
+            pass  # Don't fail the main operation if logging fails
         
         return jsonify({
             'success': True,
@@ -3888,6 +3915,7 @@ def api_link_user_subscription(user_id):
         return jsonify({'error': f'Stripe error: {str(e)}'}), 400
     except Exception as e:
         db.session.rollback()
+        print(f"Error linking subscription: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/user/<int:user_id>/unlink-subscription', methods=['POST'])
