@@ -138,14 +138,48 @@ function showAddMappingModal() {
 }
 
 function editMapping(mappingId) {
-    // Implement edit functionality
-    alert('Edit mapping functionality - to be implemented');
+    // Get mapping data and populate form
+    fetch(`/api/admin/whop-price-mapping/${mappingId}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            currentMappingId = mappingId;
+            document.getElementById('mappingModalTitle').textContent = 'Edit Price Mapping';
+            document.getElementById('productName').value = data.mapping.product_name;
+            document.getElementById('whopPriceId').value = data.mapping.whop_price_id;
+            document.getElementById('appPriceId').value = data.mapping.app_price_id;
+            document.getElementById('description').value = data.mapping.description || '';
+            document.getElementById('isActive').checked = data.mapping.is_active;
+            $('#mappingModal').modal('show');
+        } else {
+            alert('Error loading mapping: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error loading mapping: ' + error);
+    });
 }
 
 function deleteMapping(mappingId) {
     if (confirm('Delete this price mapping? This cannot be undone.')) {
-        // Implement delete functionality
-        alert('Delete mapping functionality - to be implemented');
+        fetch(`/api/admin/whop-price-mapping/${mappingId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Price mapping deleted successfully!');
+                location.reload();
+            } else {
+                alert('Error deleting mapping: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('Error deleting mapping: ' + error);
+        });
     }
 }
 
