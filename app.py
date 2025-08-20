@@ -2980,6 +2980,521 @@ def api_get_user_billing_history():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Trading Stats Routes
+
+@app.route('/trading-stats')
+@login_required
+def trading_stats():
+    """Main trading stats viewer page"""
+    return render_template('trading_stats/index.html')
+
+@app.route('/trading-stats/signals')
+@login_required
+def trading_signals_list():
+    """List all trading signals with filters"""
+    trader_filter = request.args.get('trader')
+    pair_filter = request.args.get('pair')
+    outcome_filter = request.args.get('outcome')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    query = TradingSignal.query
+    
+    if trader_filter:
+        query = query.filter_by(trader_name=trader_filter)
+    
+    if pair_filter:
+        query = query.filter_by(pair_name=pair_filter)
+    
+    if outcome_filter:
+        query = query.filter_by(outcome=outcome_filter)
+    
+    if start_date:
+        query = query.filter(TradingSignal.date >= datetime.strptime(start_date, '%Y-%m-%d').date())
+    
+    if end_date:
+        query = query.filter(TradingSignal.date <= datetime.strptime(end_date, '%Y-%m-%d').date())
+    
+    signals = query.order_by(TradingSignal.date.desc(), TradingSignal.created_at.desc()).all()
+    
+    return render_template('trading_stats/signals_list.html', 
+                         signals=signals,
+                         trader_filter=trader_filter,
+                         pair_filter=pair_filter,
+                         outcome_filter=outcome_filter,
+                         start_date=start_date,
+                         end_date=end_date)
+
+# Admin Routes
+@app.route('/admin/trading-signals')
+@login_required
+def admin_trading_signals():
+    """Admin page for managing trading signals"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    signals = TradingSignal.query.order_by(TradingSignal.date.desc(), TradingSignal.created_at.desc()).limit(50).all()
+    
+    return render_template('admin/trading_signals.html', signals=signals)
+
+@app.route('/admin/trading-signal/add', methods=['GET', 'POST'])
+@login_required
+def admin_add_trading_signal():
+    """Add new trading signal"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    form = TradingSignalForm()
+    
+    # Populate video choices with live trading sessions
+    live_sessions_category = Category.query.filter_by(name='Live Trading Sessions').first()
+    if live_sessions_category:
+        video_choices = [(0, 'No video linked')] + [
+            (v.id, f"{v.title} ({v.created_at.strftime('%m/%d/%Y')})")
+            for v in live_sessions_category.videos
+        ]
+    else:
+        video_choices = [(0, 'No videos available')]
+    
+    form.linked_video_id.choices = video_choices
+    
+    if form.validate_on_submit():
+        try:
+            # Get trader defaults
+            trader_name, default_pair, default_rr = get_trader_defaults(current_user)
+            
+            # Override with form data
+            trader_name = form.trader_name.data
+            
+            # Create trading signal
+            signal = TradingSignal(
+                date=datetime.utcnow().date(),
+                day_of_week=calculate_day_of_week(datetime.utcnow().date()),
+                trader_name=trader_name,
+                pair_name=form.pair_name.data,
+                trade_type=form.trade_type.data,
+                entry_price=float(form.entry_price.data),
+                stop_loss_price=float(form.stop_loss_price.data),
+                target_price=float(form.target_price.data),
+                risk_reward_ratio=float(form.risk_reward_ratio.data),
+                outcome=form.outcome.data,
+                achieved_reward=float(form.achieved_reward.data),
+                notes=form.notes.data,
+                created_by=current_user.id,
+                linked_video_id=form.linked_video_id.data if form.linked_video_id.data != 0 else None
+            )
+            
+            db.session.add(signal)
+            db.session.commit()
+            
+            # Update aggregated stats
+            update_trading_stats(signal)
+            
+            flash('Trading signal added successfully!', 'success')
+            return redirect(url_for('admin_trading_signals'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding trading signal: {str(e)}', 'error')
+    
+    return render_template('admin/trading_signal_form.html', form=form, title='Add Trading Signal')
+
+@app.route('/admin/trading-signal/edit/<int:signal_id>', methods=['GET', 'POST'])
+@login_required
+def admin_edit_trading_signal(signal_id):
+    """Edit trading signal"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    signal = TradingSignal.query.get_or_404(signal_id)
+    form = TradingSignalForm(obj=signal)
+    
+    # Populate video choices
+    live_sessions_category = Category.query.filter_by(name='Live Trading Sessions').first()
+    if live_sessions_category:
+        video_choices = [(0, 'No video linked')] + [
+            (v.id, f"{v.title} ({v.created_at.strftime('%m/%d/%Y')})")
+            for v in live_sessions_category.videos
+        ]
+    else:
+        video_choices = [(0, 'No videos available')]
+    
+    form.linked_video_id.choices = video_choices
+    
+    if request.method == 'GET':
+        # Pre-populate form with existing data
+        form.trader_name.data = signal.trader_name
+        form.pair_name.data = signal.pair_name
+        form.trade_type.data = signal.trade_type
+        form.entry_price.data = str(signal.entry_price)
+        form.stop_loss_price.data = str(signal.stop_loss_price)
+        form.target_price.data = str(signal.target_price)
+        form.risk_reward_ratio.data = str(signal.risk_reward_ratio)
+        form.outcome.data = signal.outcome
+        form.achieved_reward.data = str(signal.achieved_reward)
+        form.notes.data = signal.notes
+        form.linked_video_id.data = signal.linked_video_id or 0
+    
+    if form.validate_on_submit():
+        try:
+            # Update signal
+            signal.trader_name = form.trader_name.data
+            signal.pair_name = form.pair_name.data
+            signal.trade_type = form.trade_type.data
+            signal.entry_price = float(form.entry_price.data)
+            signal.stop_loss_price = float(form.stop_loss_price.data)
+            signal.target_price = float(form.target_price.data)
+            signal.risk_reward_ratio = float(form.risk_reward_ratio.data)
+            signal.outcome = form.outcome.data
+            signal.achieved_reward = float(form.achieved_reward.data)
+            signal.notes = form.notes.data
+            signal.linked_video_id = form.linked_video_id.data if form.linked_video_id.data != 0 else None
+            
+            db.session.commit()
+            
+            # Update aggregated stats
+            update_trading_stats(signal)
+            
+            flash('Trading signal updated successfully!', 'success')
+            return redirect(url_for('admin_trading_signals'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating trading signal: {str(e)}', 'error')
+    
+    return render_template('admin/trading_signal_form.html', 
+                         form=form, 
+                         signal=signal, 
+                         title='Edit Trading Signal')
+
+@app.route('/admin/trading-signal/<int:signal_id>', methods=['DELETE'])
+@login_required
+def admin_delete_trading_signal(signal_id):
+    """Delete trading signal"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        signal = TradingSignal.query.get_or_404(signal_id)
+        trader_name = signal.trader_name
+        date = signal.date
+        
+        db.session.delete(signal)
+        db.session.commit()
+        
+        # Update stats after deletion
+        # Recalculate for the affected date
+        remaining_signals = TradingSignal.query.filter_by(
+            trader_name=trader_name,
+            date=date
+        ).first()
+        
+        if remaining_signals:
+            update_trading_stats(remaining_signals)
+        else:
+            # Delete the stats record if no signals remain for this date
+            stats = TradingStats.query.filter_by(
+                trader_name=trader_name,
+                date=date
+            ).first()
+            if stats:
+                db.session.delete(stats)
+                db.session.commit()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# API Routes for Analytics
+@app.route('/api/trading-stats/analytics')
+@login_required
+def api_trading_analytics():
+    """Get trading analytics with filters"""
+    try:
+        trader_name = request.args.get('trader')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d').date() if start_date else None
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').date() if end_date else None
+        
+        analytics = get_trading_analytics(trader_name, start_dt, end_dt)
+        
+        return jsonify({
+            'success': True,
+            'analytics': analytics
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trading-stats/compare')
+@login_required
+def api_compare_traders():
+    """Compare performance between Ray and Jordan"""
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d').date() if start_date else None
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').date() if end_date else None
+        
+        ray_stats = get_trading_analytics('Ray', start_dt, end_dt)
+        jordan_stats = get_trading_analytics('Jordan', start_dt, end_dt)
+        
+        return jsonify({
+            'success': True,
+            'ray': ray_stats,
+            'jordan': jordan_stats
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trading-stats/hypothetical', methods=['POST'])
+@login_required
+def api_hypothetical_analysis():
+    """Calculate hypothetical scenarios"""
+    try:
+        data = request.get_json()
+        target_reward = float(data.get('target_reward', 2.0))
+        trader_name = data.get('trader')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        # Get all signals
+        query = TradingSignal.query
+        
+        if trader_name:
+            query = query.filter_by(trader_name=trader_name)
+        
+        if start_date:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+            query = query.filter(TradingSignal.date >= start_dt)
+        
+        if end_date:
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+            query = query.filter(TradingSignal.date <= end_dt)
+        
+        signals = query.all()
+        
+        # Calculate hypothetical outcomes
+        hypothetical_wins = 0
+        hypothetical_losses = 0
+        hypothetical_total_r = 0
+        modified_signals = []
+        
+        for signal in signals:
+            achieved_r = float(signal.achieved_reward)
+            
+            # If the signal achieved the target reward or better, it's a win
+            if achieved_r >= target_reward:
+                hypothetical_outcome = 'Win'
+                hypothetical_r = target_reward
+                hypothetical_wins += 1
+            # If it was a winning trade but didn't reach target, check if it went far enough
+            elif signal.outcome == 'Win' and achieved_r > 0:
+                # If it achieved less than target but was still positive, count as partial win
+                if achieved_r >= target_reward * 0.8:  # 80% of target
+                    hypothetical_outcome = 'Win'
+                    hypothetical_r = target_reward
+                    hypothetical_wins += 1
+                else:
+                    hypothetical_outcome = 'Loss'
+                    hypothetical_r = -1  # Full loss
+                    hypothetical_losses += 1
+            # If it was a loss but achieved some reward before failing
+            elif signal.outcome == 'Loss' and achieved_r >= target_reward:
+                hypothetical_outcome = 'Win'
+                hypothetical_r = target_reward
+                hypothetical_wins += 1
+            else:
+                hypothetical_outcome = 'Loss'
+                hypothetical_r = -1
+                hypothetical_losses += 1
+            
+            hypothetical_total_r += hypothetical_r
+            
+            modified_signals.append({
+                'id': signal.id,
+                'original_outcome': signal.outcome,
+                'original_reward': float(signal.achieved_reward),
+                'hypothetical_outcome': hypothetical_outcome,
+                'hypothetical_reward': hypothetical_r,
+                'date': signal.date.isoformat(),
+                'pair': signal.pair_name,
+                'trade_type': signal.trade_type
+            })
+        
+        total_trades = len(signals)
+        hypothetical_win_rate = (hypothetical_wins / total_trades * 100) if total_trades > 0 else 0
+        
+        return jsonify({
+            'success': True,
+            'target_reward': target_reward,
+            'total_trades': total_trades,
+            'hypothetical_wins': hypothetical_wins,
+            'hypothetical_losses': hypothetical_losses,
+            'hypothetical_win_rate': round(hypothetical_win_rate, 2),
+            'hypothetical_total_r': round(hypothetical_total_r, 2),
+            'average_r_per_trade': round(hypothetical_total_r / total_trades, 2) if total_trades > 0 else 0,
+            'modified_signals': modified_signals
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trading-stats/balance-calculator', methods=['POST'])
+@login_required
+def api_balance_calculator():
+    """Calculate hypothetical balance growth"""
+    try:
+        data = request.get_json()
+        starting_balance = float(data.get('starting_balance', 10000))
+        risk_percentage = float(data.get('risk_percentage', 1.0))
+        target_reward = float(data.get('target_reward', 2.0))
+        trader_name = data.get('trader')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        # Get hypothetical analysis first
+        hypothetical_data = {
+            'target_reward': target_reward,
+            'trader': trader_name,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        
+        # Reuse the hypothetical analysis logic
+        query = TradingSignal.query
+        
+        if trader_name:
+            query = query.filter_by(trader_name=trader_name)
+        
+        if start_date:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+            query = query.filter(TradingSignal.date >= start_dt)
+        
+        if end_date:
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+            query = query.filter(TradingSignal.date <= end_dt)
+        
+        signals = query.order_by(TradingSignal.date, TradingSignal.created_at).all()
+        
+        # Calculate balance progression
+        current_balance = starting_balance
+        balance_history = [{'date': 'Start', 'balance': current_balance, 'trade_result': 0}]
+        
+        for signal in signals:
+            achieved_r = float(signal.achieved_reward)
+            
+            # Determine hypothetical outcome
+            if achieved_r >= target_reward:
+                trade_r = target_reward
+            elif signal.outcome == 'Win' and achieved_r >= target_reward * 0.8:
+                trade_r = target_reward
+            elif signal.outcome == 'Loss' and achieved_r >= target_reward:
+                trade_r = target_reward
+            else:
+                trade_r = -1
+            
+            # Calculate trade result in dollars
+            risk_amount = current_balance * (risk_percentage / 100)
+            trade_result = risk_amount * trade_r
+            current_balance += trade_result
+            
+            balance_history.append({
+                'date': signal.date.isoformat(),
+                'balance': round(current_balance, 2),
+                'trade_result': round(trade_result, 2),
+                'trade_r': trade_r,
+                'pair': signal.pair_name,
+                'outcome': 'Win' if trade_r > 0 else 'Loss'
+            })
+        
+        total_return = current_balance - starting_balance
+        return_percentage = (total_return / starting_balance * 100) if starting_balance > 0 else 0
+        
+        return jsonify({
+            'success': True,
+            'starting_balance': starting_balance,
+            'ending_balance': round(current_balance, 2),
+            'total_return': round(total_return, 2),
+            'return_percentage': round(return_percentage, 2),
+            'risk_percentage': risk_percentage,
+            'target_reward': target_reward,
+            'balance_history': balance_history
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trading-stats/trader-defaults')
+@login_required
+def api_get_trader_defaults():
+    """Get default settings for current user"""
+    try:
+        trader_name, default_pair, default_rr = get_trader_defaults(current_user)
+        
+        return jsonify({
+            'success': True,
+            'trader_name': trader_name,
+            'default_pair': default_pair,
+            'default_risk_reward': default_rr
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trading-stats/signals')
+@login_required
+def api_get_trading_signals():
+    """Get trading signals with pagination and filters"""
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 20))
+        trader_filter = request.args.get('trader')
+        pair_filter = request.args.get('pair')
+        outcome_filter = request.args.get('outcome')
+        
+        query = TradingSignal.query
+        
+        if trader_filter:
+            query = query.filter_by(trader_name=trader_filter)
+        
+        if pair_filter:
+            query = query.filter_by(pair_name=pair_filter)
+        
+        if outcome_filter:
+            query = query.filter_by(outcome=outcome_filter)
+        
+        pagination = query.order_by(TradingSignal.date.desc(), TradingSignal.created_at.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        signals_data = [signal.to_dict() for signal in pagination.items]
+        
+        return jsonify({
+            'success': True,
+            'signals': signals_data,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'has_next': pagination.has_next,
+                'has_prev': pagination.has_prev
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/admin/user/<int:user_id>')
 @login_required
 def admin_user_details(user_id):
