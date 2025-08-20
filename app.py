@@ -3343,7 +3343,15 @@ def api_hypothetical_analysis():
 @app.route('/api/trading-stats/balance-calculator', methods=['POST'])
 @login_required
 def api_balance_calculator():
-    """Calculate hypothetical balance growth"""
+    """Calculate hypothetical balance growth - Premium Feature"""
+    # Check if user has active subscription
+    if not current_user.has_active_subscription():
+        return jsonify({
+            'error': 'Premium subscription required',
+            'message': 'Balance growth calculator is a premium feature. Upgrade to unlock advanced portfolio analytics.',
+            'upgrade_url': url_for('manage_subscription')
+        }), 403
+    
     try:
         data = request.get_json()
         starting_balance = float(data.get('starting_balance', 10000))
