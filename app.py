@@ -813,7 +813,9 @@ def stripe_webhook_whop():
     """Enhanced Stripe webhook handler with Whop detection"""
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get('Stripe-Signature')
-    endpoint_secret = app.config.get('STRIPE_WEBHOOK_SECRET')
+    
+    # Use separate webhook secret for Whop
+    endpoint_secret = app.config.get('STRIPE_WHOP_WEBHOOK_SECRET') or app.config.get('STRIPE_WEBHOOK_SECRET')
     
     if not endpoint_secret:
         print("⚠️ Stripe webhook secret not configured")
