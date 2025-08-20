@@ -257,6 +257,24 @@
             color: var(--accent-color);
         }
 
+        .auth-footer .text-muted {
+            color: var(--text-primary) !important;
+        }
+
+        .form-check-label {
+            color: var(--text-secondary) !important;
+            font-weight: 500;
+        }
+
+        .forgot-password-link {
+            color: var(--text-secondary) !important;
+            font-weight: 500;
+        }
+
+        .forgot-password-link:hover {
+            color: var(--primary-color) !important;
+        }
+
         .feature-list {
             list-style: none;
             padding: 0;
@@ -374,11 +392,11 @@
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="rememberMe">
-                            <label class="form-check-label text-muted" for="rememberMe">
+                            <label class="form-check-label" for="rememberMe">
                                 Remember me
                             </label>
                         </div>
-                        <a href="#" class="text-muted small">Forgot password?</a>
+                        <a href="#" class="forgot-password-link small">Forgot password?</a>
                     </div>
                     
                     <!-- Submit Button -->
@@ -387,16 +405,6 @@
                         Sign In
                     </button>
                 </form>
-
-                <!-- Demo Account -->
-                <div class="divider">
-                    <span>or try demo</span>
-                </div>
-
-                <button class="btn btn-outline-secondary w-100 mb-3" onclick="fillDemoCredentials()">
-                    <span class="material-symbols-outlined me-2">play_arrow</span>
-                    Try Demo Account
-                </button>
 
                 <!-- Features -->
                 <ul class="feature-list">
@@ -441,14 +449,6 @@
                 passwordInput.type = 'password';
                 toggleIcon.textContent = 'visibility';
             }
-        }
-
-        function fillDemoCredentials() {
-            document.querySelector('[name="username"]').value = 'demo';
-            document.querySelector('[name="password"]').value = 'demo123';
-            
-            // Show toast
-            showToast('Demo credentials filled. Click Sign In to continue.', 'info');
         }
 
         // Global notification function
@@ -497,14 +497,6 @@
 
             // Focus first input
             document.querySelector('[name="username"]').focus();
-        });
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
-            if (e.ctrlKey && e.key === 'd') {
-                e.preventDefault();
-                fillDemoCredentials();
-            }
         });
     </script>
 </body>
