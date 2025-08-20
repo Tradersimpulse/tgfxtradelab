@@ -2294,6 +2294,31 @@ def is_lifetime_subscriber(self):
     return self.subscription_plan == 'lifetime' and self.has_subscription
         
 # Custom Jinja2 filters
+
+@app.template_filter('linkify')
+def linkify_filter(text):
+    """Convert URLs in text to clickable links"""
+    if text is None:
+        return ''
+    
+    # URL regex pattern
+    url_pattern = re.compile(
+        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    )
+    
+    # Replace URLs with HTML links
+    def replace_url(match):
+        url = match.group(0)
+        return f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="notes-link">{url}</a>'
+    
+    # First convert line breaks to <br> tags
+    text_with_breaks = text.replace('\n', '<br>\n')
+    
+    # Then linkify URLs
+    linkified_text = url_pattern.sub(replace_url, text_with_breaks)
+    
+    return linkified_text
+    
 @app.template_filter('nl2br')
 def nl2br_filter(text):
     if text is None:
