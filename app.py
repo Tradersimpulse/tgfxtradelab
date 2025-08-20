@@ -1503,23 +1503,6 @@ def upload_thumbnail_to_s3(image, video_id, video_title):
         print(f"Error uploading thumbnail to S3: {e}")
         return None
 
-def get_trader_defaults(user):
-    """
-    Get default trading pair and name for auto-fill
-    """
-    if not user:
-        return "Trader", "EURUSD"
-    
-    # Map users to their default trading pairs
-    trader_defaults = {
-        'jordan': ('Jordan', 'XAUUSD'),
-        'jwill24': ('Jordan', 'XAUUSD'),
-        'admin': ('Ray', 'EURUSD'),
-        'ray': ('Ray', 'EURUSD')
-    }
-    
-    username = user.username.lower()
-    return trader_defaults.get(username, (user.display_name or user.username, 'EURUSD'))
 
 def auto_fill_live_session_title(user):
     """
