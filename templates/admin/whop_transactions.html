@@ -1,0 +1,546 @@
+<!-- templates/admin/whop_transactions.html -->
+{% extends 'admin/base.html' %}
+
+{% block title %}Whop Transactions{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Whop Transactions</h1>
+        <a href="{{ url_for('admin_whop_price_mappings') }}" class="btn btn-primary">
+            <i class="fas fa-cog"></i> Price Mappings
+        </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total Transactions</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_transactions }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-shopping-cart fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Access Granted</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ access_granted }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Verified</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ verified_transactions }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clipboard-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Total Revenue</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">${{ "%.2f"|format(total_revenue) }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Whop Transactions</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Email</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Whop Price ID</th>
+                            <th>App Price ID</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in transactions %}
+                        <tr>
+                            <td>{{ transaction.id }}</td>
+                            <td>
+                                {{ transaction.email }}
+                                {% if transaction.user %}
+                                <br><small class="text-muted">User: {{ transaction.user.username }}</small>
+                                {% endif %}
+                            </td>
+                            <td>${{ "%.2f"|format(transaction.amount or 0) }}</td>
+                            <td>
+                                {% if transaction.status == 'access_granted' %}
+                                <span class="badge badge-success">{{ transaction.status|title }}</span>
+                                {% elif transaction.status == 'verified' %}
+                                <span class="badge badge-info">{{ transaction.status|title }}</span>
+                                {% elif transaction.status == 'pending' %}
+                                <span class="badge badge-warning">{{ transaction.status|title }}</span>
+                                {% else %}
+                                <span class="badge badge-danger">{{ transaction.status|title }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ transaction.whop_price_id }}</small>
+                            </td>
+                            <td>
+                                <small>{{ transaction.app_price_id or 'Not mapped' }}</small>
+                            </td>
+                            <td>{{ transaction.created_at.strftime('%m/%d/%Y %H:%M') }}</td>
+                            <td>
+                                {% if transaction.status != 'access_granted' %}
+                                <button class="btn btn-sm btn-success" onclick="grantAccess({{ transaction.id }})">
+                                    Grant Access
+                                </button>
+                                {% endif %}
+                                <button class="btn btn-sm btn-info" onclick="viewDetails({{ transaction.id }})">
+                                    View
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for transaction details -->
+<div class="modal fade" id="transactionModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Transaction Details</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="transactionDetails">
+                <!-- Transaction details will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function grantAccess(transactionId) {
+    if (confirm('Grant access for this Whop transaction?')) {
+        fetch(`/api/admin/whop-transaction/${transactionId}/grant-access`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Access granted successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('Error granting access: ' + error);
+        });
+    }
+}
+
+function viewDetails(transactionId) {
+    // You can implement a detailed view here
+    alert('Transaction details view - to be implemented');
+}
+
+// Initialize DataTable
+$(document).ready(function() {
+    $('#dataTable').DataTable({
+        "order": [[ 6, "desc" ]], // Sort by created date descending
+        "pageLength": 25
+    });
+});
+</script>
+{% endblock %}
+
+<!-- templates/admin/whop_price_mappings.html -->
+{% extends 'admin/base.html' %}
+
+{% block title %}Whop Price Mappings{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Whop Price Mappings</h1>
+        <div>
+            <a href="{{ url_for('admin_whop_transactions') }}" class="btn btn-secondary mr-2">
+                <i class="fas fa-arrow-left"></i> Back to Transactions
+            </a>
+            <button class="btn btn-primary" onclick="showAddMappingModal()">
+                <i class="fas fa-plus"></i> Add Mapping
+            </button>
+        </div>
+    </div>
+
+    <!-- Info Alert -->
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i>
+        <strong>Price Mappings:</strong> These map Whop.com price IDs to your app's Stripe price IDs. 
+        When a user purchases through Whop, their subscription will be mapped to the correct plan in your app.
+    </div>
+
+    <!-- Mappings Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Price Mappings</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Whop Price ID</th>
+                            <th>App Price ID</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mapping in mappings %}
+                        <tr>
+                            <td>
+                                <strong>{{ mapping.product_name }}</strong>
+                                {% if mapping.description %}
+                                <br><small class="text-muted">{{ mapping.description }}</small>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ mapping.whop_price_id }}</code></td>
+                            <td><code>{{ mapping.app_price_id }}</code></td>
+                            <td>
+                                {% if mapping.is_active %}
+                                <span class="badge badge-success">Active</span>
+                                {% else %}
+                                <span class="badge badge-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ mapping.created_at.strftime('%m/%d/%Y') }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-warning" onclick="editMapping({{ mapping.id }})">
+                                    Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteMapping({{ mapping.id }})">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Mapping Modal -->
+<div class="modal fade" id="mappingModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mappingModalTitle">Add Price Mapping</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="mappingForm">
+                    <div class="form-group">
+                        <label for="productName">Product Name</label>
+                        <input type="text" class="form-control" id="productName" required>
+                        <small class="form-text text-muted">Human-readable name for this mapping</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="whopPriceId">Whop Price ID</label>
+                        <input type="text" class="form-control" id="whopPriceId" required placeholder="price_1abc123...">
+                        <small class="form-text text-muted">The price ID from Whop.com/Stripe</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="appPriceId">App Price ID</label>
+                        <input type="text" class="form-control" id="appPriceId" required placeholder="price_1xyz789...">
+                        <small class="form-text text-muted">Your app's corresponding Stripe price ID</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Description (Optional)</label>
+                        <textarea class="form-control" id="description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="isActive" checked>
+                        <label class="form-check-label" for="isActive">Active</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveMappingk()">Save Mapping</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentMappingId = null;
+
+function showAddMappingModal() {
+    currentMappingId = null;
+    document.getElementById('mappingModalTitle').textContent = 'Add Price Mapping';
+    document.getElementById('mappingForm').reset();
+    document.getElementById('isActive').checked = true;
+    $('#mappingModal').modal('show');
+}
+
+function editMapping(mappingId) {
+    // Implement edit functionality
+    alert('Edit mapping functionality - to be implemented');
+}
+
+function deleteMapping(mappingId) {
+    if (confirm('Delete this price mapping? This cannot be undone.')) {
+        // Implement delete functionality
+        alert('Delete mapping functionality - to be implemented');
+    }
+}
+
+function saveMapping() {
+    const formData = {
+        product_name: document.getElementById('productName').value,
+        whop_price_id: document.getElementById('whopPriceId').value,
+        app_price_id: document.getElementById('appPriceId').value,
+        description: document.getElementById('description').value,
+        is_active: document.getElementById('isActive').checked
+    };
+    
+    const url = currentMappingId 
+        ? `/api/admin/whop-price-mapping/${currentMappingId}`
+        : '/api/admin/whop-price-mapping';
+    
+    const method = currentMappingId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Price mapping saved successfully!');
+            $('#mappingModal').modal('hide');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error saving mapping: ' + error);
+    });
+}
+</script>
+{% endblock %}
+
+<!-- templates/components/whop_verification.html -->
+<div class="whop-verification-section">
+    <div class="card border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-shopping-cart mr-2"></i>
+                Purchased on Whop.com?
+            </h5>
+        </div>
+        <div class="card-body">
+            <p class="card-text">
+                If you purchased your subscription through Whop.com, click below to verify your purchase and activate your access.
+            </p>
+            
+            <div class="whop-verification-form">
+                <div class="form-group">
+                    <label for="whop-email">Email used for Whop purchase:</label>
+                    <input type="email" class="form-control" id="whop-email" 
+                           value="{{ current_user.email }}" 
+                           placeholder="Enter your email">
+                    <small class="form-text text-muted">
+                        This should match the email you used when purchasing on Whop.com
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="whop-transaction-id">Transaction ID (Optional):</label>
+                    <input type="text" class="form-control" id="whop-transaction-id" 
+                           placeholder="Leave blank to auto-detect">
+                    <small class="form-text text-muted">
+                        If you have the transaction ID from Whop, enter it here for faster verification
+                    </small>
+                </div>
+                
+                <button class="btn btn-success btn-lg btn-block" onclick="verifyWhopPurchase()">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    Verify Whop Purchase
+                </button>
+            </div>
+            
+            <div id="whop-verification-result" class="mt-3" style="display: none;">
+                <!-- Results will be shown here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verifyWhopPurchase() {
+    const email = document.getElementById('whop-email').value;
+    const transactionId = document.getElementById('whop-transaction-id').value;
+    const resultDiv = document.getElementById('whop-verification-result');
+    
+    if (!email) {
+        alert('Please enter your email address');
+        return;
+    }
+    
+    // Show loading state
+    resultDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin mr-2"></i>
+            Verifying your Whop purchase...
+        </div>
+    `;
+    resultDiv.style.display = 'block';
+    
+    const requestData = { email: email };
+    if (transactionId) {
+        requestData.transaction_id = transactionId;
+    }
+    
+    fetch('/api/verify-whop-purchase', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    <strong>Success!</strong> ${data.message}
+                    <br><small>Plan: ${data.plan || 'Unknown'} | Amount: $${data.amount || '0.00'}</small>
+                </div>
+            `;
+            
+            // Reload page after a delay to show updated subscription status
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <strong>Not Found:</strong> ${data.message}
+                    <br><br>
+                    <small>
+                        <strong>Troubleshooting:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Make sure you used the same email for both Whop and this account</li>
+                            <li>Wait a few minutes after purchasing for the transaction to sync</li>
+                            <li>Contact support if the issue persists</li>
+                        </ul>
+                    </small>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-times-circle mr-2"></i>
+                <strong>Error:</strong> Failed to verify purchase. Please try again or contact support.
+                <br><small>Error: ${error}</small>
+            </div>
+        `;
+    });
+}
+</script>
+
+<!-- Add this CSS for styling -->
+<style>
+.whop-verification-section {
+    margin: 20px 0;
+}
+
+.whop-verification-section .card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.whop-verification-section .btn-success {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    border: none;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    transition: all 0.3s ease;
+}
+
+.whop-verification-section .btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+}
+</style>
