@@ -1,0 +1,145 @@
+<div class="whop-verification-section">
+    <div class="card border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">
+                <i class="fas fa-shopping-cart mr-2"></i>
+                Purchased on Whop.com?
+            </h5>
+        </div>
+        <div class="card-body">
+            <p class="card-text">
+                If you purchased your subscription through Whop.com, click below to verify your purchase and activate your access.
+            </p>
+            
+            <div class="whop-verification-form">
+                <div class="form-group">
+                    <label for="whop-email">Email used for Whop purchase:</label>
+                    <input type="email" class="form-control" id="whop-email" 
+                           value="{{ current_user.email }}" 
+                           placeholder="Enter your email">
+                    <small class="form-text text-muted">
+                        This should match the email you used when purchasing on Whop.com
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="whop-transaction-id">Transaction ID (Optional):</label>
+                    <input type="text" class="form-control" id="whop-transaction-id" 
+                           placeholder="Leave blank to auto-detect">
+                    <small class="form-text text-muted">
+                        If you have the transaction ID from Whop, enter it here for faster verification
+                    </small>
+                </div>
+                
+                <button class="btn btn-success btn-lg btn-block" onclick="verifyWhopPurchase()">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    Verify Whop Purchase
+                </button>
+            </div>
+            
+            <div id="whop-verification-result" class="mt-3" style="display: none;">
+                <!-- Results will be shown here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function verifyWhopPurchase() {
+    const email = document.getElementById('whop-email').value;
+    const transactionId = document.getElementById('whop-transaction-id').value;
+    const resultDiv = document.getElementById('whop-verification-result');
+    
+    if (!email) {
+        alert('Please enter your email address');
+        return;
+    }
+    
+    // Show loading state
+    resultDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin mr-2"></i>
+            Verifying your Whop purchase...
+        </div>
+    `;
+    resultDiv.style.display = 'block';
+    
+    const requestData = { email: email };
+    if (transactionId) {
+        requestData.transaction_id = transactionId;
+    }
+    
+    fetch('/api/verify-whop-purchase', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    <strong>Success!</strong> ${data.message}
+                    <br><small>Plan: ${data.plan || 'Unknown'} | Amount: $${data.amount || '0.00'}</small>
+                </div>
+            `;
+            
+            // Reload page after a delay to show updated subscription status
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <strong>Not Found:</strong> ${data.message}
+                    <br><br>
+                    <small>
+                        <strong>Troubleshooting:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Make sure you used the same email for both Whop and this account</li>
+                            <li>Wait a few minutes after purchasing for the transaction to sync</li>
+                            <li>Contact support if the issue persists</li>
+                        </ul>
+                    </small>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-times-circle mr-2"></i>
+                <strong>Error:</strong> Failed to verify purchase. Please try again or contact support.
+                <br><small>Error: ${error}</small>
+            </div>
+        `;
+    });
+}
+</script>
+
+<!-- Add this CSS for styling -->
+<style>
+.whop-verification-section {
+    margin: 20px 0;
+}
+
+.whop-verification-section .card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.whop-verification-section .btn-success {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    border: none;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    transition: all 0.3s ease;
+}
+
+.whop-verification-section .btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+}
+</style>
