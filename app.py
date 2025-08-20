@@ -1151,6 +1151,140 @@ def rollback_migration():
         print(f"❌ Rollback failed: {e}")
         db.session.rollback()
 
+def get_trading_analytics(trader_name=None, start_date=None, end_date=None):
+    """Calculate comprehensive trading analytics"""
+    try:
+        # Build query
+        query = TradingSignal.query
+        
+        if trader_name:
+            query = query.filter_by(trader_name=trader_name)
+        
+        if start_date:
+            query = query.filter(TradingSignal.date >= start_date)
+        
+        if end_date:
+            query = query.filter(TradingSignal.date <= end_date)
+        
+        signals = query.all()
+        
+        if not signals:
+            return {
+                'total_trades': 0,
+                'wins': 0,
+                'losses': 0,
+                'breakevens': 0,
+                'win_rate': 0,
+                'total_r_reward': 0,
+                'average_r_per_trade': 0,
+                'best_trade': 0,
+                'worst_trade': 0,
+                'day_of_week_stats': {}
+            }
+        
+        # Calculate basic stats
+        total_trades = len(signals)
+        wins = len([s for s in signals if s.outcome == 'Win'])
+        losses = len([s for s in signals if s.outcome == 'Loss'])
+        breakevens = len([s for s in signals if s.outcome == 'Breakeven'])
+        
+        win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+        
+        # Calculate R rewards using actual_rr field
+        total_r_reward = sum([float(getattr(s, 'actual_rr', getattr(s, 'achieved_reward', 0))) for s in signals])
+        average_r_per_trade = total_r_reward / total_trades if total_trades > 0 else 0
+        
+        # Best and worst trades
+        r_values = [float(getattr(s, 'actual_rr', getattr(s, 'achieved_reward', 0))) for s in signals]
+        best_trade = max(r_values) if r_values else 0
+        worst_trade = min(r_values) if r_values else 0
+        
+        # Day of week statistics
+        day_stats = {}
+        for signal in signals:
+            day = signal.day_of_week
+            if day not in day_stats:
+                day_stats[day] = {'trades': 0, 'wins': 0, 'total_r': 0}
+            
+            day_stats[day]['trades'] += 1
+            if signal.outcome == 'Win':
+                day_stats[day]['wins'] += 1
+            day_stats[day]['total_r'] += float(getattr(signal, 'actual_rr', getattr(signal, 'achieved_reward', 0)))
+        
+        return {
+            'total_trades': total_trades,
+            'wins': wins,
+            'losses': losses,
+            'breakevens': breakevens,
+            'win_rate': round(win_rate, 2),
+            'total_r_reward': round(total_r_reward, 2),
+            'average_r_per_trade': round(average_r_per_trade, 2),
+            'best_trade': round(best_trade, 2),
+            'worst_trade': round(worst_trade, 2),
+            'day_of_week_stats': day_stats
+        }
+        
+    except Exception as e:
+        print(f"Error calculating trading analytics: {e}")
+        return {
+            'total_trades': 0,
+            'wins': 0,
+            'losses': 0,
+            'breakevens': 0,
+            'win_rate': 0,
+            'total_r_reward': 0,
+            'average_r_per_trade': 0,
+            'best_trade': 0,
+            'worst_trade': 0,
+            'day_of_week_stats': {}
+        }
+
+def calculate_day_of_week(date):
+    """Calculate day of week from date"""
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    return days[date.weekday()]
+
+def get_trader_defaults(user):
+    """Get default trader settings based on user"""
+    trader_defaults = {
+        'jordan': ('Jordan', 'XAUUSD', 2.0),
+        'jwill24': ('Jordan', 'XAUUSD', 2.0),
+        'admin': ('Ray', 'EURUSD', 2.0),
+        'ray': ('Ray', 'EURUSD', 2.0)
+    }
+    
+    username = user.username.lower() if user.username else 'unknown'
+    return trader_defaults.get(username, (user.display_name or user.username, 'EURUSD', 2.0))
+
+def update_trading_stats(signal):
+    """Update aggregated trading stats when a signal is added/modified"""
+    try:
+        # This is a placeholder - you can implement TradingStats model aggregation here if needed
+        print(f"Updated stats for {signal.trader_name} signal on {signal.date}")
+        return True
+        
+    except Exception as e:
+        print(f"Error updating trading stats: {e}")
+        return False
+
+class TradingStats(db.Model):
+    """Model for aggregated trading statistics (optional)"""
+    __tablename__ = 'trading_stats'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    trader_name = db.Column(db.String(50), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    total_trades = db.Column(db.Integer, default=0, nullable=False)
+    wins = db.Column(db.Integer, default=0, nullable=False)
+    losses = db.Column(db.Integer, default=0, nullable=False)
+    breakevens = db.Column(db.Integer, default=0, nullable=False)
+    total_r_reward = db.Column(db.Numeric(10, 2), default=0.0, nullable=False)
+    total_pips = db.Column(db.Numeric(10, 2), default=0.0, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Composite unique constraint
+    __table_args__ = (db.UniqueConstraint('trader_name', 'date', name='unique_trader_date_stats'),)
+
 # API endpoint for manual migration trigger
 @app.route('/api/admin/migrate-trading-signals', methods=['POST'])
 @login_required
