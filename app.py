@@ -4520,7 +4520,7 @@ def api_upgrade_to_annual():
         # Update subscription in Stripe
         subscription = stripe.Subscription.retrieve(current_user.stripe_subscription_id)
         
-        sstripe.Subscription.modify(
+        stripe.Subscription.modify(
             current_user.stripe_subscription_id,
             items=[{
                 'id': subscription['items']['data'][0].id,
