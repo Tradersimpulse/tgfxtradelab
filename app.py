@@ -935,6 +935,266 @@ def send_discord_webhook(title, description, color=5814783, fields=None, thumbna
         print(f"❌ Discord webhook error: {e}")
         return False
 
+def migrate_trading_signals_to_dual_rr():
+    """
+    Migrate trading signals database to support both actual_rr and achieved_rr fields
+    
+    This migration:
+    1. Adds the new 'achieved_rr' column for maximum favorable excursion
+    2. Renames 'achieved_reward' to 'actual_rr' for clarity
+    3. Provides backward compatibility
+    """
+    try:
+        print("🔄 Starting trading signals database migration...")
+        
+        # Step 1: Add the new achieved_rr column
+        try:
+            db.session.execute('''
+                ALTER TABLE trading_signals 
+                ADD COLUMN achieved_rr DECIMAL(4,2) DEFAULT NULL
+            ''')
+            print("✅ Added 'achieved_rr' column for maximum favorable excursion tracking")
+        except Exception as e:
+            if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                print("ℹ️ 'achieved_rr' column already exists")
+            else:
+                print(f"⚠️ Error adding achieved_rr column: {e}")
+            db.session.rollback()
+        
+        # Step 2: Add the new actual_rr column  
+        try:
+            db.session.execute('''
+                ALTER TABLE trading_signals 
+                ADD COLUMN actual_rr DECIMAL(4,2) DEFAULT 0.0
+            ''')
+            print("✅ Added 'actual_rr' column for final trade outcomes")
+        except Exception as e:
+            if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                print("ℹ️ 'actual_rr' column already exists")
+            else:
+                print(f"⚠️ Error adding actual_rr column: {e}")
+            db.session.rollback()
+        
+        # Step 3: Copy data from achieved_reward to actual_rr (if needed)
+        try:
+            # Check if achieved_reward column exists
+            result = db.session.execute('''
+                SELECT COUNT(*) as count 
+                FROM information_schema.columns 
+                WHERE table_name = 'trading_signals' 
+                AND column_name = 'achieved_reward'
+            ''').fetchone()
+            
+            if result and result[0] > 0:
+                # Copy data from old column to new column
+                db.session.execute('''
+                    UPDATE trading_signals 
+                    SET actual_rr = achieved_reward 
+                    WHERE achieved_reward IS NOT NULL AND actual_rr = 0.0
+                ''')
+                
+                rows_updated = db.session.execute('SELECT ROW_COUNT()').fetchone()[0]
+                print(f"✅ Copied {rows_updated} records from 'achieved_reward' to 'actual_rr'")
+                
+                # Note: We don't drop the old column immediately for safety
+                print("ℹ️ Old 'achieved_reward' column preserved for safety (can be dropped manually later)")
+            else:
+                print("ℹ️ No 'achieved_reward' column found to migrate")
+                
+        except Exception as e:
+            print(f"⚠️ Error during data migration: {e}")
+            db.session.rollback()
+            
+        # Step 4: Update any null actual_rr values based on outcome
+        try:
+            db.session.execute('''
+                UPDATE trading_signals 
+                SET actual_rr = CASE 
+                    WHEN outcome = 'Win' AND risk_reward_ratio IS NOT NULL THEN risk_reward_ratio
+                    WHEN outcome = 'Loss' THEN -1.0
+                    WHEN outcome = 'Breakeven' THEN 0.0
+                    ELSE 0.0
+                END
+                WHERE actual_rr IS NULL OR actual_rr = 0.0
+            ''')
+            print("✅ Updated null actual_rr values based on trade outcomes")
+        except Exception as e:
+            print(f"⚠️ Error updating null values: {e}")
+            db.session.rollback()
+        
+        # Step 5: Add helpful indexes for performance
+        try:
+            db.session.execute('''
+                CREATE INDEX IF NOT EXISTS idx_trading_signals_actual_rr 
+                ON trading_signals(actual_rr)
+            ''')
+            db.session.execute('''
+                CREATE INDEX IF NOT EXISTS idx_trading_signals_achieved_rr 
+                ON trading_signals(achieved_rr)
+            ''')
+            print("✅ Added database indexes for better query performance")
+        except Exception as e:
+            print(f"⚠️ Error adding indexes: {e}")
+            db.session.rollback()
+        
+        # Commit all changes
+        db.session.commit()
+        
+        # Step 6: Validate migration
+        validation_result = validate_migration()
+        if validation_result['success']:
+            print("✅ Migration validation passed!")
+            print(f"   📊 Total signals: {validation_result['total_signals']}")
+            print(f"   📈 Signals with actual_rr: {validation_result['signals_with_actual_rr']}")
+            print(f"   📉 Signals with achieved_rr: {validation_result['signals_with_achieved_rr']}")
+        else:
+            print("⚠️ Migration validation warnings:")
+            for warning in validation_result['warnings']:
+                print(f"   - {warning}")
+        
+        print("🎉 Trading signals migration completed successfully!")
+        print()
+        print("📋 What's New:")
+        print("   • 'Actual R' - Final trade outcome (positive for wins, negative for losses)")
+        print("   • 'Achieved R' - Maximum favorable excursion before reversal")
+        print("   • Enhanced hypothetical analysis using achieved R data")
+        print("   • Better insights for exit strategy optimization")
+        print()
+        print("📝 Next Steps:")
+        print("   1. Start tracking 'Achieved R' for new signals")
+        print("   2. Update historical signals with achieved R data when possible")
+        print("   3. Use hypothetical analysis to optimize exit strategies")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Migration failed: {e}")
+        db.session.rollback()
+        return False
+
+def validate_migration():
+    """Validate that the migration completed successfully"""
+    try:
+        # Count total signals
+        total_signals = db.session.execute(
+            'SELECT COUNT(*) FROM trading_signals'
+        ).scalar()
+        
+        # Count signals with actual_rr data
+        signals_with_actual_rr = db.session.execute(
+            'SELECT COUNT(*) FROM trading_signals WHERE actual_rr IS NOT NULL'
+        ).scalar()
+        
+        # Count signals with achieved_rr data
+        signals_with_achieved_rr = db.session.execute(
+            'SELECT COUNT(*) FROM trading_signals WHERE achieved_rr IS NOT NULL'
+        ).scalar()
+        
+        warnings = []
+        
+        # Check for potential issues
+        if signals_with_actual_rr < total_signals:
+            warnings.append(f"{total_signals - signals_with_actual_rr} signals missing actual_rr data")
+        
+        if signals_with_achieved_rr == 0:
+            warnings.append("No signals have achieved_rr data yet (this is normal for historical data)")
+        
+        # Check for impossible values
+        impossible_values = db.session.execute('''
+            SELECT COUNT(*) FROM trading_signals 
+            WHERE outcome = 'Win' AND actual_rr < 0
+        ''').scalar()
+        
+        if impossible_values > 0:
+            warnings.append(f"{impossible_values} winning trades have negative actual_rr values")
+        
+        return {
+            'success': len(warnings) == 0 or all('normal for historical' in w for w in warnings),
+            'total_signals': total_signals,
+            'signals_with_actual_rr': signals_with_actual_rr,
+            'signals_with_achieved_rr': signals_with_achieved_rr,
+            'warnings': warnings
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'warnings': [f"Validation failed: {e}"]
+        }
+
+def rollback_migration():
+    """Rollback the migration if needed (use with caution!)"""
+    try:
+        print("⚠️ Rolling back trading signals migration...")
+        
+        # Restore data to achieved_reward if it exists
+        try:
+            db.session.execute('''
+                UPDATE trading_signals 
+                SET achieved_reward = actual_rr 
+                WHERE actual_rr IS NOT NULL
+            ''')
+            print("✅ Restored data to achieved_reward column")
+        except Exception as e:
+            print(f"⚠️ Could not restore to achieved_reward: {e}")
+        
+        # Drop new columns (commented out for safety)
+        # db.session.execute('ALTER TABLE trading_signals DROP COLUMN actual_rr')
+        # db.session.execute('ALTER TABLE trading_signals DROP COLUMN achieved_rr')
+        # print("✅ Dropped new columns")
+        
+        db.session.commit()
+        print("✅ Migration rollback completed")
+        
+    except Exception as e:
+        print(f"❌ Rollback failed: {e}")
+        db.session.rollback()
+
+# API endpoint for manual migration trigger
+@app.route('/api/admin/migrate-trading-signals', methods=['POST'])
+@login_required
+def api_migrate_trading_signals():
+    """API endpoint to trigger trading signals migration"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Admin access required'}), 403
+    
+    try:
+        success = migrate_trading_signals_to_dual_rr()
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Trading signals migration completed successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Migration failed, check server logs'
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Add this to your app initialization in the main block
+def enhanced_initialize_app():
+    """Enhanced initialization that includes the new migration"""
+    try:
+        with app.app_context():
+            # Existing initialization code...
+            db.create_all()
+            print("✓ Database tables created successfully")
+            
+            # NEW: Run trading signals migration
+            migrate_trading_signals_to_dual_rr()
+            
+            # Existing code for admin user, streamers, etc...
+            
+    except Exception as e:
+        print(f"❌ Enhanced app initialization error: {e}")
+        return False
+    
+    return True
+    
+
 def send_new_video_webhook(video, category):
     """Send Discord notification for new video"""
     fields = [
