@@ -1,0 +1,570 @@
+<!-- templates/trading_stats/signals_list.html -->
+{% extends "base.html" %}
+
+{% block title %}Trading Signals - TGFX Trade Lab{% endblock %}
+
+{% block head %}
+<style>
+    .signal-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .signal-card:hover {
+        border-color: rgba(16, 185, 129, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+    
+    .signal-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+    }
+    
+    .signal-card.win::before {
+        background: linear-gradient(90deg, #10B981, #34D399);
+    }
+    
+    .signal-card.loss::before {
+        background: linear-gradient(90deg, #EF4444, #F87171);
+    }
+    
+    .signal-card.breakeven::before {
+        background: linear-gradient(90deg, #6B7280, #9CA3AF);
+    }
+    
+    .trader-indicator {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.25rem;
+        color: white;
+        margin-bottom: 1rem;
+    }
+    
+    .trader-indicator.ray {
+        background: linear-gradient(135deg, #10B981, #059669);
+    }
+    
+    .trader-indicator.jordan {
+        background: linear-gradient(135deg, #3B82F6, #1D4ED8);
+    }
+    
+    .pair-badge {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-weight: 700;
+        font-size: 1rem;
+        color: #10B981;
+    }
+    
+    .trade-direction {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+    }
+    
+    .trade-direction.buy {
+        color: #10B981;
+    }
+    
+    .trade-direction.sell {
+        color: #EF4444;
+    }
+    
+    .price-levels {
+        background: var(--bg-tertiary);
+        border-radius: 12px;
+        padding: 1rem;
+    }
+    
+    .price-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.25rem 0;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+    
+    .price-label {
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    .price-value {
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    
+    .outcome-display {
+        text-align: center;
+        padding: 1rem;
+        border-radius: 12px;
+        border: 2px solid;
+    }
+    
+    .outcome-display.win {
+        background: rgba(16, 185, 129, 0.1);
+        border-color: rgba(16, 185, 129, 0.3);
+        color: #10B981;
+    }
+    
+    .outcome-display.loss {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.3);
+        color: #EF4444;
+    }
+    
+    .outcome-display.breakeven {
+        background: rgba(156, 163, 175, 0.1);
+        border-color: rgba(156, 163, 175, 0.3);
+        color: #9CA3AF;
+    }
+    
+    .reward-display {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+    
+    .reward-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .rr-ratio {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 0.75rem;
+        text-align: center;
+    }
+    
+    .rr-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #10B981;
+    }
+    
+    .video-link {
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 8px;
+        padding: 0.75rem;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    
+    .video-link:hover {
+        background: rgba(59, 130, 246, 0.2);
+        transform: translateY(-2px);
+    }
+    
+    .signal-notes {
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .filter-bar {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        position: sticky;
+        top: 1rem;
+        z-index: 100;
+    }
+    
+    .stats-summary {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1rem;
+        text-align: center;
+    }
+    
+    .stats-number {
+        font-size: 1.5rem;
+        font-weight: 800;
+        margin-bottom: 0.25rem;
+    }
+    
+    .stats-label {
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .pagination-wrapper {
+        display: flex;
+        justify-content: center;
+        margin-top: 2rem;
+    }
+    
+    .trade-meta {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border-light);
+    }
+    
+    .date-badge {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 0.5rem;
+        text-align: center;
+        min-width: 80px;
+    }
+    
+    .date-day {
+        font-size: 1.25rem;
+        font-weight: 700;
+        line-height: 1;
+        margin-bottom: 0.25rem;
+    }
+    
+    .date-month {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .day-of-week {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1 text-gradient-primary">📊 Trading Signals</h1>
+            <p class="text-muted mb-0">Complete history of Ray and Jordan's trading calls</p>
+        </div>
+        <div>
+            <a href="{{ url_for('trading_stats') }}" class="btn btn-primary">
+                <span class="material-symbols-outlined me-2">analytics</span>
+                View Analytics
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label">Trader</label>
+                <select name="trader" class="form-select">
+                    <option value="">All Traders</option>
+                    <option value="Ray" {% if trader_filter == 'Ray' %}selected{% endif %}>Ray</option>
+                    <option value="Jordan" {% if trader_filter == 'Jordan' %}selected{% endif %}>Jordan</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Pair</label>
+                <select name="pair" class="form-select">
+                    <option value="">All Pairs</option>
+                    <option value="EURUSD" {% if pair_filter == 'EURUSD' %}selected{% endif %}>EUR/USD</option>
+                    <option value="XAUUSD" {% if pair_filter == 'XAUUSD' %}selected{% endif %}>Gold</option>
+                    <option value="NQ" {% if pair_filter == 'NQ' %}selected{% endif %}>NASDAQ</option>
+                    <option value="GBPUSD" {% if pair_filter == 'GBPUSD' %}selected{% endif %}>GBP/USD</option>
+                    <option value="USDJPY" {% if pair_filter == 'USDJPY' %}selected{% endif %}>USD/JPY</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Outcome</label>
+                <select name="outcome" class="form-select">
+                    <option value="">All Outcomes</option>
+                    <option value="Win" {% if outcome_filter == 'Win' %}selected{% endif %}>Win</option>
+                    <option value="Loss" {% if outcome_filter == 'Loss' %}selected{% endif %}>Loss</option>
+                    <option value="Breakeven" {% if outcome_filter == 'Breakeven' %}selected{% endif %}>Breakeven</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">From Date</label>
+                <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">To Date</label>
+                <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <span class="material-symbols-outlined me-2">search</span>
+                    Filter
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="stats-summary">
+                <div class="stats-number text-primary">{{ signals|length }}</div>
+                <div class="stats-label">Total Signals</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-summary">
+                <div class="stats-number text-success">{{ signals|selectattr('outcome', 'equalto', 'Win')|list|length }}</div>
+                <div class="stats-label">Wins</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-summary">
+                <div class="stats-number text-danger">{{ signals|selectattr('outcome', 'equalto', 'Loss')|list|length }}</div>
+                <div class="stats-label">Losses</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-summary">
+                {% set total_r = signals|map(attribute='achieved_reward')|map('float')|sum %}
+                <div class="stats-number" style="color: #10B981;">{{ "%.1f"|format(total_r) }}R</div>
+                <div class="stats-label">Total R Reward</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signals List -->
+    <div class="row">
+        {% if signals %}
+            {% for signal in signals %}
+            <div class="col-lg-6 mb-4">
+                <div class="signal-card {{ signal.outcome.lower() }}">
+                    <!-- Trader and Date -->
+                    <div class="trade-meta">
+                        <div class="trader-indicator {{ signal.trader_name.lower() }}">
+                            {{ signal.trader_name[0] }}
+                        </div>
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1">{{ signal.trader_name }}</h5>
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="date-badge">
+                                    <div class="date-day">{{ signal.date.strftime('%d') }}</div>
+                                    <div class="date-month">{{ signal.date.strftime('%b') }}</div>
+                                </div>
+                                <div>
+                                    <div class="fw-bold">{{ signal.date.strftime('%B %d, %Y') }}</div>
+                                    <div class="day-of-week">{{ signal.day_of_week }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pair-badge">{{ signal.pair_name }}</div>
+                    </div>
+
+                    <div class="row">
+                        <!-- Trade Details -->
+                        <div class="col-md-6">
+                            <!-- Trade Direction -->
+                            <div class="trade-direction {{ signal.trade_type.lower() }} mb-3">
+                                {% if signal.trade_type == 'Buy' %}
+                                    <span class="material-symbols-outlined">trending_up</span>
+                                {% else %}
+                                    <span class="material-symbols-outlined">trending_down</span>
+                                {% endif %}
+                                <span class="fw-bold">{{ signal.trade_type.upper() }}</span>
+                            </div>
+
+                            <!-- Price Levels -->
+                            <div class="price-levels">
+                                <div class="price-item">
+                                    <span class="price-label">Entry:</span>
+                                    <span class="price-value">{{ "%.5f"|format(signal.entry_price|float) }}</span>
+                                </div>
+                                <div class="price-item">
+                                    <span class="price-label">Stop Loss:</span>
+                                    <span class="price-value">{{ "%.5f"|format(signal.stop_loss_price|float) }}</span>
+                                </div>
+                                <div class="price-item">
+                                    <span class="price-label">Target:</span>
+                                    <span class="price-value">{{ "%.5f"|format(signal.target_price|float) }}</span>
+                                </div>
+                            </div>
+
+                            <!-- R/R Ratio -->
+                            <div class="rr-ratio mt-3">
+                                <div class="rr-value">{{ signal.risk_reward_ratio }}:1</div>
+                                <small class="text-muted">Risk/Reward</small>
+                            </div>
+                        </div>
+
+                        <!-- Outcome -->
+                        <div class="col-md-6">
+                            <div class="outcome-display {{ signal.outcome.lower() }}">
+                                <div class="reward-display">{{ signal.achieved_reward }}R</div>
+                                <div class="reward-label">{{ signal.outcome }}</div>
+                                
+                                {% if signal.outcome == 'Win' %}
+                                    <div class="mt-2">
+                                        <span class="material-symbols-outlined">check_circle</span>
+                                    </div>
+                                {% elif signal.outcome == 'Loss' %}
+                                    <div class="mt-2">
+                                        <span class="material-symbols-outlined">cancel</span>
+                                    </div>
+                                {% else %}
+                                    <div class="mt-2">
+                                        <span class="material-symbols-outlined">remove</span>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Video Link -->
+                            {% if signal.linked_video %}
+                            <div class="video-link mt-3">
+                                <a href="{{ url_for('watch_video', video_id=signal.linked_video.id) }}" 
+                                   class="text-decoration-none">
+                                    <div class="d-flex align-items-center justify-content-center gap-2">
+                                        <span class="material-symbols-outlined text-info">play_circle</span>
+                                        <span class="fw-bold text-info">Watch Live Session</span>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">{{ signal.linked_video.title }}</small>
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    {% if signal.notes %}
+                    <div class="signal-notes">
+                        <h6 class="mb-2">
+                            <span class="material-symbols-outlined me-2">note</span>
+                            Trading Notes
+                        </h6>
+                        <p class="mb-0">{{ signal.notes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <!-- Empty State -->
+        <div class="col-12">
+            <div class="text-center py-5">
+                <span class="material-symbols-outlined mb-3" style="font-size: 4rem; color: var(--text-muted);">trending_up</span>
+                <h4 class="text-muted">No Trading Signals Found</h4>
+                <p class="text-muted mb-4">
+                    {% if trader_filter or pair_filter or outcome_filter or start_date or end_date %}
+                        No signals match your current filters. Try adjusting the filter criteria.
+                    {% else %}
+                        No trading signals have been recorded yet.
+                    {% endif %}
+                </p>
+                
+                {% if trader_filter or pair_filter or outcome_filter or start_date or end_date %}
+                <a href="{{ url_for('trading_signals_list') }}" class="btn btn-outline-primary">
+                    <span class="material-symbols-outlined me-2">clear_all</span>
+                    Clear Filters
+                </a>
+                {% endif %}
+                
+                <a href="{{ url_for('trading_stats') }}" class="btn btn-primary ms-2">
+                    <span class="material-symbols-outlined me-2">analytics</span>
+                    View Analytics
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination placeholder for future implementation -->
+    {% if signals and signals|length >= 20 %}
+    <div class="pagination-wrapper">
+        <nav aria-label="Trading signals pagination">
+            <ul class="pagination">
+                <li class="page-item disabled">
+                    <span class="page-link">Previous</span>
+                </li>
+                <li class="page-item active">
+                    <span class="page-link">1</span>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="#">2</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="#">Next</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add hover effects to signal cards
+    const signalCards = document.querySelectorAll('.signal-card');
+    
+    signalCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-4px)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(-2px)';
+        });
+    });
+    
+    // Auto-focus on trader filter if it's the only filter applied
+    const traderFilter = document.querySelector('select[name="trader"]');
+    if (traderFilter && traderFilter.value && window.location.search.includes('trader=')) {
+        traderFilter.focus();
+    }
+});
+
+// Add smooth scrolling to video links
+document.querySelectorAll('.video-link a').forEach(link => {
+    link.addEventListener('click', function(e) {
+        // Add a small delay to show click feedback
+        e.preventDefault();
+        const href = this.getAttribute('href');
+        
+        setTimeout(() => {
+            window.location.href = href;
+        }, 150);
+        
+        // Visual feedback
+        this.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            this.style.transform = 'scale(1)';
+        }, 150);
+    });
+});
+</script>
+{% endblock %}
