@@ -164,7 +164,76 @@
             line-height: 1.6;
         }
 
+        @media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+    }
+
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding: 1rem;
+        padding-top: 5rem; /* INCREASE THIS - was 4rem, now 5rem to account for mobile toggle */
+    }
+
+    .mobile-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(4px);
+    }
+
+    .mobile-overlay.show {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .mobile-toggle {
+        position: fixed;
+        top: 1rem; /* REDUCE THIS - was 1.5rem, now 1rem */
+        left: 1rem; /* REDUCE THIS - was 1.5rem, now 1rem */
+        z-index: 1002;
+        background: var(--gradient-primary);
+        border: none;
+        color: white;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadow-lg);
+        transition: all 0.2s ease;
+    }
+
+    .mobile-toggle:hover {
+        transform: scale(1.05);
+    }
+
+    /* Ensure flash messages don't get hidden behind mobile toggle */
+    .alert {
+        margin-top: 1rem;
+    }
+
+    /* Mobile logo adjustments */
+    .sidebar-logo {
+        height: 42px;
+        max-width: 160px;
+    }
+}
+
         /* COMPLETE BOOTSTRAP OVERRIDE FOR GREEN THEME */
+    
         .text-primary {
             color: #10B981 !important;
         }
