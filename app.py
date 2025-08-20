@@ -4504,13 +4504,13 @@ def api_upgrade_to_annual():
         # Update subscription in Stripe
         subscription = stripe.Subscription.retrieve(current_user.stripe_subscription_id)
         
-        stripe.Subscription.modify(
+        sstripe.Subscription.modify(
             current_user.stripe_subscription_id,
             items=[{
                 'id': subscription['items']['data'][0].id,
                 'price': annual_price_id,
             }],
-            proration_behavior='immediate_with_remainder'
+            proration_behavior='create_prorations'
         )
         
         # Update user record
