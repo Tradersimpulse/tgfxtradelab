@@ -5,55 +5,78 @@
 
 {% block head %}
 <style>
-    .signal-card {
+    .signals-container {
         background: var(--bg-card);
         border: 1px solid var(--border-color);
         border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
-        position: relative;
         overflow: hidden;
     }
     
-    .signal-card:hover {
-        border-color: rgba(16, 185, 129, 0.3);
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    .signals-header {
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 1.5rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
     
-    .signal-card::before {
+    .signal-row {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--border-light);
+        transition: all 0.2s ease;
+        cursor: pointer;
+        position: relative;
+    }
+    
+    .signal-row:last-child {
+        border-bottom: none;
+    }
+    
+    .signal-row:hover {
+        background: var(--bg-tertiary);
+        transform: translateX(2px);
+    }
+    
+    .signal-row::before {
         content: '';
         position: absolute;
-        top: 0;
         left: 0;
-        right: 0;
-        height: 4px;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        transition: all 0.2s ease;
     }
     
-    .signal-card.win::before {
-        background: linear-gradient(90deg, #10B981, #34D399);
+    .signal-row.win::before {
+        background: #10B981;
     }
     
-    .signal-card.loss::before {
-        background: linear-gradient(90deg, #EF4444, #F87171);
+    .signal-row.loss::before {
+        background: #EF4444;
     }
     
-    .signal-card.breakeven::before {
-        background: linear-gradient(90deg, #6B7280, #9CA3AF);
+    .signal-row.breakeven::before {
+        background: #6B7280;
+    }
+    
+    .signal-row:hover::before {
+        width: 6px;
     }
     
     .trader-indicator {
-        width: 50px;
-        height: 50px;
-        border-radius: 12px;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 700;
-        font-size: 1.25rem;
+        font-size: 1rem;
         color: white;
-        margin-bottom: 1rem;
+        flex-shrink: 0;
     }
     
     .trader-indicator.ray {
@@ -67,11 +90,12 @@
     .pair-badge {
         background: var(--bg-tertiary);
         border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        padding: 0.25rem 0.75rem;
         font-weight: 700;
-        font-size: 1rem;
+        font-size: 0.875rem;
         color: #10B981;
+        white-space: nowrap;
     }
     
     .trade-direction {
@@ -79,6 +103,7 @@
         align-items: center;
         gap: 0.5rem;
         font-weight: 600;
+        font-size: 0.875rem;
     }
     
     .trade-direction.buy {
@@ -89,103 +114,105 @@
         color: #EF4444;
     }
     
-    .price-levels {
-        background: var(--bg-tertiary);
-        border-radius: 12px;
-        padding: 1rem;
-    }
-    
-    .price-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.25rem 0;
+    .price-display {
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    }
-    
-    .price-label {
-        font-weight: 600;
-        color: var(--text-secondary);
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    
-    .price-value {
-        font-weight: 700;
+        font-size: 0.875rem;
         color: var(--text-primary);
     }
     
-    .outcome-display {
-        text-align: center;
-        padding: 1rem;
-        border-radius: 12px;
-        border: 2px solid;
+    .price-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        display: block;
+        margin-bottom: 2px;
     }
     
-    .outcome-display.win {
-        background: rgba(16, 185, 129, 0.1);
-        border-color: rgba(16, 185, 129, 0.3);
-        color: #10B981;
-    }
-    
-    .outcome-display.loss {
-        background: rgba(239, 68, 68, 0.1);
-        border-color: rgba(239, 68, 68, 0.3);
-        color: #EF4444;
-    }
-    
-    .outcome-display.breakeven {
-        background: rgba(156, 163, 175, 0.1);
-        border-color: rgba(156, 163, 175, 0.3);
-        color: #9CA3AF;
-    }
-    
-    .reward-display {
-        font-size: 2rem;
-        font-weight: 800;
-        margin-bottom: 0.5rem;
-    }
-    
-    .reward-label {
-        font-size: 0.875rem;
+    .outcome-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        white-space: nowrap;
     }
     
-    .rr-ratio {
-        background: var(--bg-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 0.75rem;
+    .outcome-badge.win {
+        background: rgba(16, 185, 129, 0.2);
+        color: #10B981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    
+    .outcome-badge.loss {
+        background: rgba(239, 68, 68, 0.2);
+        color: #EF4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    
+    .outcome-badge.breakeven {
+        background: rgba(156, 163, 175, 0.2);
+        color: #9CA3AF;
+        border: 1px solid rgba(156, 163, 175, 0.3);
+    }
+    
+    .reward-display {
+        font-size: 1.25rem;
+        font-weight: 800;
         text-align: center;
     }
     
-    .rr-value {
-        font-size: 1.5rem;
-        font-weight: 700;
+    .reward-display.positive {
         color: #10B981;
     }
     
-    .video-link {
+    .reward-display.negative {
+        color: #EF4444;
+    }
+    
+    .reward-display.neutral {
+        color: #6B7280;
+    }
+    
+    .rr-ratio {
+        font-weight: 700;
+        color: #10B981;
+        text-align: center;
+    }
+    
+    .date-display {
+        text-align: center;
+    }
+    
+    .date-day {
+        font-size: 1.125rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    
+    .date-meta {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-top: 2px;
+    }
+    
+    .video-link-btn {
         background: rgba(59, 130, 246, 0.1);
         border: 1px solid rgba(59, 130, 246, 0.3);
-        border-radius: 8px;
-        padding: 0.75rem;
-        text-align: center;
-        transition: all 0.3s ease;
+        border-radius: 6px;
+        padding: 0.25rem 0.5rem;
+        color: #3B82F6;
+        text-decoration: none;
+        font-size: 0.75rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        white-space: nowrap;
     }
     
-    .video-link:hover {
+    .video-link-btn:hover {
         background: rgba(59, 130, 246, 0.2);
-        transform: translateY(-2px);
-    }
-    
-    .signal-notes {
-        background: rgba(245, 158, 11, 0.1);
-        border: 1px solid rgba(245, 158, 11, 0.3);
-        border-radius: 8px;
-        padding: 1rem;
-        margin-top: 1rem;
+        color: #3B82F6;
+        transform: scale(1.05);
     }
     
     .filter-bar {
@@ -194,9 +221,6 @@
         border-radius: 16px;
         padding: 1.5rem;
         margin-bottom: 2rem;
-        position: sticky;
-        top: 1rem;
-        z-index: 100;
     }
     
     .stats-summary {
@@ -221,48 +245,87 @@
         letter-spacing: 0.05em;
     }
     
-    .pagination-wrapper {
-        display: flex;
-        justify-content: center;
-        margin-top: 2rem;
+    .expandable-row {
+        background: var(--bg-tertiary);
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--border-light);
+        display: none;
     }
     
-    .trade-meta {
+    .expandable-row.expanded {
+        display: block;
+    }
+    
+    .notes-section {
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    .expand-indicator {
+        color: var(--text-secondary);
+        transition: transform 0.2s ease;
+        margin-left: 0.5rem;
+    }
+    
+    .signal-row.expanded .expand-indicator {
+        transform: rotate(180deg);
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    
+    .btn-sm-icon {
+        padding: 0.25rem;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-secondary);
+        transition: all 0.2s ease;
+        width: 32px;
+        height: 32px;
         display: flex;
         align-items: center;
-        gap: 1rem;
-        margin-bottom: 1rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--border-light);
+        justify-content: center;
     }
     
-    .date-badge {
+    .btn-sm-icon:hover {
         background: var(--bg-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 0.5rem;
-        text-align: center;
-        min-width: 80px;
+        color: var(--text-primary);
     }
     
-    .date-day {
-        font-size: 1.25rem;
-        font-weight: 700;
-        line-height: 1;
-        margin-bottom: 0.25rem;
+    .btn-sm-icon.edit:hover {
+        background: rgba(59, 130, 246, 0.1);
+        color: #3B82F6;
+        border-color: rgba(59, 130, 246, 0.3);
     }
     
-    .date-month {
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+    .btn-sm-icon.delete:hover {
+        background: rgba(239, 68, 68, 0.1);
+        color: #EF4444;
+        border-color: rgba(239, 68, 68, 0.3);
     }
     
-    .day-of-week {
-        font-size: 0.875rem;
-        color: var(--text-muted);
-        margin-top: 0.25rem;
+    @media (max-width: 768px) {
+        .signals-header {
+            display: none;
+        }
+        
+        .signal-row {
+            padding: 1rem;
+        }
+        
+        .signal-row .row > div {
+            margin-bottom: 0.5rem;
+        }
+        
+        .signal-row .row > div:last-child {
+            margin-bottom: 0;
+        }
     }
 </style>
 {% endblock %}
@@ -360,154 +423,208 @@
         </div>
     </div>
 
-    <!-- Signals List -->
-    <div class="row">
+    <!-- Signals Table -->
+    <div class="signals-container">
+        <!-- Header -->
+        <div class="signals-header d-none d-md-block">
+            <div class="row align-items-center">
+                <div class="col-md-2">Trader & Date</div>
+                <div class="col-md-1">Pair</div>
+                <div class="col-md-1">Type</div>
+                <div class="col-md-2">Entry</div>
+                <div class="col-md-1">Stop</div>
+                <div class="col-md-1">Target</div>
+                <div class="col-md-1">R:R</div>
+                <div class="col-md-1">Result</div>
+                <div class="col-md-1">Reward</div>
+                <div class="col-md-1">Actions</div>
+            </div>
+        </div>
+
+        <!-- Signal Rows -->
         {% if signals %}
             {% for signal in signals %}
-            <div class="col-lg-6 mb-4">
-                <div class="signal-card {{ signal.outcome.lower() }}">
-                    <!-- Trader and Date -->
-                    <div class="trade-meta">
-                        <div class="trader-indicator {{ signal.trader_name.lower() }}">
-                            {{ signal.trader_name[0] }}
-                        </div>
-                        <div class="flex-grow-1">
-                            <h5 class="mb-1">{{ signal.trader_name }}</h5>
-                            <div class="d-flex align-items-center gap-3">
-                                <div class="date-badge">
-                                    <div class="date-day">{{ signal.date.strftime('%d') }}</div>
-                                    <div class="date-month">{{ signal.date.strftime('%b') }}</div>
-                                </div>
-                                <div>
-                                    <div class="fw-bold">{{ signal.date.strftime('%B %d, %Y') }}</div>
-                                    <div class="day-of-week">{{ signal.day_of_week }}</div>
-                                </div>
+            <div class="signal-row {{ signal.outcome.lower() }}" onclick="toggleRow({{ signal.id }})">
+                <div class="row align-items-center">
+                    <!-- Trader & Date -->
+                    <div class="col-md-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="trader-indicator {{ signal.trader_name.lower() }}">
+                                {{ signal.trader_name[0] }}
+                            </div>
+                            <div>
+                                <div class="fw-bold">{{ signal.trader_name }}</div>
+                                <div class="date-meta">{{ signal.date.strftime('%b %d') }}</div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Pair -->
+                    <div class="col-md-1">
                         <div class="pair-badge">{{ signal.pair_name }}</div>
                     </div>
 
-                    <div class="row">
-                        <!-- Trade Details -->
-                        <div class="col-md-6">
-                            <!-- Trade Direction -->
-                            <div class="trade-direction {{ signal.trade_type.lower() }} mb-3">
-                                {% if signal.trade_type == 'Buy' %}
-                                    <span class="material-symbols-outlined">trending_up</span>
-                                {% else %}
-                                    <span class="material-symbols-outlined">trending_down</span>
-                                {% endif %}
-                                <span class="fw-bold">{{ signal.trade_type.upper() }}</span>
-                            </div>
-
-                            <!-- Price Levels -->
-                            <div class="price-levels">
-                                <div class="price-item">
-                                    <span class="price-label">Entry:</span>
-                                    <span class="price-value">{{ "%.5f"|format(signal.entry_price|float) }}</span>
-                                </div>
-                                <div class="price-item">
-                                    <span class="price-label">Stop Loss:</span>
-                                    <span class="price-value">{{ "%.5f"|format(signal.stop_loss_price|float) }}</span>
-                                </div>
-                                <div class="price-item">
-                                    <span class="price-label">Target:</span>
-                                    <span class="price-value">{{ "%.5f"|format(signal.target_price|float) }}</span>
-                                </div>
-                            </div>
-
-                            <!-- R/R Ratio -->
-                            <div class="rr-ratio mt-3">
-                                <div class="rr-value">{{ signal.risk_reward_ratio }}:1</div>
-                                <small class="text-muted">Risk/Reward</small>
-                            </div>
-                        </div>
-
-                        <!-- Outcome -->
-                        <div class="col-md-6">
-                            <div class="outcome-display {{ signal.outcome.lower() }}">
-                                <div class="reward-display">{{ signal.achieved_reward }}R</div>
-                                <div class="reward-label">{{ signal.outcome }}</div>
-                                
-                                {% if signal.outcome == 'Win' %}
-                                    <div class="mt-2">
-                                        <span class="material-symbols-outlined">check_circle</span>
-                                    </div>
-                                {% elif signal.outcome == 'Loss' %}
-                                    <div class="mt-2">
-                                        <span class="material-symbols-outlined">cancel</span>
-                                    </div>
-                                {% else %}
-                                    <div class="mt-2">
-                                        <span class="material-symbols-outlined">remove</span>
-                                    </div>
-                                {% endif %}
-                            </div>
-
-                            <!-- Video Link -->
-                            {% if signal.linked_video %}
-                            <div class="video-link mt-3">
-                                <a href="{{ url_for('watch_video', video_id=signal.linked_video.id) }}" 
-                                   class="text-decoration-none">
-                                    <div class="d-flex align-items-center justify-content-center gap-2">
-                                        <span class="material-symbols-outlined text-info">play_circle</span>
-                                        <span class="fw-bold text-info">Watch Live Session</span>
-                                    </div>
-                                    <small class="text-muted d-block mt-1">{{ signal.linked_video.title }}</small>
-                                </a>
-                            </div>
+                    <!-- Trade Type -->
+                    <div class="col-md-1">
+                        <div class="trade-direction {{ signal.trade_type.lower() }}">
+                            {% if signal.trade_type == 'Buy' %}
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">trending_up</span>
+                            {% else %}
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">trending_down</span>
                             {% endif %}
+                            <span>{{ signal.trade_type }}</span>
                         </div>
                     </div>
 
-                    <!-- Notes -->
-                    {% if signal.notes %}
-                    <div class="signal-notes">
-                        <h6 class="mb-2">
-                            <span class="material-symbols-outlined me-2">note</span>
-                            Trading Notes
-                        </h6>
-                        <p class="mb-0">{{ signal.notes }}</p>
+                    <!-- Entry Price -->
+                    <div class="col-md-2">
+                        <div class="price-display">{{ "%.5f"|format(signal.entry_price|float) }}</div>
                     </div>
-                    {% endif %}
+
+                    <!-- Stop Loss -->
+                    <div class="col-md-1">
+                        <div class="price-display">{{ "%.5f"|format(signal.stop_loss_price|float) }}</div>
+                    </div>
+
+                    <!-- Target -->
+                    <div class="col-md-1">
+                        <div class="price-display">{{ "%.5f"|format(signal.target_price|float) }}</div>
+                    </div>
+
+                    <!-- Risk/Reward -->
+                    <div class="col-md-1">
+                        <div class="rr-ratio">{{ signal.risk_reward_ratio }}:1</div>
+                    </div>
+
+                    <!-- Outcome -->
+                    <div class="col-md-1">
+                        <div class="outcome-badge {{ signal.outcome.lower() }}">
+                            {{ signal.outcome }}
+                        </div>
+                    </div>
+
+                    <!-- Reward -->
+                    <div class="col-md-1">
+                        {% if signal.achieved_reward|float > 0 %}
+                            <div class="reward-display positive">{{ signal.achieved_reward }}R</div>
+                        {% elif signal.achieved_reward|float < 0 %}
+                            <div class="reward-display negative">{{ signal.achieved_reward }}R</div>
+                        {% else %}
+                            <div class="reward-display neutral">{{ signal.achieved_reward }}R</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="col-md-1">
+                        <div class="action-buttons">
+                            {% if signal.linked_video %}
+                                <a href="{{ url_for('watch_video', video_id=signal.linked_video.id) }}" 
+                                   class="video-link-btn" 
+                                   title="Watch Live Session"
+                                   onclick="event.stopPropagation()">
+                                    <span class="material-symbols-outlined" style="font-size: 0.875rem;">play_circle</span>
+                                </a>
+                            {% endif %}
+                            
+                            {% if current_user.is_admin %}
+                                <button class="btn-sm-icon edit" 
+                                        title="Edit Signal"
+                                        onclick="event.stopPropagation(); editSignal({{ signal.id }})">
+                                    <span class="material-symbols-outlined" style="font-size: 0.875rem;">edit</span>
+                                </button>
+                                
+                                <button class="btn-sm-icon delete" 
+                                        title="Delete Signal"
+                                        onclick="event.stopPropagation(); deleteSignal({{ signal.id }})">
+                                    <span class="material-symbols-outlined" style="font-size: 0.875rem;">delete</span>
+                                </button>
+                            {% endif %}
+                            
+                            <span class="expand-indicator">
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">expand_more</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expandable Details -->
+            <div id="details-{{ signal.id }}" class="expandable-row">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="mb-3">📊 Trade Details</h6>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <div class="price-label">Full Date</div>
+                                <div class="fw-bold">{{ signal.date.strftime('%B %d, %Y') }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="price-label">Day of Week</div>
+                                <div class="fw-bold">{{ signal.day_of_week }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="price-label">Pips Risked</div>
+                                <div class="fw-bold">{{ "%.1f"|format(signal.calculate_pips_risked()) }} pips</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="price-label">Pips Target</div>
+                                <div class="fw-bold">{{ "%.1f"|format(signal.calculate_pips_target()) }} pips</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        {% if signal.notes %}
+                        <div class="notes-section">
+                            <h6 class="mb-2">
+                                <span class="material-symbols-outlined me-2" style="font-size: 1rem;">note</span>
+                                Trading Notes
+                            </h6>
+                            <p class="mb-0">{{ signal.notes }}</p>
+                        </div>
+                        {% else %}
+                        <div class="text-center text-muted py-4">
+                            <span class="material-symbols-outlined mb-2" style="font-size: 2rem;">note_add</span>
+                            <div>No trading notes available</div>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% endfor %}
         {% else %}
         <!-- Empty State -->
-        <div class="col-12">
-            <div class="text-center py-5">
-                <span class="material-symbols-outlined mb-3" style="font-size: 4rem; color: var(--text-muted);">trending_up</span>
-                <h4 class="text-muted">No Trading Signals Found</h4>
-                <p class="text-muted mb-4">
-                    {% if trader_filter or pair_filter or outcome_filter or start_date or end_date %}
-                        No signals match your current filters. Try adjusting the filter criteria.
-                    {% else %}
-                        No trading signals have been recorded yet.
-                    {% endif %}
-                </p>
-                
+        <div class="text-center py-5">
+            <span class="material-symbols-outlined mb-3" style="font-size: 4rem; color: var(--text-muted);">trending_up</span>
+            <h4 class="text-muted">No Trading Signals Found</h4>
+            <p class="text-muted mb-4">
                 {% if trader_filter or pair_filter or outcome_filter or start_date or end_date %}
-                <a href="{{ url_for('trading_signals_list') }}" class="btn btn-outline-primary">
-                    <span class="material-symbols-outlined me-2">clear_all</span>
-                    Clear Filters
-                </a>
+                    No signals match your current filters. Try adjusting the filter criteria.
+                {% else %}
+                    No trading signals have been recorded yet.
                 {% endif %}
-                
-                <a href="{{ url_for('trading_stats') }}" class="btn btn-primary ms-2">
-                    <span class="material-symbols-outlined me-2">analytics</span>
-                    View Analytics
-                </a>
-            </div>
+            </p>
+            
+            {% if trader_filter or pair_filter or outcome_filter or start_date or end_date %}
+            <a href="{{ url_for('trading_signals_list') }}" class="btn btn-outline-primary">
+                <span class="material-symbols-outlined me-2">clear_all</span>
+                Clear Filters
+            </a>
+            {% endif %}
+            
+            <a href="{{ url_for('trading_stats') }}" class="btn btn-primary ms-2">
+                <span class="material-symbols-outlined me-2">analytics</span>
+                View Analytics
+            </a>
         </div>
         {% endif %}
     </div>
 
-    <!-- Pagination placeholder for future implementation -->
+    <!-- Pagination placeholder -->
     {% if signals and signals|length >= 20 %}
-    <div class="pagination-wrapper">
+    <div class="text-center mt-4">
         <nav aria-label="Trading signals pagination">
-            <ul class="pagination">
+            <ul class="pagination justify-content-center">
                 <li class="page-item disabled">
                     <span class="page-link">Previous</span>
                 </li>
@@ -527,17 +644,69 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Add hover effects to signal cards
-    const signalCards = document.querySelectorAll('.signal-card');
+// Toggle expandable row details
+function toggleRow(signalId) {
+    const detailsRow = document.getElementById(`details-${signalId}`);
+    const signalRow = detailsRow.previousElementSibling;
     
-    signalCards.forEach(card => {
-        card.addEventListener('mouseenter', function() {
-            this.style.transform = 'translateY(-4px)';
+    if (detailsRow.classList.contains('expanded')) {
+        detailsRow.classList.remove('expanded');
+        signalRow.classList.remove('expanded');
+    } else {
+        // Close all other expanded rows
+        document.querySelectorAll('.expandable-row.expanded').forEach(row => {
+            row.classList.remove('expanded');
+        });
+        document.querySelectorAll('.signal-row.expanded').forEach(row => {
+            row.classList.remove('expanded');
         });
         
-        card.addEventListener('mouseleave', function() {
-            this.style.transform = 'translateY(-2px)';
+        // Open this row
+        detailsRow.classList.add('expanded');
+        signalRow.classList.add('expanded');
+    }
+}
+
+// Edit signal function
+function editSignal(signalId) {
+    window.location.href = `/admin/trading-signal/edit/${signalId}`;
+}
+
+// Delete signal function
+function deleteSignal(signalId) {
+    if (confirm('Are you sure you want to delete this trading signal?')) {
+        fetch(`/admin/trading-signal/${signalId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error deleting signal: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error deleting signal');
+        });
+    }
+}
+
+// Enhanced hover effects
+document.addEventListener('DOMContentLoaded', function() {
+    const signalRows = document.querySelectorAll('.signal-row');
+    
+    signalRows.forEach(row => {
+        row.addEventListener('mouseenter', function() {
+            this.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
+        });
+        
+        row.addEventListener('mouseleave', function() {
+            this.style.boxShadow = 'none';
         });
     });
     
@@ -548,23 +717,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Add smooth scrolling to video links
-document.querySelectorAll('.video-link a').forEach(link => {
-    link.addEventListener('click', function(e) {
-        // Add a small delay to show click feedback
-        e.preventDefault();
-        const href = this.getAttribute('href');
-        
-        setTimeout(() => {
-            window.location.href = href;
-        }, 150);
-        
-        // Visual feedback
-        this.style.transform = 'scale(0.95)';
-        setTimeout(() => {
-            this.style.transform = 'scale(1)';
-        }, 150);
-    });
+// Add keyboard navigation
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        // Close all expanded rows
+        document.querySelectorAll('.expandable-row.expanded').forEach(row => {
+            row.classList.remove('expanded');
+        });
+        document.querySelectorAll('.signal-row.expanded').forEach(row => {
+            row.classList.remove('expanded');
+        });
+    }
 });
 </script>
 {% endblock %}
