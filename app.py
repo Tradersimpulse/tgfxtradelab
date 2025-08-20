@@ -3242,7 +3242,15 @@ def api_compare_traders():
 @app.route('/api/trading-stats/hypothetical', methods=['POST'])
 @login_required
 def api_hypothetical_analysis():
-    """Calculate hypothetical scenarios"""
+    """Calculate hypothetical scenarios - Premium Feature"""
+    # Check if user has active subscription
+    if not current_user.has_active_subscription():
+        return jsonify({
+            'error': 'Premium subscription required',
+            'message': 'Hypothetical analysis is a premium feature. Upgrade to unlock advanced trading analytics.',
+            'upgrade_url': url_for('manage_subscription')
+        }), 403
+    
     try:
         data = request.get_json()
         target_reward = float(data.get('target_reward', 2.0))
