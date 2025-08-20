@@ -1,0 +1,509 @@
+<!-- templates/admin/trading_signals.html -->
+{% extends "base.html" %}
+
+{% block title %}Trading Signals Management - Admin{% endblock %}
+
+{% block head %}
+<style>
+    .quick-stats {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .quick-stats .stat-number {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+    
+    .quick-stats .stat-label {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .signal-row {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+    
+    .signal-row:hover {
+        border-color: rgba(16, 185, 129, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    }
+    
+    .trader-indicator {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        color: white;
+    }
+    
+    .trader-indicator.ray {
+        background: linear-gradient(135deg, #10B981, #059669);
+    }
+    
+    .trader-indicator.jordan {
+        background: linear-gradient(135deg, #3B82F6, #1D4ED8);
+    }
+    
+    .outcome-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        border: 1px solid;
+    }
+    
+    .outcome-badge.win {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10B981;
+        border-color: rgba(16, 185, 129, 0.3);
+    }
+    
+    .outcome-badge.loss {
+        background: rgba(239, 68, 68, 0.1);
+        color: #EF4444;
+        border-color: rgba(239, 68, 68, 0.3);
+    }
+    
+    .outcome-badge.breakeven {
+        background: rgba(156, 163, 175, 0.1);
+        color: #9CA3AF;
+        border-color: rgba(156, 163, 175, 0.3);
+    }
+    
+    .price-info {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.875rem;
+    }
+    
+    .r-reward {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #10B981;
+    }
+    
+    .admin-actions {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .signal-row:hover .admin-actions {
+        opacity: 1;
+    }
+    
+    .quick-add-form {
+        background: var(--bg-tertiary);
+        border: 2px dashed var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        transition: all 0.3s ease;
+    }
+    
+    .quick-add-form:hover {
+        border-color: rgba(16, 185, 129, 0.4);
+        background: rgba(16, 185, 129, 0.05);
+    }
+    
+    .auto-fill-btn {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #10B981;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        transition: all 0.3s ease;
+    }
+    
+    .auto-fill-btn:hover {
+        background: rgba(16, 185, 129, 0.2);
+        border-color: rgba(16, 185, 129, 0.5);
+        color: #059669;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1 text-gradient-primary">📈 Trading Signals Management</h1>
+            <p class="text-muted mb-0">Manage and track trading signals from Ray and Jordan</p>
+        </div>
+        <div>
+            <a href="{{ url_for('admin_add_trading_signal') }}" class="btn btn-primary">
+                <span class="material-symbols-outlined me-2">add</span>
+                Add Signal
+            </a>
+            <a href="{{ url_for('trading_stats') }}" class="btn btn-outline-primary ms-2">
+                <span class="material-symbols-outlined me-2">analytics</span>
+                View Analytics
+            </a>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="quick-stats">
+                <div class="stat-number text-primary" id="totalSignals">{{ signals|length }}</div>
+                <div class="stat-label">Total Signals</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="quick-stats">
+                <div class="stat-number text-success" id="todaySignals">
+                    {{ signals|selectattr('date', 'equalto', today)|list|length if today else 0 }}
+                </div>
+                <div class="stat-label">Today's Signals</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="quick-stats">
+                <div class="stat-number text-info" id="raySignals">
+                    {{ signals|selectattr('trader_name', 'equalto', 'Ray')|list|length }}
+                </div>
+                <div class="stat-label">Ray's Signals</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="quick-stats">
+                <div class="stat-number text-warning" id="jordanSignals">
+                    {{ signals|selectattr('trader_name', 'equalto', 'Jordan')|list|length }}
+                </div>
+                <div class="stat-label">Jordan's Signals</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Add Form -->
+    <div class="quick-add-form">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h5 class="mb-2">
+                    <span class="material-symbols-outlined me-2">flash_on</span>
+                    Quick Add Signal
+                </h5>
+                <p class="text-muted mb-0">Click to quickly add a new trading signal with auto-filled defaults</p>
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="auto-fill-btn me-2" onclick="getTraderDefaults()">
+                    <span class="material-symbols-outlined me-2">auto_fix_high</span>
+                    Auto-fill for {{ current_user.display_name or current_user.username }}
+                </button>
+                <a href="{{ url_for('admin_add_trading_signal') }}" class="btn btn-primary">
+                    <span class="material-symbols-outlined me-2">add</span>
+                    Add Signal
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <span class="material-symbols-outlined me-2">filter_list</span>
+                Filter Signals
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Trader</label>
+                    <select class="form-select" id="traderFilter">
+                        <option value="">All Traders</option>
+                        <option value="Ray">Ray</option>
+                        <option value="Jordan">Jordan</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Pair</label>
+                    <select class="form-select" id="pairFilter">
+                        <option value="">All Pairs</option>
+                        <option value="EURUSD">EUR/USD</option>
+                        <option value="XAUUSD">Gold</option>
+                        <option value="NQ">NASDAQ</option>
+                        <option value="GBPUSD">GBP/USD</option>
+                        <option value="USDJPY">USD/JPY</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Outcome</label>
+                    <select class="form-select" id="outcomeFilter">
+                        <option value="">All Outcomes</option>
+                        <option value="Win">Win</option>
+                        <option value="Loss">Loss</option>
+                        <option value="Breakeven">Breakeven</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" class="form-control" id="fromDate">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">To Date</label>
+                    <input type="date" class="form-control" id="toDate">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-outline-primary w-100" onclick="applyFilters()">
+                        <span class="material-symbols-outlined me-2">search</span>
+                        Filter
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signals List -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">list</span>
+                    Recent Trading Signals
+                </h5>
+                <div>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="refreshSignals()">
+                        <span class="material-symbols-outlined">refresh</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div id="signalsList">
+                {% if signals %}
+                    {% for signal in signals %}
+                    <div class="signal-row p-4 border-bottom" data-signal-id="{{ signal.id }}">
+                        <div class="row align-items-center">
+                            <!-- Trader & Date -->
+                            <div class="col-md-2">
+                                <div class="d-flex align-items-center">
+                                    <div class="trader-indicator {{ signal.trader_name.lower() }} me-3">
+                                        {{ signal.trader_name[0] }}
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">{{ signal.trader_name }}</div>
+                                        <small class="text-muted">{{ signal.date.strftime('%m/%d/%Y') }}</small>
+                                        <small class="text-muted d-block">{{ signal.day_of_week }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Pair & Type -->
+                            <div class="col-md-2">
+                                <div class="fw-bold text-primary">{{ signal.pair_name }}</div>
+                                <div class="text-muted">
+                                    {{ signal.trade_type }}
+                                    {% if signal.trade_type == 'Buy' %}
+                                        <span class="material-symbols-outlined" style="font-size: 16px; color: #10B981;">trending_up</span>
+                                    {% else %}
+                                        <span class="material-symbols-outlined" style="font-size: 16px; color: #EF4444;">trending_down</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <!-- Prices -->
+                            <div class="col-md-2">
+                                <div class="price-info">
+                                    <div><strong>Entry:</strong> {{ "%.5f"|format(signal.entry_price|float) }}</div>
+                                    <div><strong>SL:</strong> {{ "%.5f"|format(signal.stop_loss_price|float) }}</div>
+                                    <div><strong>TP:</strong> {{ "%.5f"|format(signal.target_price|float) }}</div>
+                                </div>
+                            </div>
+                            
+                            <!-- R/R & Outcome -->
+                            <div class="col-md-2">
+                                <div class="text-center">
+                                    <div class="fw-bold text-muted mb-1">{{ signal.risk_reward_ratio }}:1 RR</div>
+                                    <div class="outcome-badge {{ signal.outcome.lower() }}">
+                                        {{ signal.outcome }}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Achieved R -->
+                            <div class="col-md-2">
+                                <div class="text-center">
+                                    <div class="r-reward">{{ signal.achieved_reward }}R</div>
+                                    <small class="text-muted">Achieved</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Actions -->
+                            <div class="col-md-2">
+                                <div class="admin-actions d-flex justify-content-end gap-2">
+                                    {% if signal.linked_video %}
+                                    <a href="{{ url_for('watch_video', video_id=signal.linked_video.id) }}" 
+                                       class="btn btn-outline-info btn-sm" title="Watch Linked Video">
+                                        <span class="material-symbols-outlined">play_circle</span>
+                                    </a>
+                                    {% endif %}
+                                    <a href="{{ url_for('admin_edit_trading_signal', signal_id=signal.id) }}" 
+                                       class="btn btn-outline-primary btn-sm" title="Edit Signal">
+                                        <span class="material-symbols-outlined">edit</span>
+                                    </a>
+                                    <button class="btn btn-outline-danger btn-sm" 
+                                            onclick="deleteSignal({{ signal.id }})" title="Delete Signal">
+                                        <span class="material-symbols-outlined">delete</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if signal.notes %}
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="alert alert-info py-2">
+                                    <strong>Notes:</strong> {{ signal.notes }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="p-5 text-center">
+                    <span class="material-symbols-outlined mb-3" style="font-size: 4rem; color: var(--text-muted);">trending_up</span>
+                    <h5 class="text-muted">No Trading Signals Found</h5>
+                    <p class="text-muted mb-4">Start tracking trading performance by adding your first signal.</p>
+                    <a href="{{ url_for('admin_add_trading_signal') }}" class="btn btn-primary">
+                        <span class="material-symbols-outlined me-2">add</span>
+                        Add First Signal
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function getTraderDefaults() {
+    try {
+        const response = await fetch('/api/trading-stats/trader-defaults');
+        const data = await response.json();
+        
+        if (data.success) {
+            showToast(`Defaults for ${data.trader_name}: ${data.default_pair}, ${data.default_risk_reward}:1 RR`, 'info');
+        }
+    } catch (error) {
+        console.error('Error getting trader defaults:', error);
+    }
+}
+
+async function deleteSignal(signalId) {
+    if (!confirm('Are you sure you want to delete this trading signal? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/admin/trading-signal/${signalId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Remove the signal row from the page
+            const signalRow = document.querySelector(`[data-signal-id="${signalId}"]`);
+            if (signalRow) {
+                signalRow.style.animation = 'fadeOutUp 0.3s ease-out';
+                setTimeout(() => {
+                    signalRow.remove();
+                    // Update stats
+                    updateQuickStats();
+                }, 300);
+            }
+            
+            showToast('Trading signal deleted successfully', 'success');
+        } else {
+            showToast('Error deleting trading signal: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting signal:', error);
+        showToast('Error deleting trading signal', 'error');
+    }
+}
+
+function applyFilters() {
+    const trader = document.getElementById('traderFilter').value;
+    const pair = document.getElementById('pairFilter').value;
+    const outcome = document.getElementById('outcomeFilter').value;
+    const fromDate = document.getElementById('fromDate').value;
+    const toDate = document.getElementById('toDate').value;
+    
+    const params = new URLSearchParams();
+    if (trader) params.append('trader', trader);
+    if (pair) params.append('pair', pair);
+    if (outcome) params.append('outcome', outcome);
+    if (fromDate) params.append('start_date', fromDate);
+    if (toDate) params.append('end_date', toDate);
+    
+    window.location.href = `{{ url_for('admin_trading_signals') }}?${params.toString()}`;
+}
+
+function refreshSignals() {
+    window.location.reload();
+}
+
+function updateQuickStats() {
+    // Update the quick stats after a signal is deleted
+    const signalRows = document.querySelectorAll('.signal-row');
+    document.getElementById('totalSignals').textContent = signalRows.length;
+    
+    // You could make this more sophisticated by counting specific traders, etc.
+}
+
+// Set default filter dates (last 30 days)
+document.addEventListener('DOMContentLoaded', function() {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    
+    if (!document.getElementById('fromDate').value) {
+        document.getElementById('fromDate').value = startDate.toISOString().split('T')[0];
+    }
+    
+    if (!document.getElementById('toDate').value) {
+        document.getElementById('toDate').value = endDate.toISOString().split('T')[0];
+    }
+});
+
+// CSS animation for row deletion
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fadeOutUp {
+        from {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        to {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}
