@@ -3212,7 +3212,7 @@ def api_compare_traders():
 @app.route('/api/trading-stats/hypothetical', methods=['POST'])
 @login_required
 def api_hypothetical_analysis():
-    """Calculate hypothetical scenarios - Premium Feature"""
+    """Calculate hypothetical scenarios using achieved_rr data - ENHANCED VERSION"""
     # Check if user has active subscription
     if not current_user.has_active_subscription():
         return jsonify({
@@ -3227,6 +3227,7 @@ def api_hypothetical_analysis():
         trader_name = data.get('trader')
         start_date = data.get('start_date')
         end_date = data.get('end_date')
+        analysis_type = data.get('analysis_type', 'take_profit')  # NEW: Different analysis types
         
         # Get all signals
         query = TradingSignal.query
@@ -3244,37 +3245,67 @@ def api_hypothetical_analysis():
         
         signals = query.all()
         
-        # Calculate hypothetical outcomes
+        # ENHANCED: Different analysis types
+        if analysis_type == 'take_profit':
+            return calculate_take_profit_analysis(signals, target_reward)
+        elif analysis_type == 'trailing_stop':
+            return calculate_trailing_stop_analysis(signals, data)
+        elif analysis_type == 'partial_profit':
+            return calculate_partial_profit_analysis(signals, data)
+        else:
+            return calculate_take_profit_analysis(signals, target_reward)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def calculate_take_profit_analysis(signals, target_reward):
+    """Analyze what would happen if we took profit at a specific R level"""
+    try:
         hypothetical_wins = 0
         hypothetical_losses = 0
         hypothetical_total_r = 0
         modified_signals = []
+        missed_opportunities = 0
         
         for signal in signals:
-            achieved_r = float(signal.achieved_reward)
+            # Use actual_rr for backward compatibility
+            actual_r = float(getattr(signal, 'actual_rr', getattr(signal, 'achieved_reward', 0)))
+            achieved_r = float(getattr(signal, 'achieved_rr', 0)) if hasattr(signal, 'achieved_rr') and signal.achieved_rr else None
             
-            # If the signal achieved the target reward or better, it's a win
-            if achieved_r >= target_reward:
+            # Enhanced logic using achieved_rr data
+            if achieved_r is not None and achieved_r >= target_reward:
+                # Trade reached our hypothetical take profit level
                 hypothetical_outcome = 'Win'
                 hypothetical_r = target_reward
                 hypothetical_wins += 1
-            # If it was a winning trade but didn't reach target, check if it went far enough
-            elif signal.outcome == 'Win' and achieved_r > 0:
-                # If it achieved less than target but was still positive, count as partial win
-                if achieved_r >= target_reward * 0.8:  # 80% of target
+                
+                # Calculate missed opportunity for losses that reached target
+                if signal.outcome == 'Loss':
+                    missed_opportunities += target_reward - actual_r
+                    
+            elif signal.outcome == 'Win' and actual_r > 0:
+                # Keep winning trades as they are (but may be reduced if they didn't reach target)
+                if actual_r >= target_reward:
                     hypothetical_outcome = 'Win'
-                    hypothetical_r = target_reward
+                    hypothetical_r = target_reward  # Reduced to target level
+                else:
+                    hypothetical_outcome = 'Win'
+                    hypothetical_r = actual_r  # Keep original win
+                hypothetical_wins += 1
+                
+            elif achieved_r is not None and achieved_r > 0:
+                # Trade went favorable but not enough to reach target, then reversed
+                if achieved_r >= target_reward * 0.5:  # At least 50% of target
+                    # Could have taken partial profit
+                    hypothetical_outcome = 'Small Win'
+                    hypothetical_r = min(achieved_r * 0.5, target_reward * 0.3)  # Conservative partial
                     hypothetical_wins += 1
                 else:
                     hypothetical_outcome = 'Loss'
-                    hypothetical_r = -1  # Full loss
+                    hypothetical_r = -1
                     hypothetical_losses += 1
-            # If it was a loss but achieved some reward before failing
-            elif signal.outcome == 'Loss' and achieved_r >= target_reward:
-                hypothetical_outcome = 'Win'
-                hypothetical_r = target_reward
-                hypothetical_wins += 1
             else:
+                # Trade never went favorable or no achieved_r data
                 hypothetical_outcome = 'Loss'
                 hypothetical_r = -1
                 hypothetical_losses += 1
@@ -3283,32 +3314,205 @@ def api_hypothetical_analysis():
             
             modified_signals.append({
                 'id': signal.id,
-                'original_outcome': signal.outcome,
-                'original_reward': float(signal.achieved_reward),
-                'hypothetical_outcome': hypothetical_outcome,
-                'hypothetical_reward': hypothetical_r,
                 'date': signal.date.isoformat(),
                 'pair': signal.pair_name,
-                'trade_type': signal.trade_type
+                'trade_type': signal.trade_type,
+                'original_outcome': signal.outcome,
+                'original_actual_r': float(actual_r),
+                'achieved_r': achieved_r,
+                'hypothetical_outcome': hypothetical_outcome,
+                'hypothetical_r': hypothetical_r,
+                'analysis': get_signal_analysis(signal, target_reward, achieved_r, actual_r)
             })
         
         total_trades = len(signals)
         hypothetical_win_rate = (hypothetical_wins / total_trades * 100) if total_trades > 0 else 0
         
+        # Calculate improvement metrics
+        original_total_r = sum([float(getattr(s, 'actual_rr', getattr(s, 'achieved_reward', 0))) for s in signals])
+        improvement = hypothetical_total_r - original_total_r
+        
         return jsonify({
             'success': True,
+            'analysis_type': 'take_profit',
             'target_reward': target_reward,
             'total_trades': total_trades,
-            'hypothetical_wins': hypothetical_wins,
-            'hypothetical_losses': hypothetical_losses,
-            'hypothetical_win_rate': round(hypothetical_win_rate, 2),
-            'hypothetical_total_r': round(hypothetical_total_r, 2),
-            'average_r_per_trade': round(hypothetical_total_r / total_trades, 2) if total_trades > 0 else 0,
+            'original_performance': {
+                'total_r': round(original_total_r, 2),
+                'wins': len([s for s in signals if s.outcome == 'Win']),
+                'losses': len([s for s in signals if s.outcome == 'Loss'])
+            },
+            'hypothetical_performance': {
+                'total_r': round(hypothetical_total_r, 2),
+                'wins': hypothetical_wins,
+                'losses': hypothetical_losses,
+                'win_rate': round(hypothetical_win_rate, 2),
+                'average_r_per_trade': round(hypothetical_total_r / total_trades, 2) if total_trades > 0 else 0
+            },
+            'improvement_metrics': {
+                'r_improvement': round(improvement, 2),
+                'percentage_improvement': round((improvement / abs(original_total_r) * 100), 2) if original_total_r != 0 else 0,
+                'missed_opportunities': round(missed_opportunities, 2),
+                'signals_that_reached_target': len([s for s in signals if hasattr(s, 'achieved_rr') and s.achieved_rr and float(s.achieved_rr) >= target_reward])
+            },
             'modified_signals': modified_signals
         })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def get_signal_analysis(signal, target_reward, achieved_r, actual_r):
+    """Generate analysis text for individual signals"""
+    if achieved_r is None:
+        return "No achieved R data available for analysis"
+    
+    if achieved_r >= target_reward and signal.outcome == 'Loss':
+        return f"Reached {target_reward}R target but reversed to loss. Perfect candidate for take-profit strategy."
+    elif achieved_r >= target_reward * 0.8 and signal.outcome == 'Loss':
+        return f"Reached {achieved_r}R ({int(achieved_r/target_reward*100)}% of target). Consider partial profits."
+    elif achieved_r > 0 and signal.outcome == 'Loss':
+        return f"Went {achieved_r}R favorable before reversal. Small profit opportunity missed."
+    elif signal.outcome == 'Win' and achieved_r > actual_r:
+        return f"Winner that peaked at {achieved_r}R. Could have captured more with trailing stops."
+    elif signal.outcome == 'Win':
+        return "Successful trade execution to target."
+    else:
+        return "Trade never moved favorably."
+
+def calculate_trailing_stop_analysis(signals, data):
+    """Analyze trailing stop strategies using achieved_rr data"""
+    try:
+        trailing_percentage = float(data.get('trailing_percentage', 20))  # 20% trailing stop
+        
+        modified_signals = []
+        total_hypothetical_r = 0
+        
+        for signal in signals:
+            actual_r = float(getattr(signal, 'actual_rr', getattr(signal, 'achieved_reward', 0)))
+            achieved_r = float(getattr(signal, 'achieved_rr', 0)) if hasattr(signal, 'achieved_rr') and signal.achieved_rr else None
+            
+            if achieved_r and achieved_r > 0:
+                # Calculate where trailing stop would have triggered
+                trailing_stop_level = achieved_r * (1 - trailing_percentage / 100)
+                
+                if signal.outcome == 'Loss':
+                    # Assume trailing stop would have saved some profit
+                    hypothetical_r = max(trailing_stop_level, 0)
+                else:
+                    # For wins, trailing stop might have reduced profit slightly
+                    hypothetical_r = min(actual_r, trailing_stop_level + 0.5)  # Small buffer
+                
+                total_hypothetical_r += hypothetical_r
+                
+                modified_signals.append({
+                    'id': signal.id,
+                    'original_r': actual_r,
+                    'achieved_r': achieved_r,
+                    'trailing_stop_level': round(trailing_stop_level, 2),
+                    'hypothetical_r': round(hypothetical_r, 2),
+                    'improvement': round(hypothetical_r - actual_r, 2)
+                })
+            else:
+                total_hypothetical_r += actual_r
+                modified_signals.append({
+                    'id': signal.id,
+                    'original_r': actual_r,
+                    'achieved_r': achieved_r,
+                    'trailing_stop_level': 0,
+                    'hypothetical_r': actual_r,
+                    'improvement': 0
+                })
+        
+        original_total = sum([float(getattr(s, 'actual_rr', getattr(s, 'achieved_reward', 0))) for s in signals])
+        
+        return jsonify({
+            'success': True,
+            'analysis_type': 'trailing_stop',
+            'trailing_percentage': trailing_percentage,
+            'original_total_r': round(original_total, 2),
+            'hypothetical_total_r': round(total_hypothetical_r, 2),
+            'improvement': round(total_hypothetical_r - original_total, 2),
+            'signals': modified_signals
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def calculate_partial_profit_analysis(signals, data):
+    """Analyze partial profit taking strategies"""
+    try:
+        partial_level_1 = float(data.get('partial_level_1', 1.0))  # Take 50% at 1R
+        partial_level_2 = float(data.get('partial_level_2', 2.0))  # Take 25% at 2R
+        
+        modified_signals = []
+        total_hypothetical_r = 0
+        
+        for signal in signals:
+            actual_r = float(getattr(signal, 'actual_rr', getattr(signal, 'achieved_reward', 0)))
+            achieved_r = float(getattr(signal, 'achieved_rr', 0)) if hasattr(signal, 'achieved_rr') and signal.achieved_rr else None
+            
+            if achieved_r and achieved_r > 0:
+                hypothetical_r = 0
+                
+                # Partial profit calculations
+                if achieved_r >= partial_level_1:
+                    hypothetical_r += partial_level_1 * 0.5  # 50% at level 1
+                    
+                if achieved_r >= partial_level_2:
+                    hypothetical_r += partial_level_2 * 0.25  # 25% at level 2
+                    
+                # Remaining position
+                remaining_percentage = 0.25 if achieved_r >= partial_level_2 else 0.5 if achieved_r >= partial_level_1 else 1.0
+                
+                if signal.outcome == 'Win':
+                    hypothetical_r += actual_r * remaining_percentage
+                elif signal.outcome == 'Loss':
+                    hypothetical_r += -1 * remaining_percentage  # Remaining hits stop loss
+                
+                modified_signals.append({
+                    'id': signal.id,
+                    'original_r': actual_r,
+                    'achieved_r': achieved_r,
+                    'partial_profits': {
+                        'level_1': partial_level_1 * 0.5 if achieved_r >= partial_level_1 else 0,
+                        'level_2': partial_level_2 * 0.25 if achieved_r >= partial_level_2 else 0,
+                        'remaining': (actual_r if signal.outcome == 'Win' else -1) * remaining_percentage
+                    },
+                    'hypothetical_r': round(hypothetical_r, 2),
+                    'improvement': round(hypothetical_r - actual_r, 2)
+                })
+                
+                total_hypothetical_r += hypothetical_r
+            else:
+                total_hypothetical_r += actual_r
+                modified_signals.append({
+                    'id': signal.id,
+                    'original_r': actual_r,
+                    'achieved_r': achieved_r,
+                    'hypothetical_r': actual_r,
+                    'improvement': 0
+                })
+        
+        original_total = sum([float(getattr(s, 'actual_rr', getattr(s, 'achieved_reward', 0))) for s in signals])
+        
+        return jsonify({
+            'success': True,
+            'analysis_type': 'partial_profit',
+            'strategy': {
+                'level_1': f"50% at {partial_level_1}R",
+                'level_2': f"25% at {partial_level_2}R",
+                'remaining': "25% to target/stop"
+            },
+            'original_total_r': round(original_total, 2),
+            'hypothetical_total_r': round(total_hypothetical_r, 2),
+            'improvement': round(total_hypothetical_r - original_total, 2),
+            'signals': modified_signals
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 
 @app.route('/api/trading-stats/balance-calculator', methods=['POST'])
 @login_required
