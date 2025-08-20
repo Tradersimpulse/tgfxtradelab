@@ -1310,24 +1310,21 @@ def api_migrate_trading_signals():
 
 # Add this to your app initialization in the main block
 def enhanced_initialize_app():
-    """Enhanced initialization that includes the new migration"""
     try:
         with app.app_context():
-            # Existing initialization code...
+            # Your existing initialization code...
             db.create_all()
-            print("✓ Database tables created successfully")
             
-            # NEW: Run trading signals migration
-            migrate_trading_signals_to_dual_rr()
+            # NEW: Initialize Whop integration
+            initialize_whop_integration()
             
-            # Existing code for admin user, streamers, etc...
+            print("✅ Enhanced app initialization complete!")
             
     except Exception as e:
         print(f"❌ Enhanced app initialization error: {e}")
         return False
     
     return True
-    
 
 def send_new_video_webhook(video, category):
     """Send Discord notification for new video"""
