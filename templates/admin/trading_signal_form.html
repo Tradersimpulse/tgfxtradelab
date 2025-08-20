@@ -1,0 +1,651 @@
+<!-- templates/admin/trading_signal_form.html -->
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - Admin{% endblock %}
+
+{% block head %}
+<style>
+    .form-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .form-section h5 {
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid var(--border-color);
+    }
+    
+    .auto-calculate {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .price-input {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 1rem;
+        text-align: center;
+        font-weight: 600;
+    }
+    
+    .rr-display {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+    }
+    
+    .rr-value {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #10B981;
+        margin-bottom: 0.5rem;
+    }
+    
+    .auto-fill-section {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+        border: 2px dashed rgba(16, 185, 129, 0.3);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .trader-default-info {
+        background: var(--bg-tertiary);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .video-link-section {
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 12px;
+        padding: 1.5rem;
+    }
+    
+    .calculation-help {
+        background: var(--bg-secondary);
+        border-left: 4px solid #10B981;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .pip-calculator {
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+    }
+    
+    .preview-trade {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-top: 1rem;
+    }
+    
+    .trade-preview-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-light);
+    }
+    
+    .trade-preview-item:last-child {
+        border-bottom: none;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    
+    .smart-suggestions {
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .suggestion-item {
+        display: flex;
+        justify-content: between;
+        align-items: center;
+        padding: 0.5rem;
+        margin: 0.25rem 0;
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .suggestion-item:hover {
+        background: rgba(245, 158, 11, 0.2);
+        transform: translateX(4px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1 text-gradient-primary">{{ title }}</h1>
+            <p class="text-muted mb-0">Add or edit trading signal with smart auto-calculations</p>
+        </div>
+        <div>
+            <a href="{{ url_for('admin_trading_signals') }}" class="btn btn-outline-secondary">
+                <span class="material-symbols-outlined me-2">arrow_back</span>
+                Back to Signals
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <form method="POST" id="tradingSignalForm">
+                {{ form.hidden_tag() }}
+                
+                <!-- Auto-fill Section -->
+                <div class="auto-fill-section">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="mb-2">
+                                <span class="material-symbols-outlined me-2">auto_fix_high</span>
+                                Smart Auto-fill
+                            </h5>
+                            <p class="mb-0 text-muted">Load default settings based on the current user and trading preferences</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button type="button" class="btn btn-success" onclick="loadTraderDefaults()">
+                                <span class="material-symbols-outlined me-2">flash_on</span>
+                                Load Defaults
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="trader-default-info mt-3" id="defaultInfo" style="display: none;">
+                        <h6>Current Defaults:</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <strong>Trader:</strong> <span id="defaultTrader">-</span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Default Pair:</strong> <span id="defaultPair">-</span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Default R/R:</strong> <span id="defaultRR">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Basic Information -->
+                <div class="form-section">
+                    <h5>
+                        <span class="material-symbols-outlined me-2">info</span>
+                        Basic Trade Information
+                    </h5>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Trader</label>
+                            {{ form.trader_name(class="form-control") }}
+                            {% if form.trader_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.trader_name.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Trading Pair</label>
+                            {{ form.pair_name(class="form-control", onchange="updatePairSpecifics()") }}
+                            {% if form.pair_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.pair_name.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Trade Type</label>
+                            {{ form.trade_type(class="form-control") }}
+                            {% if form.trade_type.errors %}
+                                <div class="text-danger small mt-1">{{ form.trade_type.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Risk/Reward Ratio</label>
+                            {{ form.risk_reward_ratio(class="form-control", onchange="calculateRRRatio()", step="0.1") }}
+                            {% if form.risk_reward_ratio.errors %}
+                                <div class="text-danger small mt-1">{{ form.risk_reward_ratio.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Price Levels -->
+                <div class="form-section">
+                    <h5>
+                        <span class="material-symbols-outlined me-2">currency_exchange</span>
+                        Price Levels
+                    </h5>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Entry Price</label>
+                            {{ form.entry_price(class="form-control price-input", onchange="calculatePips()", step="0.00001") }}
+                            {% if form.entry_price.errors %}
+                                <div class="text-danger small mt-1">{{ form.entry_price.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">Stop Loss Price</label>
+                            {{ form.stop_loss_price(class="form-control price-input", onchange="calculatePips()", step="0.00001") }}
+                            {% if form.stop_loss_price.errors %}
+                                <div class="text-danger small mt-1">{{ form.stop_loss_price.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">Target Price</label>
+                            {{ form.target_price(class="form-control price-input", onchange="calculatePips()", step="0.00001") }}
+                            {% if form.target_price.errors %}
+                                <div class="text-danger small mt-1">{{ form.target_price.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="auto-calculate">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="pip-calculator">
+                                    <div class="fw-bold text-primary" id="pipsRisk">0</div>
+                                    <small class="text-muted">Pips Risk</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="pip-calculator">
+                                    <div class="fw-bold text-success" id="pipsReward">0</div>
+                                    <small class="text-muted">Pips Reward</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="rr-display">
+                                    <div class="rr-value" id="calculatedRR">0:1</div>
+                                    <small class="text-muted">Calculated R/R</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="smart-suggestions" id="smartSuggestions" style="display: none;">
+                        <h6>
+                            <span class="material-symbols-outlined me-2">lightbulb</span>
+                            Smart Suggestions
+                        </h6>
+                        <div id="suggestionsList"></div>
+                    </div>
+                </div>
+
+                <!-- Trade Outcome -->
+                <div class="form-section">
+                    <h5>
+                        <span class="material-symbols-outlined me-2">flag</span>
+                        Trade Outcome
+                    </h5>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Outcome</label>
+                            {{ form.outcome(class="form-control", onchange="updateAchievedReward()") }}
+                            {% if form.outcome.errors %}
+                                <div class="text-danger small mt-1">{{ form.outcome.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">Achieved Reward (R)</label>
+                            {{ form.achieved_reward(class="form-control", step="0.1") }}
+                            {% if form.achieved_reward.errors %}
+                                <div class="text-danger small mt-1">{{ form.achieved_reward.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="calculation-help">
+                        <h6>
+                            <span class="material-symbols-outlined me-2">help</span>
+                            How to Calculate Achieved Reward
+                        </h6>
+                        <ul class="mb-0">
+                            <li><strong>Win:</strong> Enter positive R value (e.g., 3.0 for full target, 1.5 for partial profit)</li>
+                            <li><strong>Loss:</strong> Enter -1.0 for full loss, or partial loss value (e.g., -0.5)</li>
+                            <li><strong>Breakeven:</strong> Enter 0.0</li>
+                            <li><strong>Example:</strong> If target was 3:1 but you took profit at 2:1, enter 2.0</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Video Link -->
+                <div class="form-section">
+                    <div class="video-link-section">
+                        <h5>
+                            <span class="material-symbols-outlined me-2">video_library</span>
+                            Link to Trading Video (Optional)
+                        </h5>
+                        
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Live Trading Session Video</label>
+                                {{ form.linked_video_id(class="form-control") }}
+                                <small class="text-muted">
+                                    Link this trading signal to a live trading session video so users can watch the actual trade execution.
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div class="form-section">
+                    <h5>
+                        <span class="material-symbols-outlined me-2">note</span>
+                        Additional Notes
+                    </h5>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <label class="form-label">Trading Notes</label>
+                            {{ form.notes(class="form-control", rows="4", placeholder="Optional notes about this trade (market conditions, reasoning, lessons learned, etc.)") }}
+                            {% if form.notes.errors %}
+                                <div class="text-danger small mt-1">{{ form.notes.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('admin_trading_signals') }}" class="btn btn-outline-secondary">
+                        <span class="material-symbols-outlined me-2">cancel</span>
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="material-symbols-outlined me-2">save</span>
+                        {% if signal %}Update Signal{% else %}Add Signal{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Live Preview -->
+        <div class="col-lg-4">
+            <div class="position-sticky" style="top: 2rem;">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <span class="material-symbols-outlined me-2">preview</span>
+                            Live Preview
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="preview-trade" id="livePreview">
+                            <div class="trade-preview-item">
+                                <span>Trader:</span>
+                                <strong id="previewTrader">-</strong>
+                            </div>
+                            <div class="trade-preview-item">
+                                <span>Pair:</span>
+                                <strong id="previewPair">-</strong>
+                            </div>
+                            <div class="trade-preview-item">
+                                <span>Type:</span>
+                                <strong id="previewType">-</strong>
+                            </div>
+                            <div class="trade-preview-item">
+                                <span>Entry:</span>
+                                <strong id="previewEntry">-</strong>
+                            </div>
+                            <div class="trade-preview-item">
+                                <span>Stop Loss:</span>
+                                <strong id="previewSL">-</strong>
+                            </div>
+                            <div class="trade-preview-item">
+                                <span>Target:</span>
+                                <strong id="previewTarget">-</strong>
+                            </div>
+                            <div class="trade-preview-item">
+                                <span>Risk/Reward:</span>
+                                <strong id="previewRR" style="color: #10B981;">-</strong>
+                            </div>
+                            <div class="trade-preview-item">
+                                <span>Outcome:</span>
+                                <strong id="previewOutcome">-</strong>
+                            </div>
+                            <div class="trade-preview-item">
+                                <span>Achieved R:</span>
+                                <strong id="previewAchieved" style="color: #10B981;">-</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let pairSpecs = {
+    'EURUSD': { decimals: 5, pipValue: 0.0001 },
+    'GBPUSD': { decimals: 5, pipValue: 0.0001 },
+    'AUDUSD': { decimals: 5, pipValue: 0.0001 },
+    'NZDUSD': { decimals: 5, pipValue: 0.0001 },
+    'USDJPY': { decimals: 3, pipValue: 0.01 },
+    'EURJPY': { decimals: 3, pipValue: 0.01 },
+    'GBPJPY': { decimals: 3, pipValue: 0.01 },
+    'XAUUSD': { decimals: 2, pipValue: 0.1 },
+    'NQ': { decimals: 0, pipValue: 1.0 },
+    'ES': { decimals: 0, pipValue: 1.0 },
+    'YM': { decimals: 0, pipValue: 1.0 }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Update preview on page load
+    updateLivePreview();
+    
+    // Add event listeners for live preview
+    document.querySelectorAll('select, input').forEach(element => {
+        element.addEventListener('change', updateLivePreview);
+        element.addEventListener('input', updateLivePreview);
+    });
+    
+    // Calculate pips and RR on load if values exist
+    calculatePips();
+});
+
+async function loadTraderDefaults() {
+    try {
+        const response = await fetch('/api/trading-stats/trader-defaults');
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update form fields
+            document.getElementById('trader_name').value = data.trader_name;
+            document.getElementById('pair_name').value = data.default_pair;
+            document.getElementById('risk_reward_ratio').value = data.default_risk_reward;
+            
+            // Show default info
+            document.getElementById('defaultTrader').textContent = data.trader_name;
+            document.getElementById('defaultPair').textContent = data.default_pair;
+            document.getElementById('defaultRR').textContent = data.default_risk_reward + ':1';
+            document.getElementById('defaultInfo').style.display = 'block';
+            
+            // Update live preview
+            updateLivePreview();
+            updatePairSpecifics();
+            
+            showToast(`Loaded defaults for ${data.trader_name}`, 'success');
+        }
+    } catch (error) {
+        console.error('Error loading trader defaults:', error);
+        showToast('Error loading trader defaults', 'error');
+    }
+}
+
+function updatePairSpecifics() {
+    const pair = document.getElementById('pair_name').value;
+    const spec = pairSpecs[pair];
+    
+    if (spec) {
+        // Update input step values based on pair
+        const priceInputs = document.querySelectorAll('.price-input');
+        priceInputs.forEach(input => {
+            input.step = spec.pipValue.toString();
+        });
+        
+        calculatePips();
+    }
+}
+
+function calculatePips() {
+    const pair = document.getElementById('pair_name').value;
+    const tradeType = document.getElementById('trade_type').value;
+    const entry = parseFloat(document.getElementById('entry_price').value);
+    const stopLoss = parseFloat(document.getElementById('stop_loss_price').value);
+    const target = parseFloat(document.getElementById('target_price').value);
+    
+    if (!pair || !tradeType || !entry || !stopLoss || !target) {
+        return;
+    }
+    
+    const spec = pairSpecs[pair];
+    if (!spec) return;
+    
+    let pipsRisk, pipsReward;
+    
+    if (tradeType === 'Buy') {
+        pipsRisk = Math.abs((entry - stopLoss) / spec.pipValue);
+        pipsReward = Math.abs((target - entry) / spec.pipValue);
+    } else {
+        pipsRisk = Math.abs((stopLoss - entry) / spec.pipValue);
+        pipsReward = Math.abs((entry - target) / spec.pipValue);
+    }
+    
+    const rrRatio = pipsReward / pipsRisk;
+    
+    // Update display
+    document.getElementById('pipsRisk').textContent = pipsRisk.toFixed(1);
+    document.getElementById('pipsReward').textContent = pipsReward.toFixed(1);
+    document.getElementById('calculatedRR').textContent = rrRatio.toFixed(1) + ':1';
+    
+    // Update RR ratio field if it's empty or different
+    const rrField = document.getElementById('risk_reward_ratio');
+    if (!rrField.value || Math.abs(parseFloat(rrField.value) - rrRatio) > 0.1) {
+        rrField.value = rrRatio.toFixed(1);
+    }
+    
+    // Show smart suggestions
+    showSmartSuggestions(rrRatio, pipsRisk, pipsReward);
+}
+
+function showSmartSuggestions(currentRR, pipsRisk, pipsReward) {
+    const suggestionsContainer = document.getElementById('smartSuggestions');
+    const suggestionsList = document.getElementById('suggestionsList');
+    
+    let suggestions = [];
+    
+    // Suggest improvements based on trader preferences
+    const trader = document.getElementById('trader_name').value;
+    const targetRR = trader === 'Jordan' ? 1.0 : 3.0;
+    
+    if (currentRR < targetRR * 0.8) {
+        suggestions.push({
+            text: `Consider increasing target for ${targetRR}:1 RR (${trader}'s preferred ratio)`,
+            type: 'warning'
+        });
+    }
+    
+    if (pipsRisk > 50) {
+        suggestions.push({
+            text: 'Risk is quite high (>50 pips). Consider tighter stop loss.',
+            type: 'warning'
+        });
+    }
+    
+    if (currentRR > 5) {
+        suggestions.push({
+            text: 'Excellent risk/reward ratio! This is a great setup.',
+            type: 'success'
+        });
+    }
+    
+    if (suggestions.length > 0) {
+        suggestionsList.innerHTML = suggestions.map(s => 
+            `<div class="suggestion-item">
+                <span class="material-symbols-outlined me-2" style="color: ${s.type === 'success' ? '#10B981' : '#F59E0B'};">
+                    ${s.type === 'success' ? 'check_circle' : 'warning'}
+                </span>
+                ${s.text}
+            </div>`
+        ).join('');
+        suggestionsContainer.style.display = 'block';
+    } else {
+        suggestionsContainer.style.display = 'none';
+    }
+}
+
+function updateAchievedReward() {
+    const outcome = document.getElementById('outcome').value;
+    const rrRatio = parseFloat(document.getElementById('risk_reward_ratio').value) || 0;
+    const achievedField = document.getElementById('achieved_reward');
+    
+    // Auto-fill achieved reward based on outcome
+    if (outcome === 'Win' && !achievedField.value) {
+        achievedField.value = rrRatio.toFixed(1);
+    } else if (outcome === 'Loss' && !achievedField.value) {
+        achievedField.value = '-1.0';
+    } else if (outcome === 'Breakeven' && !achievedField.value) {
+        achievedField.value = '0.0';
+    }
+    
+    updateLivePreview();
+}
+
+function updateLivePreview() {
+    // Update all preview fields
+    document.getElementById('previewTrader').textContent = 
+        document.getElementById('trader_name').value || '-';
+    document.getElementById('previewPair').textContent = 
+        document.getElementById('pair_name').value || '-';
+    document.getElementById('previewType').textContent = 
+        document.getElementById('trade_type').value || '-';
+    document.getElementById('previewEntry').textContent = 
+        document.getElementById('entry_price').value || '-';
+    document.getElementById('previewSL').textContent = 
+        document.getElementById('stop_loss_price').value || '-';
+    document.getElementById('previewTarget').textContent = 
+        document.getElementById('target_price').value || '-';
+    document.getElementById('previewRR').textContent = 
+        (document.getElementById('risk_reward_ratio').value || '-') + ':1';
+    document.getElementById('previewOutcome').textContent = 
+        document.getElementById('outcome').value || '-';
+    document.getElementById('previewAchieved').textContent = 
+        (document.getElementById('achieved_reward').value || '-') + 'R';
+}
+
+function calculateRRRatio() {
+    // Trigger pip calculation when RR ratio is manually changed
+    setTimeout(calculatePips, 100);
+}
+</script>
+{% endblock %}
