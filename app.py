@@ -152,6 +152,56 @@ video_tags = db.Table('video_tags',
 
 
 # Models - MySQL Optimized
+
+class TradingSignalForm(FlaskForm):
+    date = db.Column(db.Date, default=datetime.utcnow().date)
+    trader_name = SelectField('Trader', choices=[
+        ('Ray', 'Ray'),
+        ('Jordan', 'Jordan')
+    ], validators=[DataRequired()])
+    pair_name = SelectField('Trading Pair', choices=[
+        ('EURUSD', 'EUR/USD'),
+        ('XAUUSD', 'Gold (XAU/USD)'),
+        ('NQ', 'NASDAQ Futures (NQ)'),
+        ('GBPUSD', 'GBP/USD'),
+        ('USDJPY', 'USD/JPY'),
+        ('EURJPY', 'EUR/JPY'),
+        ('GBPJPY', 'GBP/JPY'),
+        ('AUDUSD', 'AUD/USD'),
+        ('NZDUSD', 'NZD/USD'),
+        ('ES', 'S&P 500 Futures (ES)'),
+        ('YM', 'Dow Jones Futures (YM)')
+    ], validators=[DataRequired()])
+    trade_type = SelectField('Trade Type', choices=[
+        ('Buy', 'Buy'),
+        ('Sell', 'Sell')
+    ], validators=[DataRequired()])
+    entry_price = StringField('Entry Price', validators=[DataRequired()], 
+                             render_kw={"placeholder": "1.0500", "step": "0.00001"})
+    stop_loss_price = StringField('Stop Loss Price', validators=[DataRequired()], 
+                                 render_kw={"placeholder": "1.0450", "step": "0.00001"})
+    target_price = StringField('Target Price', validators=[DataRequired()], 
+                              render_kw={"placeholder": "1.0650", "step": "0.00001"})
+    risk_reward_ratio = StringField('Risk/Reward Ratio', validators=[DataRequired()], 
+                                   render_kw={"placeholder": "3.0", "step": "0.1"})
+    outcome = SelectField('Outcome', choices=[
+        ('Win', 'Win'),
+        ('Loss', 'Loss'),
+        ('Breakeven', 'Breakeven')
+    ], validators=[DataRequired()])
+    
+    # UPDATED: Renamed and clarified field descriptions
+    actual_rr = StringField('Actual R Outcome', validators=[DataRequired()], 
+                           render_kw={"placeholder": "3.0 for win, -1.0 for loss", "step": "0.1"})
+    
+    # NEW: Maximum favorable excursion field
+    achieved_rr = StringField('Achieved R (Max Favorable)', validators=[Optional()], 
+                             render_kw={"placeholder": "1.5 (how far trade went in your favor)", "step": "0.1"})
+    
+    notes = TextAreaField('Notes', validators=[Optional()], 
+                         render_kw={"placeholder": "Optional trading notes..."})
+    linked_video_id = SelectField('Link to Trading Video', choices=[], coerce=int, validators=[Optional()])
+    
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     
