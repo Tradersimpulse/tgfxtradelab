@@ -496,6 +496,25 @@ document.addEventListener('DOMContentLoaded', function() {
         element.addEventListener('input', updateLivePreview);
     });
     
+    // Add validation for achieved R field
+    const achievedRField = document.getElementById('achieved_rr');
+    if (achievedRField) {
+        achievedRField.addEventListener('blur', validateAchievedR);
+        achievedRField.addEventListener('input', function() {
+            // Clear validation errors on input
+            const existingError = this.parentNode.querySelector('.validation-error');
+            if (existingError) {
+                existingError.remove();
+            }
+        });
+    }
+    
+    // Update preview when R fields change
+    document.querySelectorAll('#actual_rr, #achieved_rr').forEach(field => {
+        field.addEventListener('input', updateLivePreview);
+        field.addEventListener('change', updateLivePreview);
+    });
+    
     // Calculate pips and RR on load if values exist
     calculatePips();
 });
@@ -585,13 +604,66 @@ function calculatePips() {
     showSmartSuggestions(rrRatio, pipsRisk, pipsReward);
 }
 
+// UPDATED: Enhanced trade outcome function with actual_rr and achieved_rr
+function updateTradeOutcome() {
+    const outcome = document.getElementById('outcome').value;
+    const rrRatio = parseFloat(document.getElementById('risk_reward_ratio').value) || 0;
+    const actualRrField = document.getElementById('actual_rr');
+    const achievedRrField = document.getElementById('achieved_rr');
+    
+    // Auto-fill Actual R based on outcome
+    if (outcome === 'Win' && !actualRrField.value) {
+        actualRrField.value = rrRatio.toFixed(1);
+        // For wins, achieved R is typically the same as actual R
+        if (!achievedRrField.value) {
+            achievedRrField.value = rrRatio.toFixed(1);
+        }
+    } else if (outcome === 'Loss' && !actualRrField.value) {
+        actualRrField.value = '-1.0';
+        // Leave achieved R empty for manual entry (how far it went before reversing)
+    } else if (outcome === 'Breakeven' && !actualRrField.value) {
+        actualRrField.value = '0.0';
+        // For breakeven, achieved R might be how far it went before coming back
+    }
+    
+    updateLivePreview();
+}
+
+// UPDATED: Enhanced live preview with actual_rr and achieved_rr
+function updateLivePreview() {
+    // Update all preview fields including new ones
+    document.getElementById('previewTrader').textContent = 
+        document.getElementById('trader_name').value || '-';
+    document.getElementById('previewPair').textContent = 
+        document.getElementById('pair_name').value || '-';
+    document.getElementById('previewType').textContent = 
+        document.getElementById('trade_type').value || '-';
+    document.getElementById('previewEntry').textContent = 
+        document.getElementById('entry_price').value || '-';
+    document.getElementById('previewSL').textContent = 
+        document.getElementById('stop_loss_price').value || '-';
+    document.getElementById('previewTarget').textContent = 
+        document.getElementById('target_price').value || '-';
+    document.getElementById('previewRR').textContent = 
+        (document.getElementById('risk_reward_ratio').value || '-') + ':1';
+    document.getElementById('previewOutcome').textContent = 
+        document.getElementById('outcome').value || '-';
+    
+    // UPDATED: Show both actual and achieved R
+    const actualR = document.getElementById('actual_rr').value || '-';
+    const achievedR = document.getElementById('achieved_rr').value || '-';
+    
+    document.getElementById('previewActual').textContent = actualR + 'R';
+    document.getElementById('previewAchieved').textContent = achievedR + 'R';
+}
+
+// UPDATED: Enhanced suggestions with achieved R tracking
 function showSmartSuggestions(currentRR, pipsRisk, pipsReward) {
     const suggestionsContainer = document.getElementById('smartSuggestions');
     const suggestionsList = document.getElementById('suggestionsList');
     
     let suggestions = [];
     
-    // Suggest improvements based on trader preferences
     const trader = document.getElementById('trader_name').value;
     const targetRR = trader === 'Jordan' ? 1.0 : 3.0;
     
@@ -616,11 +688,30 @@ function showSmartSuggestions(currentRR, pipsRisk, pipsReward) {
         });
     }
     
+    // NEW: Suggestion for achieved R tracking
+    const outcome = document.getElementById('outcome').value;
+    const achievedR = parseFloat(document.getElementById('achieved_rr').value || 0);
+    const actualR = parseFloat(document.getElementById('actual_rr').value || 0);
+    
+    if (outcome === 'Loss' && actualR < 0 && achievedR > 0) {
+        suggestions.push({
+            text: `Trade went ${achievedR}R in your favor before reversing. Consider partial profit taking at ${achievedR}R level.`,
+            type: 'info'
+        });
+    }
+    
+    if (outcome === 'Loss' && achievedR > targetRR * 0.5) {
+        suggestions.push({
+            text: `Price reached ${achievedR}R (${((achievedR/targetRR)*100).toFixed(0)}% of target). Consider trailing stops.`,
+            type: 'info'
+        });
+    }
+    
     if (suggestions.length > 0) {
         suggestionsList.innerHTML = suggestions.map(s => 
             `<div class="suggestion-item">
-                <span class="material-symbols-outlined me-2" style="color: ${s.type === 'success' ? '#10B981' : '#F59E0B'};">
-                    ${s.type === 'success' ? 'check_circle' : 'warning'}
+                <span class="material-symbols-outlined me-2" style="color: ${getColorForType(s.type)};">
+                    ${getIconForType(s.type)}
                 </span>
                 ${s.text}
             </div>`
@@ -631,43 +722,69 @@ function showSmartSuggestions(currentRR, pipsRisk, pipsReward) {
     }
 }
 
-function updateAchievedReward() {
-    const outcome = document.getElementById('outcome').value;
-    const rrRatio = parseFloat(document.getElementById('risk_reward_ratio').value) || 0;
-    const achievedField = document.getElementById('achieved_reward');
-    
-    // Auto-fill achieved reward based on outcome
-    if (outcome === 'Win' && !achievedField.value) {
-        achievedField.value = rrRatio.toFixed(1);
-    } else if (outcome === 'Loss' && !achievedField.value) {
-        achievedField.value = '-1.0';
-    } else if (outcome === 'Breakeven' && !achievedField.value) {
-        achievedField.value = '0.0';
-    }
-    
-    updateLivePreview();
+// NEW: Helper functions for suggestions
+function getColorForType(type) {
+    const colors = {
+        'success': '#10B981',
+        'warning': '#F59E0B',
+        'info': '#3B82F6',
+        'error': '#EF4444'
+    };
+    return colors[type] || '#6B7280';
 }
 
-function updateLivePreview() {
-    // Update all preview fields
-    document.getElementById('previewTrader').textContent = 
-        document.getElementById('trader_name').value || '-';
-    document.getElementById('previewPair').textContent = 
-        document.getElementById('pair_name').value || '-';
-    document.getElementById('previewType').textContent = 
-        document.getElementById('trade_type').value || '-';
-    document.getElementById('previewEntry').textContent = 
-        document.getElementById('entry_price').value || '-';
-    document.getElementById('previewSL').textContent = 
-        document.getElementById('stop_loss_price').value || '-';
-    document.getElementById('previewTarget').textContent = 
-        document.getElementById('target_price').value || '-';
-    document.getElementById('previewRR').textContent = 
-        (document.getElementById('risk_reward_ratio').value || '-') + ':1';
-    document.getElementById('previewOutcome').textContent = 
-        document.getElementById('outcome').value || '-';
-    document.getElementById('previewAchieved').textContent = 
-        (document.getElementById('achieved_reward').value || '-') + 'R';
+function getIconForType(type) {
+    const icons = {
+        'success': 'check_circle',
+        'warning': 'warning',
+        'info': 'info',
+        'error': 'error'
+    };
+    return icons[type] || 'help';
+}
+
+// NEW: Validation for achieved R field
+function validateAchievedR() {
+    const outcome = document.getElementById('outcome').value;
+    const actualR = parseFloat(document.getElementById('actual_rr').value || 0);
+    const achievedR = parseFloat(document.getElementById('achieved_rr').value || 0);
+    const targetR = parseFloat(document.getElementById('risk_reward_ratio').value || 0);
+    
+    let isValid = true;
+    let message = '';
+    
+    // For winning trades, achieved R should not be less than actual R
+    if (outcome === 'Win' && achievedR > 0 && achievedR < actualR) {
+        isValid = false;
+        message = 'Achieved R cannot be less than Actual R for winning trades';
+    }
+    
+    // Achieved R should not exceed target significantly (with some buffer for slippage)
+    if (achievedR > targetR * 1.2) {
+        message = 'Achieved R seems unusually high compared to target. Please verify.';
+    }
+    
+    // Show validation message
+    const achievedRField = document.getElementById('achieved_rr');
+    const existingError = achievedRField.parentNode.querySelector('.validation-error');
+    
+    if (existingError) {
+        existingError.remove();
+    }
+    
+    if (!isValid) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'text-danger small mt-1 validation-error';
+        errorDiv.textContent = message;
+        achievedRField.parentNode.appendChild(errorDiv);
+    } else if (message) {
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'text-warning small mt-1 validation-error';
+        warningDiv.textContent = message;
+        achievedRField.parentNode.appendChild(warningDiv);
+    }
+    
+    return isValid;
 }
 
 function calculateRRRatio() {
