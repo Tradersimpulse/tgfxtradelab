@@ -440,7 +440,7 @@
         </div>
         <div class="col-md-3">
             <div class="stats-summary">
-                {% set total_r = signals|map(attribute='achieved_reward')|map('float')|sum %}
+                {% set total_r = signals|map(attribute='actual_rr')|select('defined')|map('float')|sum %}
                 <div class="stats-number" style="color: #10B981;">{{ "%.1f"|format(total_r) }}R</div>
                 <div class="stats-label">Total R Reward</div>
             </div>
