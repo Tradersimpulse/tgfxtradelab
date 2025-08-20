@@ -7430,6 +7430,11 @@ def admin_recommendations():
 @app.route('/livestream')
 @login_required
 def livestream():
+    # Check if user has active subscription or lifetime access
+    if not current_user.has_active_subscription():
+        flash('Live streaming requires an active subscription. Upgrade now to access exclusive live trading sessions!', 'warning')
+        return redirect(url_for('subscription'))
+    
     active_streams = Stream.query.filter_by(is_active=True).all()
     
     streams_by_streamer = {}
