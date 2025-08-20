@@ -134,7 +134,10 @@ function showAddMappingModal() {
     document.getElementById('mappingModalTitle').textContent = 'Add Price Mapping';
     document.getElementById('mappingForm').reset();
     document.getElementById('isActive').checked = true;
-    $('#mappingModal').modal('show');
+    
+    // Show modal without jQuery
+    const modal = new bootstrap.Modal(document.getElementById('mappingModal'));
+    modal.show();
 }
 
 function editMapping(mappingId) {
@@ -150,7 +153,10 @@ function editMapping(mappingId) {
             document.getElementById('appPriceId').value = data.mapping.app_price_id;
             document.getElementById('description').value = data.mapping.description || '';
             document.getElementById('isActive').checked = data.mapping.is_active;
-            $('#mappingModal').modal('show');
+            
+            // Show modal without jQuery
+            const modal = new bootstrap.Modal(document.getElementById('mappingModal'));
+            modal.show();
         } else {
             alert('Error loading mapping: ' + data.error);
         }
@@ -209,7 +215,11 @@ function saveMapping() {
     .then(data => {
         if (data.success) {
             alert('Price mapping saved successfully!');
-            $('#mappingModal').modal('hide');
+            // Hide modal without jQuery
+            const modal = bootstrap.Modal.getInstance(document.getElementById('mappingModal'));
+            if (modal) {
+                modal.hide();
+            }
             location.reload();
         } else {
             alert('Error: ' + data.error);
