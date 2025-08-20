@@ -1,0 +1,189 @@
+{% extends 'admin/base.html' %}
+
+{% block title %}Whop Price Mappings{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Whop Price Mappings</h1>
+        <div>
+            <a href="{{ url_for('admin_whop_transactions') }}" class="btn btn-secondary mr-2">
+                <i class="fas fa-arrow-left"></i> Back to Transactions
+            </a>
+            <button class="btn btn-primary" onclick="showAddMappingModal()">
+                <i class="fas fa-plus"></i> Add Mapping
+            </button>
+        </div>
+    </div>
+
+    <!-- Info Alert -->
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i>
+        <strong>Price Mappings:</strong> These map Whop.com price IDs to your app's Stripe price IDs. 
+        When a user purchases through Whop, their subscription will be mapped to the correct plan in your app.
+    </div>
+
+    <!-- Mappings Table -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Price Mappings</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Whop Price ID</th>
+                            <th>App Price ID</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mapping in mappings %}
+                        <tr>
+                            <td>
+                                <strong>{{ mapping.product_name }}</strong>
+                                {% if mapping.description %}
+                                <br><small class="text-muted">{{ mapping.description }}</small>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ mapping.whop_price_id }}</code></td>
+                            <td><code>{{ mapping.app_price_id }}</code></td>
+                            <td>
+                                {% if mapping.is_active %}
+                                <span class="badge badge-success">Active</span>
+                                {% else %}
+                                <span class="badge badge-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ mapping.created_at.strftime('%m/%d/%Y') }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-warning" onclick="editMapping({{ mapping.id }})">
+                                    Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteMapping({{ mapping.id }})">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Mapping Modal -->
+<div class="modal fade" id="mappingModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mappingModalTitle">Add Price Mapping</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="mappingForm">
+                    <div class="form-group">
+                        <label for="productName">Product Name</label>
+                        <input type="text" class="form-control" id="productName" required>
+                        <small class="form-text text-muted">Human-readable name for this mapping</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="whopPriceId">Whop Price ID</label>
+                        <input type="text" class="form-control" id="whopPriceId" required placeholder="price_1abc123...">
+                        <small class="form-text text-muted">The price ID from Whop.com/Stripe</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="appPriceId">App Price ID</label>
+                        <input type="text" class="form-control" id="appPriceId" required placeholder="price_1xyz789...">
+                        <small class="form-text text-muted">Your app's corresponding Stripe price ID</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Description (Optional)</label>
+                        <textarea class="form-control" id="description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="isActive" checked>
+                        <label class="form-check-label" for="isActive">Active</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveMapping()">Save Mapping</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentMappingId = null;
+
+function showAddMappingModal() {
+    currentMappingId = null;
+    document.getElementById('mappingModalTitle').textContent = 'Add Price Mapping';
+    document.getElementById('mappingForm').reset();
+    document.getElementById('isActive').checked = true;
+    $('#mappingModal').modal('show');
+}
+
+function editMapping(mappingId) {
+    // Implement edit functionality
+    alert('Edit mapping functionality - to be implemented');
+}
+
+function deleteMapping(mappingId) {
+    if (confirm('Delete this price mapping? This cannot be undone.')) {
+        // Implement delete functionality
+        alert('Delete mapping functionality - to be implemented');
+    }
+}
+
+function saveMapping() {
+    const formData = {
+        product_name: document.getElementById('productName').value,
+        whop_price_id: document.getElementById('whopPriceId').value,
+        app_price_id: document.getElementById('appPriceId').value,
+        description: document.getElementById('description').value,
+        is_active: document.getElementById('isActive').checked
+    };
+    
+    const url = currentMappingId 
+        ? `/api/admin/whop-price-mapping/${currentMappingId}`
+        : '/api/admin/whop-price-mapping';
+    
+    const method = currentMappingId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Price mapping saved successfully!');
+            $('#mappingModal').modal('hide');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('Error saving mapping: ' + error);
+    });
+}
+</script>
+{% endblock %}
