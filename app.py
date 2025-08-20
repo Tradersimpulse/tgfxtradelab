@@ -3932,15 +3932,7 @@ def api_balance_calculator():
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         
-        # Get hypothetical analysis first
-        hypothetical_data = {
-            'target_reward': target_reward,
-            'trader': trader_name,
-            'start_date': start_date,
-            'end_date': end_date
-        }
-        
-        # Reuse the hypothetical analysis logic
+        # Get signals based on filters
         query = TradingSignal.query
         
         if trader_name:
@@ -3961,17 +3953,19 @@ def api_balance_calculator():
         balance_history = [{'date': 'Start', 'balance': current_balance, 'trade_result': 0}]
         
         for signal in signals:
-            achieved_r = float(signal.achieved_reward)
+            # Get actual R result
+            actual_r = float(getattr(signal, 'actual_rr', getattr(signal, 'achieved_reward', 0)))
+            
+            # For hypothetical calculation, use target reward if trade was successful enough
+            achieved_r = float(getattr(signal, 'achieved_rr', 0)) if hasattr(signal, 'achieved_rr') and signal.achieved_rr else None
             
             # Determine hypothetical outcome
-            if achieved_r >= target_reward:
-                trade_r = target_reward
-            elif signal.outcome == 'Win' and achieved_r >= target_reward * 0.8:
-                trade_r = target_reward
-            elif signal.outcome == 'Loss' and achieved_r >= target_reward:
-                trade_r = target_reward
+            if achieved_r is not None and achieved_r >= target_reward:
+                trade_r = target_reward  # Would have hit target
+            elif signal.outcome == 'Win' and actual_r > 0:
+                trade_r = min(actual_r, target_reward)  # Keep actual win if less than target
             else:
-                trade_r = -1
+                trade_r = actual_r  # Keep actual result (loss or breakeven)
             
             # Calculate trade result in dollars
             risk_amount = current_balance * (risk_percentage / 100)
@@ -3984,7 +3978,7 @@ def api_balance_calculator():
                 'trade_result': round(trade_result, 2),
                 'trade_r': trade_r,
                 'pair': signal.pair_name,
-                'outcome': 'Win' if trade_r > 0 else 'Loss'
+                'outcome': 'Win' if trade_r > 0 else 'Loss' if trade_r < 0 else 'Breakeven'
             })
         
         total_return = current_balance - starting_balance
