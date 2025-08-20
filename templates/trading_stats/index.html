@@ -743,7 +743,8 @@ async function calculateHypothetical() {
                 target_reward: targetReward,
                 trader: trader,
                 start_date: startDate,
-                end_date: endDate
+                end_date: endDate,
+                analysis_type: 'take_profit'
             })
         });
         
@@ -751,20 +752,30 @@ async function calculateHypothetical() {
         
         if (response.status === 403) {
             // Premium feature required
-            window.TGFXLiveKit.utils.showNotification('warning', data.message, 6000);
+            if (window.TGFXLiveKit && window.TGFXLiveKit.utils) {
+                window.TGFXLiveKit.utils.showNotification('warning', data.message, 6000);
+            } else {
+                alert(data.message);
+            }
             setTimeout(() => {
                 window.location.href = data.upgrade_url;
             }, 2000);
             return;
         }
         
-        if (data.success) {
-            document.getElementById('hypotheticalWins').textContent = data.hypothetical_wins;
-            document.getElementById('hypotheticalLosses').textContent = data.hypothetical_losses;
-            document.getElementById('hypotheticalWinRate').textContent = `${data.hypothetical_win_rate}%`;
-            document.getElementById('hypotheticalTotalR').textContent = `${data.hypothetical_total_r}R`;
+        if (data.success && data.hypothetical_performance) {
+            // Access the nested hypothetical_performance object
+            const hypoPerf = data.hypothetical_performance;
+            
+            document.getElementById('hypotheticalWins').textContent = hypoPerf.wins || 0;
+            document.getElementById('hypotheticalLosses').textContent = hypoPerf.losses || 0;
+            document.getElementById('hypotheticalWinRate').textContent = `${hypoPerf.win_rate || 0}%`;
+            document.getElementById('hypotheticalTotalR').textContent = `${hypoPerf.total_r || 0}R`;
             
             document.getElementById('hypotheticalResults').style.display = 'block';
+        } else {
+            console.error('Invalid response format:', data);
+            showToast('Error: Invalid response format', 'error');
         }
     } catch (error) {
         console.error('Error calculating hypothetical:', error);
@@ -800,7 +811,11 @@ async function calculateBalance() {
         
         if (response.status === 403) {
             // Premium feature required
-            window.TGFXLiveKit.utils.showNotification('warning', data.message, 6000);
+            if (window.TGFXLiveKit && window.TGFXLiveKit.utils) {
+                window.TGFXLiveKit.utils.showNotification('warning', data.message, 6000);
+            } else {
+                alert(data.message);
+            }
             setTimeout(() => {
                 window.location.href = data.upgrade_url;
             }, 2000);
@@ -808,39 +823,57 @@ async function calculateBalance() {
         }
         
         if (data.success) {
-            document.getElementById('endingBalance').textContent = `$${data.ending_balance.toLocaleString()}`;
-            document.getElementById('totalReturn').textContent = `${data.return_percentage.toFixed(2)}%`;
+            document.getElementById('endingBalance').textContent = `$${data.ending_balance ? data.ending_balance.toLocaleString() : '0'}`;
+            document.getElementById('totalReturn').textContent = `${data.return_percentage ? data.return_percentage.toFixed(2) : '0.00'}%`;
             
             // Update balance history
             const historyContainer = document.getElementById('balanceHistory');
             let historyHtml = '';
             
-            data.balance_history.slice(-10).forEach(entry => {
-                const resultClass = entry.outcome === 'Win' ? 'text-success' : 
-                                   entry.outcome === 'Loss' ? 'text-danger' : 'text-muted';
-                
-                historyHtml += `
-                    <div class="balance-entry">
-                        <div>
-                            <strong>${entry.date}</strong>
-                            ${entry.pair ? `<small class="text-muted ms-2">${entry.pair}</small>` : ''}
+            if (data.balance_history && data.balance_history.length > 0) {
+                data.balance_history.slice(-10).forEach(entry => {
+                    const resultClass = entry.outcome === 'Win' ? 'text-success' : 
+                                       entry.outcome === 'Loss' ? 'text-danger' : 'text-muted';
+                    
+                    historyHtml += `
+                        <div class="balance-entry">
+                            <div>
+                                <strong>${entry.date || 'Unknown'}</strong>
+                                ${entry.pair ? `<small class="text-muted ms-2">${entry.pair}</small>` : ''}
+                            </div>
+                            <div class="text-end">
+                                <div class="fw-bold">$${entry.balance ? entry.balance.toLocaleString() : '0'}</div>
+                                <small class="${resultClass}">
+                                    ${entry.trade_result > 0 ? '+' : ''}${entry.trade_result || 0}
+                                </small>
+                            </div>
                         </div>
-                        <div class="text-end">
-                            <div class="fw-bold">$${entry.balance.toLocaleString()}</div>
-                            <small class="${resultClass}">
-                                ${entry.trade_result > 0 ? '+' : ''}${entry.trade_result}
-                            </small>
-                        </div>
-                    </div>
-                `;
-            });
+                    `;
+                });
+            } else {
+                historyHtml = '<p class="text-muted text-center">No balance history available</p>';
+            }
             
             historyContainer.innerHTML = historyHtml;
             document.getElementById('balanceResults').style.display = 'block';
+        } else {
+            console.error('Balance calculation failed:', data);
+            showToast('Error calculating balance growth', 'error');
         }
     } catch (error) {
         console.error('Error calculating balance:', error);
         showToast('Error calculating balance growth', 'error');
+    }
+}
+
+// Helper function for toast notifications if not already defined
+function showToast(message, type = 'info') {
+    // Simple fallback toast implementation
+    if (window.TGFXLiveKit && window.TGFXLiveKit.utils && window.TGFXLiveKit.utils.showNotification) {
+        window.TGFXLiveKit.utils.showNotification(type, message, 3000);
+    } else {
+        // Fallback to alert if no toast system
+        alert(`${type.toUpperCase()}: ${message}`);
     }
 }
 
