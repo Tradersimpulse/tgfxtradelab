@@ -3293,7 +3293,8 @@ def admin_add_trading_signal():
                 target_price=float(form.target_price.data),
                 risk_reward_ratio=float(form.risk_reward_ratio.data),
                 outcome=form.outcome.data,
-                achieved_reward=float(form.achieved_reward.data),
+                actual_rr=float(form.actual_rr.data),
+                achieved_rr=float(form.achieved_rr.data) if form.achieved_rr.data else None,
                 notes=form.notes.data,
                 created_by=current_user.id,
                 linked_video_id=form.linked_video_id.data if form.linked_video_id.data != 0 else None
@@ -3347,7 +3348,8 @@ def admin_edit_trading_signal(signal_id):
         form.target_price.data = str(signal.target_price)
         form.risk_reward_ratio.data = str(signal.risk_reward_ratio)
         form.outcome.data = signal.outcome
-        form.achieved_reward.data = str(signal.achieved_reward)
+        form.actual_rr.data = str(signal.actual_rr)
+        form.achieved_rr.data = str(signal.achieved_rr or '')
         form.notes.data = signal.notes
         form.linked_video_id.data = signal.linked_video_id or 0
     
@@ -3362,7 +3364,8 @@ def admin_edit_trading_signal(signal_id):
             signal.target_price = float(form.target_price.data)
             signal.risk_reward_ratio = float(form.risk_reward_ratio.data)
             signal.outcome = form.outcome.data
-            signal.achieved_reward = float(form.achieved_reward.data)
+            signal.actual_rr = float(form.actual_rr.data)
+            signal.achieved_rr = float(form.achieved_rr.data) if form.achieved_rr.data else None
             signal.notes = form.notes.data
             signal.linked_video_id = form.linked_video_id.data if form.linked_video_id.data != 0 else None
             
