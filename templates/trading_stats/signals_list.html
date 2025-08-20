@@ -580,7 +580,7 @@
                                 <span class="material-symbols-outlined me-2" style="font-size: 1rem;">note</span>
                                 Trading Notes
                             </h6>
-                            <p class="mb-0">{{ signal.notes }}</p>
+                            <div class="mb-0">{{ signal.notes|linkify|safe }}</div>
                         </div>
                         {% else %}
                         <div class="text-center text-muted py-4">
