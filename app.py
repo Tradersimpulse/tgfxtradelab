@@ -434,6 +434,314 @@ class RecommendationClick(db.Model):
     recommendation_id = db.Column(db.Integer, db.ForeignKey('recommendations.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
 
+class TradingSignal(db.Model):
+    __tablename__ = 'trading_signals'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
+    day_of_week = db.Column(db.String(10), nullable=False)  # Monday, Tuesday, etc.
+    trader_name = db.Column(db.String(50), nullable=False)  # Ray, Jordan
+    pair_name = db.Column(db.String(10), nullable=False)  # EURUSD, NQ, XAUUSD
+    trade_type = db.Column(db.String(4), nullable=False)  # Buy, Sell
+    entry_price = db.Column(db.Numeric(10, 5), nullable=False)
+    stop_loss_price = db.Column(db.Numeric(10, 5), nullable=False)
+    target_price = db.Column(db.Numeric(10, 5), nullable=False)
+    risk_reward_ratio = db.Column(db.Numeric(4, 2), nullable=False)  # 1.0, 3.0, etc.
+    outcome = db.Column(db.String(10), nullable=False)  # Win, Breakeven, Loss
+    achieved_reward = db.Column(db.Numeric(4, 2), nullable=False, default=0.0)  # Actual R achieved
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Optional link to live trading video
+    linked_video_id = db.Column(db.Integer, db.ForeignKey('videos.id'), nullable=True)
+    
+    # Relationships
+    creator = db.relationship('User', backref='trading_signals')
+    linked_video = db.relationship('Video', backref='trading_signals')
+    
+    def __repr__(self):
+        return f'<TradingSignal {self.trader_name} {self.pair_name} {self.date}>'
+    
+    def calculate_pips_risked(self):
+        """Calculate pips risked based on pair and prices"""
+        if self.pair_name in ['EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD']:
+            # Major pairs - 4 decimal places, 1 pip = 0.0001
+            pip_value = 0.0001
+        elif self.pair_name in ['USDJPY', 'EURJPY', 'GBPJPY']:
+            # JPY pairs - 2 decimal places, 1 pip = 0.01
+            pip_value = 0.01
+        elif self.pair_name == 'XAUUSD':
+            # Gold - 1 pip = 0.1
+            pip_value = 0.1
+        elif self.pair_name in ['NQ', 'ES', 'YM']:
+            # Futures - 1 point = 1
+            pip_value = 1.0
+        else:
+            pip_value = 0.0001  # Default
+        
+        if self.trade_type.upper() == 'BUY':
+            pips_risked = (float(self.entry_price) - float(self.stop_loss_price)) / pip_value
+        else:  # SELL
+            pips_risked = (float(self.stop_loss_price) - float(self.entry_price)) / pip_value
+        
+        return abs(pips_risked)
+    
+    def calculate_pips_target(self):
+        """Calculate pips to target"""
+        if self.pair_name in ['EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD']:
+            pip_value = 0.0001
+        elif self.pair_name in ['USDJPY', 'EURJPY', 'GBPJPY']:
+            pip_value = 0.01
+        elif self.pair_name == 'XAUUSD':
+            pip_value = 0.1
+        elif self.pair_name in ['NQ', 'ES', 'YM']:
+            pip_value = 1.0
+        else:
+            pip_value = 0.0001
+        
+        if self.trade_type.upper() == 'BUY':
+            pips_target = (float(self.target_price) - float(self.entry_price)) / pip_value
+        else:  # SELL
+            pips_target = (float(self.entry_price) - float(self.target_price)) / pip_value
+        
+        return abs(pips_target)
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'date': self.date.isoformat(),
+            'day_of_week': self.day_of_week,
+            'trader_name': self.trader_name,
+            'pair_name': self.pair_name,
+            'trade_type': self.trade_type,
+            'entry_price': float(self.entry_price),
+            'stop_loss_price': float(self.stop_loss_price),
+            'target_price': float(self.target_price),
+            'risk_reward_ratio': float(self.risk_reward_ratio),
+            'outcome': self.outcome,
+            'achieved_reward': float(self.achieved_reward),
+            'notes': self.notes,
+            'linked_video_id': self.linked_video_id,
+            'linked_video_title': self.linked_video.title if self.linked_video else None,
+            'pips_risked': self.calculate_pips_risked(),
+            'pips_target': self.calculate_pips_target(),
+            'created_at': self.created_at.isoformat()
+        }
+
+class TradingStats(db.Model):
+    __tablename__ = 'trading_stats'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    trader_name = db.Column(db.String(50), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    
+    # Daily aggregated stats
+    total_trades = db.Column(db.Integer, default=0, nullable=False)
+    wins = db.Column(db.Integer, default=0, nullable=False)
+    losses = db.Column(db.Integer, default=0, nullable=False)
+    breakevens = db.Column(db.Integer, default=0, nullable=False)
+    total_r_reward = db.Column(db.Numeric(8, 2), default=0.0, nullable=False)
+    total_pips = db.Column(db.Numeric(8, 2), default=0.0, nullable=False)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (db.UniqueConstraint('trader_name', 'date', name='unique_trader_daily_stats'),)
+    
+    def __repr__(self):
+        return f'<TradingStats {self.trader_name} {self.date}>'
+
+# Add this form class for trading signals
+class TradingSignalForm(FlaskForm):
+    date = db.Column(db.Date, default=datetime.utcnow().date)
+    trader_name = SelectField('Trader', choices=[
+        ('Ray', 'Ray'),
+        ('Jordan', 'Jordan')
+    ], validators=[DataRequired()])
+    pair_name = SelectField('Trading Pair', choices=[
+        ('EURUSD', 'EUR/USD'),
+        ('XAUUSD', 'Gold (XAU/USD)'),
+        ('NQ', 'NASDAQ Futures (NQ)')
+    ], validators=[DataRequired()])
+    trade_type = SelectField('Trade Type', choices=[
+        ('Buy', 'Buy'),
+        ('Sell', 'Sell')
+    ], validators=[DataRequired()])
+    entry_price = StringField('Entry Price', validators=[DataRequired()], 
+                             render_kw={"placeholder": "1.0500", "step": "0.00001"})
+    stop_loss_price = StringField('Stop Loss Price', validators=[DataRequired()], 
+                                 render_kw={"placeholder": "1.0450", "step": "0.00001"})
+    target_price = StringField('Target Price', validators=[DataRequired()], 
+                              render_kw={"placeholder": "1.0650", "step": "0.00001"})
+    risk_reward_ratio = StringField('Risk/Reward Ratio', validators=[DataRequired()], 
+                                   render_kw={"placeholder": "3.0", "step": "0.1"})
+    outcome = SelectField('Outcome', choices=[
+        ('Win', 'Win'),
+        ('Loss', 'Loss'),
+        ('Breakeven', 'Breakeven')
+    ], validators=[DataRequired()])
+    achieved_reward = StringField('Achieved Reward (R)', validators=[DataRequired()], 
+                                 render_kw={"placeholder": "3.0", "step": "0.1"})
+    notes = TextAreaField('Notes', validators=[Optional()], 
+                         render_kw={"placeholder": "Optional trading notes..."})
+    linked_video_id = SelectField('Link to Trading Video', choices=[], coerce=int, validators=[Optional()])
+
+# Helper functions for trading stats
+def get_trader_defaults(user):
+    """Get default trading settings based on user"""
+    if not user:
+        return "Ray", "EURUSD", 3.0
+    
+    trader_defaults = {
+        'jordan': ('Jordan', 'XAUUSD', 1.0),
+        'jwill24': ('Jordan', 'XAUUSD', 1.0),
+        'admin': ('Ray', 'EURUSD', 3.0),
+        'ray': ('Ray', 'EURUSD', 3.0)
+    }
+    
+    username = user.username.lower()
+    return trader_defaults.get(username, (user.display_name or user.username, 'EURUSD', 3.0))
+
+def calculate_day_of_week(date):
+    """Calculate day of week from date"""
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    return days[date.weekday()]
+
+def update_trading_stats(signal):
+    """Update aggregated trading stats when a signal is added/modified"""
+    try:
+        # Get or create daily stats record
+        stats = TradingStats.query.filter_by(
+            trader_name=signal.trader_name,
+            date=signal.date
+        ).first()
+        
+        if not stats:
+            stats = TradingStats(
+                trader_name=signal.trader_name,
+                date=signal.date
+            )
+            db.session.add(stats)
+        
+        # Recalculate stats for this trader on this date
+        daily_signals = TradingSignal.query.filter_by(
+            trader_name=signal.trader_name,
+            date=signal.date
+        ).all()
+        
+        stats.total_trades = len(daily_signals)
+        stats.wins = len([s for s in daily_signals if s.outcome == 'Win'])
+        stats.losses = len([s for s in daily_signals if s.outcome == 'Loss'])
+        stats.breakevens = len([s for s in daily_signals if s.outcome == 'Breakeven'])
+        stats.total_r_reward = sum([float(s.achieved_reward) for s in daily_signals])
+        stats.total_pips = sum([s.calculate_pips_risked() * float(s.achieved_reward) for s in daily_signals])
+        
+        db.session.commit()
+        
+    except Exception as e:
+        print(f"Error updating trading stats: {e}")
+        db.session.rollback()
+
+def get_trading_analytics(trader_name=None, start_date=None, end_date=None):
+    """Get comprehensive trading analytics"""
+    try:
+        query = TradingSignal.query
+        
+        if trader_name:
+            query = query.filter_by(trader_name=trader_name)
+        
+        if start_date:
+            query = query.filter(TradingSignal.date >= start_date)
+        
+        if end_date:
+            query = query.filter(TradingSignal.date <= end_date)
+        
+        signals = query.all()
+        
+        if not signals:
+            return {
+                'total_trades': 0,
+                'total_wins': 0,
+                'total_losses': 0,
+                'total_breakevens': 0,
+                'win_rate': 0,
+                'total_r_reward': 0,
+                'average_r_per_trade': 0,
+                'best_day': None,
+                'worst_day': None,
+                'day_of_week_stats': {},
+                'pair_stats': {},
+                'monthly_performance': {}
+            }
+        
+        # Basic stats
+        total_trades = len(signals)
+        total_wins = len([s for s in signals if s.outcome == 'Win'])
+        total_losses = len([s for s in signals if s.outcome == 'Loss'])
+        total_breakevens = len([s for s in signals if s.outcome == 'Breakeven'])
+        win_rate = (total_wins / total_trades * 100) if total_trades > 0 else 0
+        total_r_reward = sum([float(s.achieved_reward) for s in signals])
+        average_r_per_trade = total_r_reward / total_trades if total_trades > 0 else 0
+        
+        # Day of week analysis
+        day_stats = {}
+        for signal in signals:
+            day = signal.day_of_week
+            if day not in day_stats:
+                day_stats[day] = {'trades': 0, 'wins': 0, 'total_r': 0}
+            
+            day_stats[day]['trades'] += 1
+            if signal.outcome == 'Win':
+                day_stats[day]['wins'] += 1
+            day_stats[day]['total_r'] += float(signal.achieved_reward)
+        
+        # Find best performing day
+        best_day = max(day_stats.items(), key=lambda x: x[1]['total_r']) if day_stats else None
+        
+        # Pair analysis
+        pair_stats = {}
+        for signal in signals:
+            pair = signal.pair_name
+            if pair not in pair_stats:
+                pair_stats[pair] = {'trades': 0, 'wins': 0, 'total_r': 0}
+            
+            pair_stats[pair]['trades'] += 1
+            if signal.outcome == 'Win':
+                pair_stats[pair]['wins'] += 1
+            pair_stats[pair]['total_r'] += float(signal.achieved_reward)
+        
+        # Monthly performance
+        monthly_performance = {}
+        for signal in signals:
+            month_key = signal.date.strftime('%Y-%m')
+            if month_key not in monthly_performance:
+                monthly_performance[month_key] = {'trades': 0, 'wins': 0, 'total_r': 0}
+            
+            monthly_performance[month_key]['trades'] += 1
+            if signal.outcome == 'Win':
+                monthly_performance[month_key]['wins'] += 1
+            monthly_performance[month_key]['total_r'] += float(signal.achieved_reward)
+        
+        return {
+            'total_trades': total_trades,
+            'total_wins': total_wins,
+            'total_losses': total_losses,
+            'total_breakevens': total_breakevens,
+            'win_rate': round(win_rate, 2),
+            'total_r_reward': round(total_r_reward, 2),
+            'average_r_per_trade': round(average_r_per_trade, 2),
+            'best_day': best_day,
+            'day_of_week_stats': day_stats,
+            'pair_stats': pair_stats,
+            'monthly_performance': monthly_performance
+        }
+        
+    except Exception as e:
+        print(f"Error calculating trading analytics: {e}")
+        return {}
+
 # UPDATED Stream Model for LiveKit
 class Stream(db.Model):
     __tablename__ = 'streams'
