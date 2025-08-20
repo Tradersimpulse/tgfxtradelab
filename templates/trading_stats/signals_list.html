@@ -482,12 +482,12 @@
                             </div>
                         </div>
                     </div>
-
+        
                     <!-- Pair -->
                     <div class="col-md-1">
                         <div class="pair-badge">{{ signal.pair_name }}</div>
                     </div>
-
+        
                     <!-- Trade Type -->
                     <div class="col-md-1">
                         <div class="trade-direction {{ signal.trade_type.lower() }}">
@@ -499,45 +499,47 @@
                             <span>{{ signal.trade_type }}</span>
                         </div>
                     </div>
-
+        
                     <!-- Entry Price -->
                     <div class="col-md-2">
                         <div class="price-display">{{ "%.5f"|format(signal.entry_price|float) }}</div>
                     </div>
-
+        
                     <!-- Stop Loss -->
                     <div class="col-md-1">
                         <div class="price-display">{{ "%.5f"|format(signal.stop_loss_price|float) }}</div>
                     </div>
-
+        
                     <!-- Target -->
                     <div class="col-md-1">
                         <div class="price-display">{{ "%.5f"|format(signal.target_price|float) }}</div>
                     </div>
-
+        
                     <!-- Risk/Reward -->
                     <div class="col-md-1">
                         <div class="rr-ratio">{{ signal.risk_reward_ratio }}:1</div>
                     </div>
-
+        
                     <!-- Outcome -->
                     <div class="col-md-1">
                         <div class="outcome-badge {{ signal.outcome.lower() }}">
                             {{ signal.outcome }}
                         </div>
                     </div>
-
-                    <!-- Reward -->
+        
+                    <!-- UPDATED: Actual R (Final Result) -->
                     <div class="col-md-1">
-                        {% if signal.achieved_reward|float > 0 %}
-                            <div class="reward-display positive">{{ signal.achieved_reward }}R</div>
-                        {% elif signal.achieved_reward|float < 0 %}
-                            <div class="reward-display negative">{{ signal.achieved_reward }}R</div>
+                        {% set actual_r = signal.actual_rr if signal.actual_rr is defined else signal.achieved_reward %}
+                        {% if actual_r|float > 0 %}
+                            <div class="reward-display positive">{{ actual_r }}R</div>
+                        {% elif actual_r|float < 0 %}
+                            <div class="reward-display negative">{{ actual_r }}R</div>
                         {% else %}
-                            <div class="reward-display neutral">{{ signal.achieved_reward }}R</div>
+                            <div class="reward-display neutral">{{ actual_r }}R</div>
                         {% endif %}
+                        <small class="text-muted d-block">Final</small>
                     </div>
-
+        
                     <!-- Actions -->
                     <div class="col-md-1">
                         <div class="action-buttons">
@@ -571,12 +573,12 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Expandable Details -->
+        
+            <!-- UPDATED: Expandable Details with both actual and achieved R -->
             <div id="details-{{ signal.id }}" class="expandable-row">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6 class="mb-3">📊 Trade Details</h6>
+                        <h6 class="mb-3">📊 Trade Performance Details</h6>
                         <div class="row g-3">
                             <div class="col-6">
                                 <div class="price-label">Full Date</div>
@@ -594,9 +596,52 @@
                                 <div class="price-label">Pips Target</div>
                                 <div class="fw-bold">{{ "%.1f"|format(signal.calculate_pips_target()) }} pips</div>
                             </div>
+                            
+                            <!-- NEW: Performance Analysis Section -->
+                            <div class="col-12">
+                                <hr class="my-3">
+                                <h6 class="mb-2">🎯 Performance Analysis</h6>
+                            </div>
+                            
+                            <div class="col-6">
+                                <div class="price-label">Actual R (Final)</div>
+                                {% set actual_r = signal.actual_rr if signal.actual_rr is defined else signal.achieved_reward %}
+                                <div class="fw-bold" style="color: {{ '#10B981' if actual_r|float > 0 else '#EF4444' if actual_r|float < 0 else '#6B7280' }};">
+                                    {{ actual_r }}R
+                                </div>
+                                <small class="text-muted">Final trade outcome</small>
+                            </div>
+                            
+                            <div class="col-6">
+                                <div class="price-label">Achieved R (Max Favorable)</div>
+                                {% if signal.achieved_rr is defined and signal.achieved_rr %}
+                                    <div class="fw-bold" style="color: #3B82F6;">{{ signal.achieved_rr }}R</div>
+                                    <small class="text-muted">Maximum in your favor</small>
+                                {% else %}
+                                    <div class="fw-bold text-muted">Not tracked</div>
+                                    <small class="text-muted">No data available</small>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- NEW: Hypothetical Analysis -->
+                            {% if signal.achieved_rr is defined and signal.achieved_rr and signal.outcome == 'Loss' and signal.achieved_rr|float > 0 %}
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <h6 class="mb-2">🧪 Hypothetical Analysis</h6>
+                                    <p class="mb-1">
+                                        <strong>What if you took profit at {{ signal.achieved_rr }}R?</strong>
+                                    </p>
+                                    <ul class="mb-0">
+                                        <li>Trade would have been: <span class="badge bg-success">+{{ signal.achieved_rr }}R Win</span></li>
+                                        <li>Difference: <span class="text-success">+{{ "%.1f"|format(signal.achieved_rr|float - actual_r|float) }}R</span></li>
+                                        <li>Target reached: {{ "%.0f"|format((signal.achieved_rr|float / signal.risk_reward_ratio|float) * 100) }}%</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
-
+        
                     <div class="col-md-6">
                         {% if signal.notes %}
                         <div class="notes-section">
@@ -612,6 +657,23 @@
                             <div>No trading notes available</div>
                         </div>
                         {% endif %}
+                        
+                        <!-- NEW: Quick Trade Insights -->
+                        <div class="mt-3 p-3 bg-light rounded">
+                            <h6 class="mb-2">💡 Quick Insights</h6>
+                            {% set target_percent = (signal.achieved_rr|float / signal.risk_reward_ratio|float * 100) if signal.achieved_rr and signal.risk_reward_ratio else 0 %}
+                            
+                            {% if signal.outcome == 'Win' %}
+                                <div class="text-success">✅ Successful trade execution</div>
+                            {% elif signal.outcome == 'Loss' and signal.achieved_rr and signal.achieved_rr|float > 0 %}
+                                <div class="text-warning">⚠️ Reached {{ "%.0f"|format(target_percent) }}% of target before reversal</div>
+                                <div class="small text-muted">Consider partial profit strategies</div>
+                            {% elif signal.outcome == 'Loss' %}
+                                <div class="text-danger">❌ Trade moved against position</div>
+                            {% else %}
+                                <div class="text-muted">➖ Trade ended at breakeven</div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
