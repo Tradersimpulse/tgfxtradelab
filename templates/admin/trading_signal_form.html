@@ -301,23 +301,33 @@
                 <div class="form-section">
                     <h5>
                         <span class="material-symbols-outlined me-2">flag</span>
-                        Trade Outcome
+                        Trade Outcome & Performance
                     </h5>
                     
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">Outcome</label>
-                            {{ form.outcome(class="form-control", onchange="updateAchievedReward()") }}
+                            {{ form.outcome(class="form-control", onchange="updateTradeOutcome()") }}
                             {% if form.outcome.errors %}
                                 <div class="text-danger small mt-1">{{ form.outcome.errors[0] }}</div>
                             {% endif %}
                         </div>
                         
-                        <div class="col-md-6">
-                            <label class="form-label">Achieved Reward (R)</label>
-                            {{ form.achieved_reward(class="form-control", step="0.1") }}
-                            {% if form.achieved_reward.errors %}
-                                <div class="text-danger small mt-1">{{ form.achieved_reward.errors[0] }}</div>
+                        <div class="col-md-4">
+                            <label class="form-label">Actual R Outcome</label>
+                            {{ form.actual_rr(class="form-control", step="0.1") }}
+                            <small class="text-muted">Final trade result (positive for wins, negative for losses)</small>
+                            {% if form.actual_rr.errors %}
+                                <div class="text-danger small mt-1">{{ form.actual_rr.errors[0] }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label">Achieved R (Max Favorable)</label>
+                            {{ form.achieved_rr(class="form-control", step="0.1") }}
+                            <small class="text-muted">How far price went in your favor before reversal (optional)</small>
+                            {% if form.achieved_rr.errors %}
+                                <div class="text-danger small mt-1">{{ form.achieved_rr.errors[0] }}</div>
                             {% endif %}
                         </div>
                     </div>
@@ -325,17 +335,34 @@
                     <div class="calculation-help">
                         <h6>
                             <span class="material-symbols-outlined me-2">help</span>
-                            How to Calculate Achieved Reward
+                            How to Calculate Trade Outcomes
                         </h6>
-                        <ul class="mb-0">
-                            <li><strong>Win:</strong> Enter positive R value (e.g., 3.0 for full target, 1.5 for partial profit)</li>
-                            <li><strong>Loss:</strong> Enter -1.0 for full loss, or partial loss value (e.g., -0.5)</li>
-                            <li><strong>Breakeven:</strong> Enter 0.0</li>
-                            <li><strong>Example:</strong> If target was 3:1 but you took profit at 2:1, enter 2.0</li>
-                        </ul>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-primary">Actual R Outcome (Final Result):</h6>
+                                <ul class="mb-0">
+                                    <li><strong>Win:</strong> Enter positive R value (e.g., 3.0 for full target, 1.5 for partial profit)</li>
+                                    <li><strong>Loss:</strong> Enter -1.0 for full loss, or partial loss value (e.g., -0.5)</li>
+                                    <li><strong>Breakeven:</strong> Enter 0.0</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-success">Achieved R (Maximum Favorable):</h6>
+                                <ul class="mb-0">
+                                    <li><strong>Winning Trade:</strong> Same as Actual R (e.g., 3.0)</li>
+                                    <li><strong>Losing Trade:</strong> How far it went before reversal (e.g., 1.5R before hitting SL)</li>
+                                    <li><strong>Never Moved:</strong> Enter 0 if price never went in your favor</li>
+                                    <li><strong>Use Case:</strong> Helps analyze optimal exit strategies</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info mt-3">
+                            <strong>Example:</strong> You target 3R but price reaches 1.5R, then reverses and hits your stop loss (-1R). 
+                            Enter <code>-1.0</code> for <strong>Actual R</strong> and <code>1.5</code> for <strong>Achieved R</strong>.
+                        </div>
                     </div>
                 </div>
-
                 <!-- Video Link -->
                 <div class="form-section">
                     <div class="video-link-section">
