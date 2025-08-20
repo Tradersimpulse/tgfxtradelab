@@ -2297,19 +2297,33 @@ def is_lifetime_subscriber(self):
 
 @app.template_filter('linkify')
 def linkify_filter(text):
-    """Convert URLs in text to clickable links"""
+    """Convert URLs in text to clickable links with enhanced detection"""
     if text is None:
         return ''
     
-    # URL regex pattern
+    # Enhanced URL regex pattern that captures more URL formats
     url_pattern = re.compile(
-        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+        r'(?i)\b(?:'
+        r'(?:https?://|www\.)'  # http://, https://, or www.
+        r'(?:[^\s<>"]+)'        # non-whitespace, non-HTML chars
+        r'|'
+        r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}'  # domain.com format
+        r'(?:/[^\s<>"]*)?'      # optional path
+        r')\b'
     )
     
-    # Replace URLs with HTML links
     def replace_url(match):
         url = match.group(0)
-        return f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="notes-link">{url}</a>'
+        # Add http:// if the URL doesn't start with a protocol
+        if not url.startswith(('http://', 'https://')):
+            href_url = 'https://' + url
+        else:
+            href_url = url
+        
+        # Truncate display text if URL is very long
+        display_url = url if len(url) <= 50 else url[:47] + '...'
+        
+        return f'<a href="{href_url}" target="_blank" rel="noopener noreferrer" class="notes-link" title="{url}">{display_url}</a>'
     
     # First convert line breaks to <br> tags
     text_with_breaks = text.replace('\n', '<br>\n')
