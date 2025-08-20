@@ -529,7 +529,7 @@
         
                     <!-- UPDATED: Actual R (Final Result) -->
                     <div class="col-md-1">
-                        {% set total_r = signals|map(attribute='actual_rr')|select('defined')|map('float')|sum %}
+                        {% set actual_r = signal.actual_rr if signal.actual_rr is defined else 0 %}
                         {% if actual_r|float > 0 %}
                             <div class="reward-display positive">{{ actual_r }}R</div>
                         {% elif actual_r|float < 0 %}
@@ -605,7 +605,7 @@
                             
                             <div class="col-6">
                                 <div class="price-label">Actual R (Final)</div>
-                                {% set actual_r = signal.actual_rr if signal.actual_rr is defined else signal.achieved_reward %}
+                                {% set actual_r = signal.actual_rr if signal.actual_rr is defined else 0 %}
                                 <div class="fw-bold" style="color: {{ '#10B981' if actual_r|float > 0 else '#EF4444' if actual_r|float < 0 else '#6B7280' }};">
                                     {{ actual_r }}R
                                 </div>
@@ -624,6 +624,8 @@
                             </div>
                             
                             <!-- NEW: Hypothetical Analysis -->
+                            <!-- NEW: Hypothetical Analysis -->
+                            {% set actual_r_val = signal.actual_rr if signal.actual_rr is defined else 0 %}
                             {% if signal.achieved_rr is defined and signal.achieved_rr and signal.outcome == 'Loss' and signal.achieved_rr|float > 0 %}
                             <div class="col-12">
                                 <div class="alert alert-info">
@@ -633,7 +635,7 @@
                                     </p>
                                     <ul class="mb-0">
                                         <li>Trade would have been: <span class="badge bg-success">+{{ signal.achieved_rr }}R Win</span></li>
-                                        <li>Difference: <span class="text-success">+{{ "%.1f"|format(signal.achieved_rr|float - actual_r|float) }}R</span></li>
+                                        <li>Difference: <span class="text-success">+{{ "%.1f"|format(signal.achieved_rr|float - actual_r_val|float) }}R</span></li>
                                         <li>Target reached: {{ "%.0f"|format((signal.achieved_rr|float / signal.risk_reward_ratio|float) * 100) }}%</li>
                                     </ul>
                                 </div>
