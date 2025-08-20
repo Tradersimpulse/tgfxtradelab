@@ -583,6 +583,562 @@ class TradingSignal(db.Model):
             'created_at': self.created_at.isoformat()
         }
 
+class WhopPriceMapping(db.Model):
+    """Maps Whop price IDs to your app's price IDs"""
+    __tablename__ = 'whop_price_mappings'
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    whop_price_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    app_price_id = db.Column(db.String(100), nullable=False, index=True)
+    product_name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def __repr__(self):
+        return f'<WhopPriceMapping {self.product_name}: {self.whop_price_id} -> {self.app_price_id}>'
+
+class WhopTransaction(db.Model):
+    """Store Whop transactions for verification"""
+    __tablename__ = 'whop_transactions'
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending Verification'),
+        ('verified', 'Verified'),
+        ('failed', 'Failed Verification'),
+        ('access_granted', 'Access Granted'),
+    ]
+    
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    email = db.Column(db.String(120), nullable=False, index=True)
+    stripe_customer_id = db.Column(db.String(100), nullable=True, index=True)
+    stripe_subscription_id = db.Column(db.String(100), nullable=True, index=True)
+    whop_price_id = db.Column(db.String(100), nullable=False, index=True)
+    app_price_id = db.Column(db.String(100), nullable=True, index=True)
+    transaction_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    amount = db.Column(db.Numeric(10, 2), nullable=True)
+    currency = db.Column(db.String(3), default='USD', nullable=False)
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)
+    verified_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Additional metadata
+    stripe_webhook_data = db.Column(db.JSON, default=dict, nullable=True)
+    whop_metadata = db.Column(db.JSON, default=dict, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    
+    # Relationships
+    user = db.relationship('User', backref='whop_transactions')
+    
+    def __repr__(self):
+        return f'<WhopTransaction {self.email} - {self.status}>'
+
+# Enhanced Stripe webhook handler with Whop detection
+def is_whop_transaction(subscription_data, customer_data):
+    """
+    Determine if a Stripe transaction came from Whop.com
+    Multiple detection methods for reliability
+    """
+    try:
+        # Method 1: Check price ID against known Whop mappings
+        if subscription_data.get('items', {}).get('data'):
+            price_id = subscription_data['items']['data'][0]['price']['id']
+            if WhopPriceMapping.query.filter_by(whop_price_id=price_id, is_active=True).first():
+                return True, price_id
+        
+        # Method 2: Check customer metadata
+        customer_metadata = customer_data.get('metadata', {})
+        if any(key.lower().startswith('whop') for key in customer_metadata.keys()):
+            return True, None
+        
+        # Method 3: Check subscription metadata
+        subscription_metadata = subscription_data.get('metadata', {})
+        if subscription_metadata.get('platform') == 'whop' or subscription_metadata.get('source') == 'whop':
+            return True, None
+        
+        # Method 4: Check customer description or name patterns
+        customer_name = customer_data.get('name', '').lower()
+        customer_description = customer_data.get('description', '').lower()
+        if 'whop' in customer_name or 'whop' in customer_description:
+            return True, None
+        
+        return False, None
+        
+    except Exception as e:
+        print(f"Error detecting Whop transaction: {e}")
+        return False, None
+
+def handle_whop_subscription_created(subscription_data, customer_data):
+    """Handle new Whop subscription"""
+    try:
+        print(f"🛍️ Processing Whop subscription: {subscription_data['id']}")
+        
+        # Get price information
+        price_id = subscription_data['items']['data'][0]['price']['id'] if subscription_data.get('items', {}).get('data') else None
+        
+        # Get or create price mapping
+        price_mapping = None
+        app_price_id = price_id  # Default fallback
+        
+        if price_id:
+            price_mapping = WhopPriceMapping.query.filter_by(
+                whop_price_id=price_id,
+                is_active=True
+            ).first()
+            
+            if price_mapping:
+                app_price_id = price_mapping.app_price_id
+                print(f"✅ Found price mapping: {price_id} -> {app_price_id}")
+            else:
+                print(f"⚠️ No price mapping found for Whop price: {price_id}")
+        
+        # Create transaction record
+        transaction_id = f"whop_{subscription_data['id']}_{int(time.time())}"
+        
+        whop_transaction = WhopTransaction(
+            email=customer_data['email'],
+            stripe_customer_id=customer_data['id'],
+            stripe_subscription_id=subscription_data['id'],
+            whop_price_id=price_id or 'unknown',
+            app_price_id=app_price_id,
+            transaction_id=transaction_id,
+            amount=subscription_data.get('items', {}).get('data', [{}])[0].get('price', {}).get('unit_amount', 0) / 100 if subscription_data.get('items', {}).get('data') else 0,
+            currency=subscription_data.get('currency', 'usd').upper(),
+            status='verified',
+            verified_at=datetime.utcnow(),
+            stripe_webhook_data=subscription_data,
+            whop_metadata=customer_data.get('metadata', {})
+        )
+        
+        db.session.add(whop_transaction)
+        db.session.flush()
+        
+        # Try to grant access immediately
+        grant_whop_user_access(whop_transaction)
+        
+        db.session.commit()
+        print(f"✅ Whop subscription processed successfully")
+        
+    except Exception as e:
+        print(f"❌ Error handling Whop subscription: {e}")
+        db.session.rollback()
+        raise
+
+def grant_whop_user_access(whop_transaction):
+    """Grant access to user based on Whop transaction"""
+    try:
+        # Find existing user or create account
+        user = User.query.filter_by(email=whop_transaction.email).first()
+        
+        if not user:
+            # Create new user account
+            username = whop_transaction.email.split('@')[0]
+            counter = 1
+            original_username = username
+            
+            # Ensure unique username
+            while User.query.filter_by(username=username).first():
+                username = f"{original_username}{counter}"
+                counter += 1
+            
+            user = User(
+                username=username,
+                email=whop_transaction.email,
+                password_hash=generate_password_hash(f"whop_{uuid.uuid4().hex[:12]}"),  # Random secure password
+                timezone='America/Chicago'
+            )
+            db.session.add(user)
+            db.session.flush()
+            print(f"🆕 Created new user account: {user.username}")
+        
+        # Update user subscription status
+        user.has_subscription = True
+        user.subscription_status = 'active'
+        user.stripe_customer_id = whop_transaction.stripe_customer_id
+        user.stripe_subscription_id = whop_transaction.stripe_subscription_id
+        
+        # Determine plan type from price mapping
+        if whop_transaction.app_price_id:
+            price_ids = initialize_stripe_price_ids()
+            for plan_name, plan_price_id in price_ids.items():
+                if whop_transaction.app_price_id == plan_price_id:
+                    user.subscription_plan = plan_name
+                    break
+            
+            if not user.subscription_plan:
+                # Default plan assignment based on amount
+                if whop_transaction.amount >= 499:
+                    user.subscription_plan = 'lifetime'
+                    user.subscription_expires = datetime.utcnow() + timedelta(days=36500)  # 100 years
+                elif whop_transaction.amount >= 299:
+                    user.subscription_plan = 'annual'
+                    user.subscription_expires = datetime.utcnow() + timedelta(days=365)
+                else:
+                    user.subscription_plan = 'monthly'
+                    user.subscription_expires = datetime.utcnow() + timedelta(days=30)
+        
+        # Update transaction
+        whop_transaction.user_id = user.id
+        whop_transaction.status = 'access_granted'
+        
+        # Create welcome notification
+        create_notification(
+            user.id,
+            'Welcome from Whop! 🛍️',
+            f'Your Whop.com purchase has been verified and access has been granted! Welcome to TGFX Trade Lab.',
+            'subscription'
+        )
+        
+        # Create activity log
+        create_user_activity(
+            user.id,
+            'whop_access_granted',
+            f'Access granted via Whop.com purchase ({user.subscription_plan})'
+        )
+        
+        print(f"✅ Granted access to user: {user.email} ({user.subscription_plan})")
+        
+        return user
+        
+    except Exception as e:
+        print(f"❌ Error granting Whop access: {e}")
+        raise
+
+# Enhanced webhook handler
+@app.route('/webhook/stripe/whop', methods=['POST'])
+def stripe_webhook_whop():
+    """Enhanced Stripe webhook handler with Whop detection"""
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
+    endpoint_secret = app.config.get('STRIPE_WEBHOOK_SECRET')
+    
+    if not endpoint_secret:
+        print("⚠️ Stripe webhook secret not configured")
+        return jsonify({'error': 'Webhook secret not configured'}), 400
+    
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+    except Exception as e:
+        print(f"❌ Webhook signature verification failed: {e}")
+        return jsonify({'error': 'Invalid signature'}), 400
+    
+    try:
+        event_type = event['type']
+        event_data = event['data']['object']
+        
+        print(f"📡 Received webhook: {event_type}")
+        
+        if event_type == 'customer.subscription.created':
+            # Get customer data
+            customer = stripe.Customer.retrieve(event_data['customer'])
+            
+            # Check if this is a Whop transaction
+            is_whop, whop_price_id = is_whop_transaction(event_data, customer)
+            
+            if is_whop:
+                print(f"🛍️ Detected Whop transaction!")
+                handle_whop_subscription_created(event_data, customer)
+            else:
+                print(f"💳 Processing direct subscription")
+                handle_subscription_created(event_data)
+        
+        elif event_type == 'invoice.payment_succeeded':
+            # Check if this could be a Whop payment
+            customer = stripe.Customer.retrieve(event_data['customer'])
+            
+            # Look for existing Whop transaction
+            whop_transaction = WhopTransaction.query.filter_by(
+                stripe_customer_id=customer['id']
+            ).first()
+            
+            if whop_transaction:
+                print(f"🛍️ Processing Whop payment for existing transaction")
+                handle_whop_payment_succeeded(event_data, customer, whop_transaction)
+            else:
+                print(f"💳 Processing direct payment")
+                handle_payment_succeeded(event_data)
+        
+        else:
+            # Handle other webhook events normally
+            if event_type == 'customer.subscription.updated':
+                handle_subscription_updated(event['data']['object'])
+            elif event_type == 'customer.subscription.deleted':
+                handle_subscription_deleted(event['data']['object'])
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"❌ Error processing webhook: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def handle_whop_payment_succeeded(invoice_data, customer_data, whop_transaction):
+    """Handle successful Whop payment"""
+    try:
+        payment_amount = invoice_data['amount_paid'] / 100
+        
+        # Update transaction
+        whop_transaction.amount = payment_amount
+        whop_transaction.verified_at = datetime.utcnow()
+        whop_transaction.status = 'verified'
+        
+        # Update user if exists
+        if whop_transaction.user:
+            user = whop_transaction.user
+            user.last_payment_date = datetime.fromtimestamp(invoice_data['created'])
+            user.last_payment_amount = payment_amount
+            user.total_revenue = (user.total_revenue or 0) + payment_amount
+        
+        db.session.commit()
+        print(f"✅ Whop payment processed: ${payment_amount}")
+        
+    except Exception as e:
+        print(f"❌ Error handling Whop payment: {e}")
+        db.session.rollback()
+
+# User-facing verification endpoint
+@app.route('/api/verify-whop-purchase', methods=['POST'])
+@login_required
+def api_verify_whop_purchase():
+    """User-facing endpoint to verify Whop purchase"""
+    try:
+        data = request.get_json()
+        email = data.get('email', current_user.email)
+        transaction_id = data.get('transaction_id')  # Optional
+        
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        # Look for pending/verified Whop transactions
+        query = WhopTransaction.query.filter_by(email=email)
+        
+        if transaction_id:
+            query = query.filter_by(transaction_id=transaction_id)
+        
+        whop_transaction = query.filter(
+            WhopTransaction.status.in_(['pending', 'verified'])
+        ).order_by(WhopTransaction.created_at.desc()).first()
+        
+        if whop_transaction:
+            # Link to current user and grant access
+            if not whop_transaction.user_id:
+                whop_transaction.user_id = current_user.id
+            
+            if whop_transaction.status == 'verified':
+                grant_whop_user_access(whop_transaction)
+                db.session.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Whop purchase verified! Access granted.',
+                    'transaction_id': whop_transaction.transaction_id,
+                    'plan': current_user.subscription_plan,
+                    'amount': float(whop_transaction.amount or 0)
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': 'Whop purchase found but not yet verified. Please wait a few minutes and try again.'
+                })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'No Whop purchase found for your email. Please ensure you used the same email for both Whop and your account.'
+            })
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error verifying purchase: {str(e)}'
+        })
+
+# Admin routes for managing Whop transactions
+@app.route('/admin/whop-transactions')
+@login_required
+def admin_whop_transactions():
+    """Admin page for managing Whop transactions"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    transactions = WhopTransaction.query.order_by(WhopTransaction.created_at.desc()).all()
+    
+    # Calculate stats
+    total_transactions = len(transactions)
+    verified_transactions = len([t for t in transactions if t.status == 'verified'])
+    access_granted = len([t for t in transactions if t.status == 'access_granted'])
+    total_revenue = sum([float(t.amount or 0) for t in transactions if t.status in ['verified', 'access_granted']])
+    
+    return render_template('admin/whop_transactions.html',
+                         transactions=transactions,
+                         total_transactions=total_transactions,
+                         verified_transactions=verified_transactions,
+                         access_granted=access_granted,
+                         total_revenue=total_revenue)
+
+@app.route('/admin/whop-price-mappings')
+@login_required
+def admin_whop_price_mappings():
+    """Admin page for managing Whop price mappings"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    mappings = WhopPriceMapping.query.order_by(WhopPriceMapping.created_at.desc()).all()
+    
+    return render_template('admin/whop_price_mappings.html', mappings=mappings)
+
+# API endpoints for admin management
+@app.route('/api/admin/whop-price-mapping', methods=['POST'])
+@login_required
+def api_create_whop_price_mapping():
+    """Create new Whop price mapping"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        data = request.get_json()
+        
+        # Check if mapping already exists
+        existing = WhopPriceMapping.query.filter_by(
+            whop_price_id=data['whop_price_id']
+        ).first()
+        
+        if existing:
+            return jsonify({'error': 'Mapping for this Whop price ID already exists'}), 400
+        
+        mapping = WhopPriceMapping(
+            whop_price_id=data['whop_price_id'],
+            app_price_id=data['app_price_id'],
+            product_name=data['product_name'],
+            description=data.get('description', ''),
+            is_active=data.get('is_active', True)
+        )
+        
+        db.session.add(mapping)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'id': mapping.id})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/whop-price-mapping/<int:mapping_id>', methods=['PUT'])
+@login_required
+def api_update_whop_price_mapping(mapping_id):
+    """Update Whop price mapping"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        mapping = WhopPriceMapping.query.get_or_404(mapping_id)
+        data = request.get_json()
+        
+        mapping.whop_price_id = data.get('whop_price_id', mapping.whop_price_id)
+        mapping.app_price_id = data.get('app_price_id', mapping.app_price_id)
+        mapping.product_name = data.get('product_name', mapping.product_name)
+        mapping.description = data.get('description', mapping.description)
+        mapping.is_active = data.get('is_active', mapping.is_active)
+        mapping.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/whop-transaction/<int:transaction_id>/grant-access', methods=['POST'])
+@login_required
+def api_grant_whop_access(transaction_id):
+    """Manually grant access for a Whop transaction"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        transaction = WhopTransaction.query.get_or_404(transaction_id)
+        
+        if transaction.status == 'access_granted':
+            return jsonify({'error': 'Access already granted'}), 400
+        
+        grant_whop_user_access(transaction)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Access granted to {transaction.email}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# Database migration function
+def migrate_whop_tables():
+    """Run this once to add Whop tables to existing database"""
+    try:
+        with app.app_context():
+            db.create_all()
+            print("✅ Whop tables created successfully")
+            
+            # Create some default price mappings if needed
+            if not WhopPriceMapping.query.first():
+                print("Creating default Whop price mappings...")
+                
+                # You'll need to update these with your actual price IDs
+                default_mappings = [
+                    {
+                        'whop_price_id': 'price_whop_monthly_example',
+                        'app_price_id': 'price_1R4RMQCir8vKAFowSpnyfvnI',  # Your monthly price
+                        'product_name': 'Monthly Subscription (Whop)',
+                        'description': 'Monthly subscription purchased through Whop.com'
+                    },
+                    {
+                        'whop_price_id': 'price_whop_annual_example',
+                        'app_price_id': 'price_1Rx5qACir8vKAFowfoovlQmt',  # Your annual price
+                        'product_name': 'Annual Subscription (Whop)',
+                        'description': 'Annual subscription purchased through Whop.com'
+                    }
+                ]
+                
+                for mapping_data in default_mappings:
+                    mapping = WhopPriceMapping(**mapping_data)
+                    db.session.add(mapping)
+                
+                db.session.commit()
+                print("✅ Default price mappings created")
+            
+            return True
+            
+    except Exception as e:
+        print(f"❌ Whop migration error: {e}")
+        db.session.rollback()
+        return False
+
+# Add this to your app initialization
+def initialize_whop_integration():
+    """Initialize Whop integration during app startup"""
+    try:
+        # Run migration
+        migrate_whop_tables()
+        
+        print("🛍️ Whop integration initialized successfully!")
+        print("📋 Next steps:")
+        print("   1. Add your Whop price IDs to the price mapping table")
+        print("   2. Configure webhook URL in Stripe: /webhook/stripe/whop")
+        print("   3. Test with a Whop transaction")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Whop integration initialization failed: {e}")
+        return False
+
 # Database migration function
 def migrate_trading_signals_fields():
     """Migrate trading signals to add achieved_rr field and rename achieved_reward to actual_rr"""
