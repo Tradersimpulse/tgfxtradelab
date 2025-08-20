@@ -3656,7 +3656,7 @@ def api_hypothetical_analysis():
         return jsonify({'error': str(e)}), 500
 
 def calculate_take_profit_analysis(signals, target_reward):
-    """Analyze what would happen if we took profit at a specific R level"""
+    """Analyze what would happen if we took profit at a specific R level - FIXED"""
     try:
         hypothetical_wins = 0
         hypothetical_losses = 0
@@ -3669,7 +3669,7 @@ def calculate_take_profit_analysis(signals, target_reward):
             actual_r = float(getattr(signal, 'actual_rr', getattr(signal, 'achieved_reward', 0)))
             achieved_r = float(getattr(signal, 'achieved_rr', 0)) if hasattr(signal, 'achieved_rr') and signal.achieved_rr else None
             
-            # Enhanced logic using achieved_rr data
+            # FIXED LOGIC: Only count as hypothetical win if achieved_r reached the target
             if achieved_r is not None and achieved_r >= target_reward:
                 # Trade reached our hypothetical take profit level
                 hypothetical_outcome = 'Win'
@@ -3680,32 +3680,15 @@ def calculate_take_profit_analysis(signals, target_reward):
                 if signal.outcome == 'Loss':
                     missed_opportunities += target_reward - actual_r
                     
-            elif signal.outcome == 'Win' and actual_r > 0:
-                # Keep winning trades as they are (but may be reduced if they didn't reach target)
-                if actual_r >= target_reward:
-                    hypothetical_outcome = 'Win'
-                    hypothetical_r = target_reward  # Reduced to target level
-                else:
-                    hypothetical_outcome = 'Win'
-                    hypothetical_r = actual_r  # Keep original win
-                hypothetical_wins += 1
+            else:
+                # Trade did NOT reach target - keep original result
+                hypothetical_outcome = signal.outcome
+                hypothetical_r = actual_r
                 
-            elif achieved_r is not None and achieved_r > 0:
-                # Trade went favorable but not enough to reach target, then reversed
-                if achieved_r >= target_reward * 0.5:  # At least 50% of target
-                    # Could have taken partial profit
-                    hypothetical_outcome = 'Small Win'
-                    hypothetical_r = min(achieved_r * 0.5, target_reward * 0.3)  # Conservative partial
+                if signal.outcome == 'Win':
                     hypothetical_wins += 1
                 else:
-                    hypothetical_outcome = 'Loss'
-                    hypothetical_r = -1
                     hypothetical_losses += 1
-            else:
-                # Trade never went favorable or no achieved_r data
-                hypothetical_outcome = 'Loss'
-                hypothetical_r = -1
-                hypothetical_losses += 1
             
             hypothetical_total_r += hypothetical_r
             
@@ -3719,7 +3702,8 @@ def calculate_take_profit_analysis(signals, target_reward):
                 'achieved_r': achieved_r,
                 'hypothetical_outcome': hypothetical_outcome,
                 'hypothetical_r': hypothetical_r,
-                'analysis': get_signal_analysis(signal, target_reward, achieved_r, actual_r)
+                'analysis': get_signal_analysis(signal, target_reward, achieved_r, actual_r),
+                'reached_target': achieved_r is not None and achieved_r >= target_reward
             })
         
         total_trades = len(signals)
