@@ -2865,11 +2865,11 @@ def admin_payment_issues():
 def api_upgrade_to_lifetime():
     """Upgrade user to lifetime plan"""
     try:
+        data = request.get_json()
+        coupon_code = data.get('coupon_code')  # Optional coupon
+        
         if current_user.subscription_plan == 'lifetime':
             return jsonify({'error': 'Already on lifetime plan'}), 400
-        
-        # For lifetime upgrades, we'll redirect to a new checkout session
-        # since it's a one-time payment rather than a subscription modification
         
         price_ids = initialize_stripe_price_ids()
         lifetime_price_id = price_ids.get('lifetime')
@@ -2890,26 +2890,42 @@ def api_upgrade_to_lifetime():
             db.session.commit()
             customer_id = customer.id
         
-        # If user has existing subscription, we'll need to cancel it after lifetime purchase
         existing_subscription_id = current_user.stripe_subscription_id
         
-        # Create checkout session for lifetime purchase
-        session = stripe.checkout.Session.create(
-            customer=customer_id,
-            payment_method_types=['card'],
-            line_items=[{
+        # Prepare checkout parameters
+        checkout_params = {
+            'customer': customer_id,
+            'payment_method_types': ['card'],
+            'line_items': [{
                 'price': lifetime_price_id,
                 'quantity': 1,
             }],
-            mode='payment',  # One-time payment, not subscription
-            success_url=f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}&plan=lifetime",
-            cancel_url=f"{request.host_url}manage-subscription?upgrade_canceled=true",
-            metadata={
+            'mode': 'payment',  # One-time payment
+            'success_url': f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}&plan=lifetime",
+            'cancel_url': f"{request.host_url}manage-subscription?upgrade_canceled=true",
+            'metadata': {
                 'user_id': current_user.id,
                 'plan_type': 'lifetime',
                 'cancel_subscription_id': existing_subscription_id if existing_subscription_id else ''
-            }
-        )
+            },
+            'allow_promotion_codes': True,  # Enable promotion codes
+        }
+        
+        # Apply specific coupon if provided
+        if coupon_code:
+            try:
+                coupon = stripe.Coupon.retrieve(coupon_code)
+                if coupon.valid:
+                    checkout_params['discounts'] = [{
+                        'coupon': coupon_code
+                    }]
+                else:
+                    return jsonify({'error': 'Invalid or expired coupon code'}), 400
+            except stripe.error.InvalidRequestError:
+                return jsonify({'error': 'Invalid coupon code'}), 400
+        
+        # Create checkout session
+        session = stripe.checkout.Session.create(**checkout_params)
         
         return jsonify({
             'success': True,
@@ -5478,10 +5494,11 @@ def generate_chart_data(start_date, end_date):
 @app.route('/api/create-checkout-session', methods=['POST'])
 @login_required
 def create_checkout_session():
-    """Create a Stripe Checkout session for subscription - updated for lifetime"""
+    """Create a Stripe Checkout session for subscription - updated for coupons"""
     try:
         data = request.get_json()
         plan_type = data.get('plan_type', 'monthly')
+        coupon_code = data.get('coupon_code')  # Optional coupon code
         
         # Get price IDs
         price_ids = initialize_stripe_price_ids()
@@ -5506,30 +5523,45 @@ def create_checkout_session():
         # Determine checkout mode based on plan type
         if plan_type == 'lifetime':
             mode = 'payment'  # One-time payment
-            line_items = [{
-                'price': price_id,
-                'quantity': 1,
-            }]
         else:
             mode = 'subscription'  # Recurring subscription
-            line_items = [{
-                'price': price_id,
-                'quantity': 1,
-            }]
         
-        # Create checkout session
-        session = stripe.checkout.Session.create(
-            customer=customer_id,
-            payment_method_types=['card'],
-            line_items=line_items,
-            mode=mode,
-            success_url=f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}&plan={plan_type}",
-            cancel_url=f"{request.host_url}subscription?canceled=true",
-            metadata={
+        line_items = [{
+            'price': price_id,
+            'quantity': 1,
+        }]
+        
+        # Prepare checkout session parameters
+        checkout_params = {
+            'customer': customer_id,
+            'payment_method_types': ['card'],
+            'line_items': line_items,
+            'mode': mode,
+            'success_url': f"{request.host_url}subscription-success?session_id={{CHECKOUT_SESSION_ID}}&plan={plan_type}",
+            'cancel_url': f"{request.host_url}subscription?canceled=true",
+            'metadata': {
                 'user_id': current_user.id,
                 'plan_type': plan_type
-            }
-        )
+            },
+            'allow_promotion_codes': True,  # Enable promotion code field
+        }
+        
+        # Apply specific coupon if provided
+        if coupon_code:
+            try:
+                # Validate the coupon exists and is active
+                coupon = stripe.Coupon.retrieve(coupon_code)
+                if coupon.valid:
+                    checkout_params['discounts'] = [{
+                        'coupon': coupon_code
+                    }]
+                else:
+                    return jsonify({'error': 'Invalid or expired coupon code'}), 400
+            except stripe.error.InvalidRequestError:
+                return jsonify({'error': 'Invalid coupon code'}), 400
+        
+        # Create checkout session
+        session = stripe.checkout.Session.create(**checkout_params)
         
         return jsonify({
             'success': True,
