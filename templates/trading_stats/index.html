@@ -1,0 +1,712 @@
+<!-- templates/trading_stats/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Trading Stats Dashboard - TGFX Trade Lab{% endblock %}
+
+{% block head %}
+<style>
+    .stats-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 1.5rem;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stats-card:hover {
+        border-color: rgba(16, 185, 129, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    
+    .stats-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: var(--gradient-primary);
+    }
+    
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .trader-comparison {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+    }
+    
+    .trader-tab {
+        background: transparent;
+        border: 2px solid var(--border-color);
+        color: var(--text-secondary);
+        padding: 0.75rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .trader-tab.active {
+        background: var(--gradient-primary);
+        border-color: var(--primary-color);
+        color: white;
+    }
+    
+    .day-performance {
+        background: var(--bg-tertiary);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        border-left: 4px solid var(--primary-color);
+    }
+    
+    .day-performance.best {
+        border-left-color: #10B981;
+        background: rgba(16, 185, 129, 0.1);
+    }
+    
+    .day-performance.worst {
+        border-left-color: #EF4444;
+        background: rgba(239, 68, 68, 0.1);
+    }
+    
+    .hypothetical-calculator {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+    }
+    
+    .calculator-result {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-top: 1rem;
+    }
+    
+    .balance-history {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .balance-entry {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-light);
+    }
+    
+    .balance-entry:last-child {
+        border-bottom: none;
+    }
+    
+    .filter-section {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .chart-container {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+        height: 400px;
+    }
+    
+    .outcome-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .outcome-badge.win {
+        background: rgba(16, 185, 129, 0.2);
+        color: #10B981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    
+    .outcome-badge.loss {
+        background: rgba(239, 68, 68, 0.2);
+        color: #EF4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    
+    .outcome-badge.breakeven {
+        background: rgba(156, 163, 175, 0.2);
+        color: #9CA3AF;
+        border: 1px solid rgba(156, 163, 175, 0.3);
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid var(--border-color);
+        border-radius: 50%;
+        border-top-color: var(--primary-color);
+        animation: spin 1s ease-in-out infinite;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1 text-gradient-primary">📊 Trading Stats Dashboard</h1>
+            <p class="text-muted mb-0">Comprehensive trading performance analytics</p>
+        </div>
+        <div>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('admin_trading_signals') }}" class="btn btn-primary">
+                <span class="material-symbols-outlined me-2">add</span>
+                Manage Signals
+            </a>
+            {% endif %}
+            <a href="{{ url_for('trading_signals_list') }}" class="btn btn-outline-primary ms-2">
+                <span class="material-symbols-outlined me-2">list</span>
+                View All Signals
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-section">
+        <h5 class="mb-3">
+            <span class="material-symbols-outlined me-2">filter_list</span>
+            Filters
+        </h5>
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Trader</label>
+                <select class="form-select" id="traderFilter">
+                    <option value="">All Traders</option>
+                    <option value="Ray">Ray</option>
+                    <option value="Jordan">Jordan</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Start Date</label>
+                <input type="date" class="form-control" id="startDateFilter">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">End Date</label>
+                <input type="date" class="form-control" id="endDateFilter">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button class="btn btn-primary w-100" onclick="updateAnalytics()">
+                    <span class="material-symbols-outlined me-2">refresh</span>
+                    Update Analytics
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overview Stats -->
+    <div class="row g-4 mb-4" id="overviewStats">
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stat-value text-primary" id="totalTrades">0</div>
+                <div class="stat-label">Total Trades</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stat-value text-success" id="winRate">0%</div>
+                <div class="stat-label">Win Rate</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stat-value" id="totalReward" style="color: #10B981;">0R</div>
+                <div class="stat-label">Total R Reward</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stat-value text-info" id="avgReward">0R</div>
+                <div class="stat-label">Avg R per Trade</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Trader Comparison -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <span class="material-symbols-outlined me-2">compare_arrows</span>
+                        Trader Performance Comparison
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="trader-comparison">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="user-avatar me-3" style="background: linear-gradient(135deg, #10B981, #059669);">R</div>
+                                    <div>
+                                        <h6 class="mb-0">Ray</h6>
+                                        <small class="text-muted">EUR/USD Specialist</small>
+                                    </div>
+                                </div>
+                                <div id="rayStats">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Total Trades:</span>
+                                        <strong id="rayTotalTrades">0</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Win Rate:</span>
+                                        <strong id="rayWinRate">0%</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Total R:</span>
+                                        <strong id="rayTotalR" style="color: #10B981;">0R</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span>Avg R/Trade:</span>
+                                        <strong id="rayAvgR">0R</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="trader-comparison">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="user-avatar me-3" style="background: linear-gradient(135deg, #3B82F6, #1D4ED8);">J</div>
+                                    <div>
+                                        <h6 class="mb-0">Jordan</h6>
+                                        <small class="text-muted">Gold Specialist</small>
+                                    </div>
+                                </div>
+                                <div id="jordanStats">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Total Trades:</span>
+                                        <strong id="jordanTotalTrades">0</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Win Rate:</span>
+                                        <strong id="jordanWinRate">0%</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Total R:</span>
+                                        <strong id="jordanTotalR" style="color: #10B981;">0R</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span>Avg R/Trade:</span>
+                                        <strong id="jordanAvgR">0R</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Best Trading Days -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <span class="material-symbols-outlined me-2">calendar_today</span>
+                        Best Trading Days
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="dayOfWeekStats">
+                        <p class="text-muted text-center">Loading day statistics...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hypothetical Scenarios -->
+    <div class="row g-4 mt-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <span class="material-symbols-outlined me-2">calculate</span>
+                        Hypothetical Target Calculator
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="hypothetical-calculator">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Target R Reward</label>
+                                <input type="number" class="form-control" id="targetReward" value="2.0" step="0.1" min="0.1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Trader</label>
+                                <select class="form-select" id="hypotheticalTrader">
+                                    <option value="">All Traders</option>
+                                    <option value="Ray">Ray</option>
+                                    <option value="Jordan">Jordan</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-primary" onclick="calculateHypothetical()">
+                                    <span class="material-symbols-outlined me-2">analytics</span>
+                                    Calculate Hypothetical
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="hypotheticalResults" style="display: none;">
+                            <div class="calculator-result">
+                                <h6 class="mb-3">Hypothetical Results</h6>
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="h4 text-success mb-1" id="hypotheticalWins">0</div>
+                                            <div class="text-muted small">Wins</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="h4 text-danger mb-1" id="hypotheticalLosses">0</div>
+                                            <div class="text-muted small">Losses</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="h4 text-primary mb-1" id="hypotheticalWinRate">0%</div>
+                                            <div class="text-muted small">Win Rate</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="h4" style="color: #10B981;" id="hypotheticalTotalR">0R</div>
+                                            <div class="text-muted small">Total R</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <span class="material-symbols-outlined me-2">account_balance</span>
+                        Balance Growth Calculator
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="hypothetical-calculator">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Starting Balance ($)</label>
+                                <input type="number" class="form-control" id="startingBalance" value="10000" step="100" min="100">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Risk % per Trade</label>
+                                <input type="number" class="form-control" id="riskPercentage" value="1.0" step="0.1" min="0.1" max="10">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Target R Reward</label>
+                                <input type="number" class="form-control" id="balanceTargetReward" value="2.0" step="0.1" min="0.1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Trader</label>
+                                <select class="form-select" id="balanceTrader">
+                                    <option value="">All Traders</option>
+                                    <option value="Ray">Ray</option>
+                                    <option value="Jordan">Jordan</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-primary" onclick="calculateBalance()">
+                                    <span class="material-symbols-outlined me-2">trending_up</span>
+                                    Calculate Balance Growth
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="balanceResults" style="display: none;">
+                            <div class="calculator-result">
+                                <h6 class="mb-3">Balance Growth Results</h6>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="h5 text-primary mb-1" id="endingBalance">$0</div>
+                                            <div class="text-muted small">Ending Balance</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="text-center">
+                                            <div class="h5 text-success mb-1" id="totalReturn">0%</div>
+                                            <div class="text-muted small">Total Return</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="balance-history" id="balanceHistory">
+                                    <!-- Balance history will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default dates (last 30 days)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    
+    document.getElementById('startDateFilter').value = startDate.toISOString().split('T')[0];
+    document.getElementById('endDateFilter').value = endDate.toISOString().split('T')[0];
+    
+    // Load initial analytics
+    updateAnalytics();
+    compareTraders();
+});
+
+async function updateAnalytics() {
+    const trader = document.getElementById('traderFilter').value;
+    const startDate = document.getElementById('startDateFilter').value;
+    const endDate = document.getElementById('endDateFilter').value;
+    
+    try {
+        const params = new URLSearchParams();
+        if (trader) params.append('trader', trader);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const response = await fetch(`/api/trading-stats/analytics?${params}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            updateOverviewStats(data.analytics);
+            updateDayOfWeekStats(data.analytics.day_of_week_stats);
+        }
+    } catch (error) {
+        console.error('Error fetching analytics:', error);
+        showToast('Error loading analytics', 'error');
+    }
+}
+
+async function compareTraders() {
+    const startDate = document.getElementById('startDateFilter').value;
+    const endDate = document.getElementById('endDateFilter').value;
+    
+    try {
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const response = await fetch(`/api/trading-stats/compare?${params}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            updateTraderStats('ray', data.ray);
+            updateTraderStats('jordan', data.jordan);
+        }
+    } catch (error) {
+        console.error('Error comparing traders:', error);
+    }
+}
+
+function updateOverviewStats(analytics) {
+    document.getElementById('totalTrades').textContent = analytics.total_trades || 0;
+    document.getElementById('winRate').textContent = `${analytics.win_rate || 0}%`;
+    document.getElementById('totalReward').textContent = `${analytics.total_r_reward || 0}R`;
+    document.getElementById('avgReward').textContent = `${analytics.average_r_per_trade || 0}R`;
+}
+
+function updateTraderStats(trader, stats) {
+    const prefix = trader === 'ray' ? 'ray' : 'jordan';
+    
+    document.getElementById(`${prefix}TotalTrades`).textContent = stats.total_trades || 0;
+    document.getElementById(`${prefix}WinRate`).textContent = `${stats.win_rate || 0}%`;
+    document.getElementById(`${prefix}TotalR`).textContent = `${stats.total_r_reward || 0}R`;
+    document.getElementById(`${prefix}AvgR`).textContent = `${stats.average_r_per_trade || 0}R`;
+}
+
+function updateDayOfWeekStats(dayStats) {
+    const container = document.getElementById('dayOfWeekStats');
+    
+    if (!dayStats || Object.keys(dayStats).length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">No day statistics available</p>';
+        return;
+    }
+    
+    // Sort days by total R reward
+    const sortedDays = Object.entries(dayStats)
+        .sort((a, b) => b[1].total_r - a[1].total_r);
+    
+    let html = '';
+    sortedDays.forEach(([day, stats], index) => {
+        const winRate = stats.trades > 0 ? ((stats.wins / stats.trades) * 100).toFixed(1) : 0;
+        const isBest = index === 0;
+        const isWorst = index === sortedDays.length - 1 && sortedDays.length > 1;
+        
+        html += `
+            <div class="day-performance ${isBest ? 'best' : isWorst ? 'worst' : ''}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${day}</strong>
+                        ${isBest ? '<span class="badge bg-success ms-2">Best</span>' : ''}
+                        ${isWorst ? '<span class="badge bg-danger ms-2">Worst</span>' : ''}
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold" style="color: #10B981;">${stats.total_r}R</div>
+                        <small class="text-muted">${stats.trades} trades • ${winRate}% win rate</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+async function calculateHypothetical() {
+    const targetReward = parseFloat(document.getElementById('targetReward').value);
+    const trader = document.getElementById('hypotheticalTrader').value;
+    const startDate = document.getElementById('startDateFilter').value;
+    const endDate = document.getElementById('endDateFilter').value;
+    
+    try {
+        const response = await fetch('/api/trading-stats/hypothetical', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                target_reward: targetReward,
+                trader: trader,
+                start_date: startDate,
+                end_date: endDate
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('hypotheticalWins').textContent = data.hypothetical_wins;
+            document.getElementById('hypotheticalLosses').textContent = data.hypothetical_losses;
+            document.getElementById('hypotheticalWinRate').textContent = `${data.hypothetical_win_rate}%`;
+            document.getElementById('hypotheticalTotalR').textContent = `${data.hypothetical_total_r}R`;
+            
+            document.getElementById('hypotheticalResults').style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error calculating hypothetical:', error);
+        showToast('Error calculating hypothetical scenarios', 'error');
+    }
+}
+
+async function calculateBalance() {
+    const startingBalance = parseFloat(document.getElementById('startingBalance').value);
+    const riskPercentage = parseFloat(document.getElementById('riskPercentage').value);
+    const targetReward = parseFloat(document.getElementById('balanceTargetReward').value);
+    const trader = document.getElementById('balanceTrader').value;
+    const startDate = document.getElementById('startDateFilter').value;
+    const endDate = document.getElementById('endDateFilter').value;
+    
+    try {
+        const response = await fetch('/api/trading-stats/balance-calculator', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                starting_balance: startingBalance,
+                risk_percentage: riskPercentage,
+                target_reward: targetReward,
+                trader: trader,
+                start_date: startDate,
+                end_date: endDate
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('endingBalance').textContent = `$${data.ending_balance.toLocaleString()}`;
+            document.getElementById('totalReturn').textContent = `${data.return_percentage.toFixed(2)}%`;
+            
+            // Update balance history
+            const historyContainer = document.getElementById('balanceHistory');
+            let historyHtml = '';
+            
+            data.balance_history.slice(-10).forEach(entry => {
+                const resultClass = entry.outcome === 'Win' ? 'text-success' : 
+                                   entry.outcome === 'Loss' ? 'text-danger' : 'text-muted';
+                
+                historyHtml += `
+                    <div class="balance-entry">
+                        <div>
+                            <strong>${entry.date}</strong>
+                            ${entry.pair ? `<small class="text-muted ms-2">${entry.pair}</small>` : ''}
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold">$${entry.balance.toLocaleString()}</div>
+                            <small class="${resultClass}">
+                                ${entry.trade_result > 0 ? '+' : ''}${entry.trade_result}
+                            </small>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            historyContainer.innerHTML = historyHtml;
+            document.getElementById('balanceResults').style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error calculating balance:', error);
+        showToast('Error calculating balance growth', 'error');
+    }
+}
+
+// Update analytics when filters change
+document.getElementById('traderFilter').addEventListener('change', function() {
+    updateAnalytics();
+    compareTraders();
+});
+</script>
+{% endblock %}
