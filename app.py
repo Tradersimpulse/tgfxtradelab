@@ -900,6 +900,49 @@ def handle_whop_payment_succeeded(invoice_data, customer_data, whop_transaction)
         print(f"❌ Error handling Whop payment: {e}")
         db.session.rollback()
 
+@app.route('/api/admin/whop-price-mapping/<int:mapping_id>', methods=['GET'])
+@login_required
+def api_get_whop_price_mapping(mapping_id):
+    """Get individual Whop price mapping"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        mapping = WhopPriceMapping.query.get_or_404(mapping_id)
+        
+        return jsonify({
+            'success': True,
+            'mapping': {
+                'id': mapping.id,
+                'product_name': mapping.product_name,
+                'whop_price_id': mapping.whop_price_id,
+                'app_price_id': mapping.app_price_id,
+                'description': mapping.description,
+                'is_active': mapping.is_active
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/whop-price-mapping/<int:mapping_id>', methods=['DELETE'])
+@login_required
+def api_delete_whop_price_mapping(mapping_id):
+    """Delete Whop price mapping"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        mapping = WhopPriceMapping.query.get_or_404(mapping_id)
+        db.session.delete(mapping)
+        db.session.commit()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 # User-facing verification endpoint
 @app.route('/api/verify-whop-purchase', methods=['POST'])
 @login_required
