@@ -529,7 +529,7 @@
         
                     <!-- UPDATED: Actual R (Final Result) -->
                     <div class="col-md-1">
-                        {% set actual_r = signal.actual_rr if signal.actual_rr is defined else signal.achieved_reward %}
+                        {% set total_r = signals|map(attribute='actual_rr')|select('defined')|map('float')|sum %}
                         {% if actual_r|float > 0 %}
                             <div class="reward-display positive">{{ actual_r }}R</div>
                         {% elif actual_r|float < 0 %}
