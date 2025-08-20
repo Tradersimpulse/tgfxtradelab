@@ -154,7 +154,7 @@ video_tags = db.Table('video_tags',
 # Models - MySQL Optimized
 
 class TradingSignalForm(FlaskForm):
-    date = db.Column(db.Date, default=datetime.utcnow().date)
+    #date = db.Column(db.Date, default=datetime.utcnow().date)
     trader_name = SelectField('Trader', choices=[
         ('Ray', 'Ray'),
         ('Jordan', 'Jordan')
