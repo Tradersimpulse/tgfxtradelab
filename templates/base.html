@@ -1616,12 +1616,24 @@
         <div class="nav-section">
             <div class="nav-section-title">Live Stream</div>
             <div class="nav-item">
-                <a class="nav-link d-flex align-items-center {% if request.endpoint == 'livestream' %}active{% endif %}" href="{{ url_for('livestream') }}">
-                    <span class="material-symbols-outlined">live_tv</span>
-                    <span class="nav-text">Live Stream</span>
-                    <!-- Live indicator (shown when streams are active) -->
-                    <span class="live-indicator" id="navLiveIndicator" style="display: none;"></span>
-                </a>
+                {% if current_user.has_active_subscription() %}
+                    <a class="nav-link d-flex align-items-center {% if request.endpoint == 'livestream' %}active{% endif %}" href="{{ url_for('livestream') }}">
+                        <span class="material-symbols-outlined">live_tv</span>
+                        <span class="nav-text">Live Stream</span>
+                        <!-- Live indicator (shown when streams are active) -->
+                        <span class="live-indicator" id="navLiveIndicator" style="display: none;"></span>
+                    </a>
+                {% else %}
+                    <a class="nav-link d-flex align-items-center" href="{{ url_for('manage_subscription') }}" title="Upgrade to access live streaming">
+                        <span class="material-symbols-outlined">live_tv</span>
+                        <span class="nav-text">Live Stream</span>
+                        <!-- Premium indicator for non-subscribers -->
+                        <span class="badge bg-warning ms-auto" style="font-size: 0.6rem; padding: 0.2rem 0.4rem;">
+                            <span class="material-symbols-outlined" style="font-size: 10px;">upgrade</span>
+                            Premium
+                        </span>
+                    </a>
+                {% endif %}
             </div>
         </div>
     
