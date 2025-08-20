@@ -6649,8 +6649,8 @@ def watch_video(video_id):
     video = Video.query.get_or_404(video_id)
     
     if not user_can_access_video(video):
-        flash('This video requires an active subscription', 'warning')
-        return redirect(url_for('manage-subscription'))
+    flash('This video requires an active subscription', 'warning')
+    return redirect(url_for('manage_subscription'))
     
     progress = UserProgress.query.filter_by(user_id=current_user.id, video_id=video_id).first()
     if not progress:
