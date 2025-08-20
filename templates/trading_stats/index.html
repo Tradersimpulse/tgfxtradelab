@@ -174,6 +174,58 @@
     @keyframes spin {
         to { transform: rotate(360deg); }
     }
+
+    .premium-feature-overlay {
+    background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+    border: 2px dashed rgba(245, 158, 11, 0.3);
+    border-radius: 16px;
+    padding: 3rem 2rem;
+    text-align: center;
+    position: relative;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.premium-feature-overlay::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 10px,
+        rgba(245, 158, 11, 0.05) 10px,
+        rgba(245, 158, 11, 0.05) 20px
+    );
+    border-radius: 14px;
+    pointer-events: none;
+}
+
+.premium-feature-overlay > div {
+    position: relative;
+    z-index: 1;
+}
+
+.premium-feature-overlay .btn-warning {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    border: none;
+    color: white;
+    font-weight: 600;
+    padding: 0.75rem 2rem;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.premium-feature-overlay .btn-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.3);
+    color: white;
+}
 </style>
 {% endblock %}
 
@@ -353,17 +405,21 @@
         </div>
     </div>
 
-    <!-- Hypothetical Scenarios -->
-    <div class="row g-4 mt-4">
-        <div class="col-lg-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">calculate</span>
-                        Hypothetical Target Calculator
-                    </h5>
-                </div>
-                <div class="card-body">
+<!-- Hypothetical Scenarios -->
+<div class="row g-4 mt-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">calculate</span>
+                    Hypothetical Target Calculator
+                    {% if not current_user.has_active_subscription() %}
+                        <span class="badge bg-warning ms-2">Premium</span>
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body position-relative">
+                {% if current_user.has_active_subscription() %}
                     <div class="hypothetical-calculator">
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -418,19 +474,55 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                {% else %}
+                    <!-- Premium Overlay for Hypothetical Calculator -->
+                    <div class="premium-feature-overlay">
+                        <div class="text-center">
+                            <div class="mb-3">
+                                <span class="material-symbols-outlined text-warning" style="font-size: 3rem;">star</span>
+                            </div>
+                            <h5 class="fw-bold mb-2">Premium Feature</h5>
+                            <p class="text-muted mb-3">
+                                Unlock hypothetical scenario analysis to test different trading strategies and risk targets.
+                            </p>
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span class="small">What-if scenario testing</span>
+                                </div>
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span class="small">Custom R target analysis</span>
+                                </div>
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span class="small">Performance optimization</span>
+                                </div>
+                            </div>
+                            <a href="{{ url_for('manage_subscription') }}" class="btn btn-warning">
+                                <span class="material-symbols-outlined me-2">upgrade</span>
+                                Upgrade to Premium
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
             </div>
         </div>
+    </div>
 
-        <div class="col-lg-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">account_balance</span>
-                        Balance Growth Calculator
-                    </h5>
-                </div>
-                <div class="card-body">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="material-symbols-outlined me-2">account_balance</span>
+                    Balance Growth Calculator
+                    {% if not current_user.has_active_subscription() %}
+                        <span class="badge bg-warning ms-2">Premium</span>
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body position-relative">
+                {% if current_user.has_active_subscription() %}
                     <div class="hypothetical-calculator">
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -484,7 +576,38 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                {% else %}
+                    <!-- Premium Overlay for Balance Calculator -->
+                    <div class="premium-feature-overlay">
+                        <div class="text-center">
+                            <div class="mb-3">
+                                <span class="material-symbols-outlined text-warning" style="font-size: 3rem;">account_balance</span>
+                            </div>
+                            <h5 class="fw-bold mb-2">Premium Feature</h5>
+                            <p class="text-muted mb-3">
+                                Calculate potential portfolio growth based on historical trading performance and risk management.
+                            </p>
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span class="small">Portfolio growth modeling</span>
+                                </div>
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span class="small">Risk management analysis</span>
+                                </div>
+                                <div class="d-flex align-items-center justify-content-center">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span class="small">Performance projection</span>
+                                </div>
+                            </div>
+                            <a href="{{ url_for('manage_subscription') }}" class="btn btn-warning">
+                                <span class="material-symbols-outlined me-2">upgrade</span>
+                                Upgrade to Premium
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -626,6 +749,15 @@ async function calculateHypothetical() {
         
         const data = await response.json();
         
+        if (response.status === 403) {
+            // Premium feature required
+            window.TGFXLiveKit.utils.showNotification('warning', data.message, 6000);
+            setTimeout(() => {
+                window.location.href = data.upgrade_url;
+            }, 2000);
+            return;
+        }
+        
         if (data.success) {
             document.getElementById('hypotheticalWins').textContent = data.hypothetical_wins;
             document.getElementById('hypotheticalLosses').textContent = data.hypothetical_losses;
@@ -665,6 +797,15 @@ async function calculateBalance() {
         });
         
         const data = await response.json();
+        
+        if (response.status === 403) {
+            // Premium feature required
+            window.TGFXLiveKit.utils.showNotification('warning', data.message, 6000);
+            setTimeout(() => {
+                window.location.href = data.upgrade_url;
+            }, 2000);
+            return;
+        }
         
         if (data.success) {
             document.getElementById('endingBalance').textContent = `$${data.ending_balance.toLocaleString()}`;
