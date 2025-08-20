@@ -302,7 +302,7 @@
                     </a>
                     
                     {% if not current_user.has_subscription %}
-                    <a href="{{ url_for('subscription') }}" class="btn btn-primary btn-sm action-btn">
+                    <a href="{{ url_for('/manage-subscription') }}" class="btn btn-primary btn-sm action-btn">
                         <span class="material-symbols-outlined me-2">workspace_premium</span>
                         Upgrade to Premium
                     </a>
