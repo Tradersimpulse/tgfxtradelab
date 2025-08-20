@@ -3,21 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TGFX Trade Lab - Master Trading with Expert Video Courses</title>
+    <title>TGFX Trade Lab - Learn Forex, Stocks & Crypto Trading with Ray & Jordan | Live Trading Education</title>
     
-    <!-- Meta Description -->
-    <meta name="description" content="Learn trading with TGFX Trade Lab's comprehensive video courses. Master forex, stocks, and crypto trading with expert-led tutorials and downloadable resources.">
+    <!-- Enhanced SEO Meta Tags -->
+    <meta name="description" content="Master forex, stocks, and crypto trading with TGFX Trade Lab. Learn from Ray and Jordan through live trading sessions, comprehensive video courses, and real-time market analysis. Join 5,000+ successful traders.">
+    <meta name="keywords" content="forex trading, stock trading, crypto trading, trading education, live trading room, Ray TGFX, Jordan trading, trading courses, market analysis, trading strategies, forex signals">
+    <meta name="author" content="TGFX Trade Lab">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="TGFX Trade Lab - Live Trading Education with Ray & Jordan">
+    <meta property="og:description" content="Learn forex, stocks, and crypto trading through live sessions, video courses, and real-time market analysis. Join our community of successful traders.">
+    <meta property="og:image" content="https://tgfx-tradelab.com/og-image.jpg">
+    <meta property="og:url" content="https://tgfx-tradelab.com">
+    
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="TGFX Trade Lab - Live Trading Education">
+    <meta name="twitter:description" content="Master forex, stocks, and crypto trading with Ray & Jordan. Live trading sessions, comprehensive courses, real-time analysis.">
+    <meta name="twitter:image" content="https://tgfx-tradelab.com/twitter-image.jpg">
+    
+    <!-- Structured Data for SEO -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "EducationalOrganization",
+        "name": "TGFX Trade Lab",
+        "description": "Professional trading education platform offering live trading sessions and comprehensive video courses",
+        "url": "https://tgfx-tradelab.com",
+        "logo": "https://tgfx-tradelab.com/logo.png",
+        "founder": {
+            "@type": "Person",
+            "name": "Ray",
+            "jobTitle": "Professional Trader & Educator"
+        },
+        "offers": {
+            "@type": "Course",
+            "name": "Complete Trading Education Program",
+            "description": "Comprehensive forex, stocks, and crypto trading education with live sessions",
+            "provider": {
+                "@type": "Organization",
+                "name": "TGFX Trade Lab"
+            }
+        },
+        "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.9",
+            "reviewCount": "500"
+        }
+    }
+    </script>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     
     <!-- Bootstrap -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <!-- Material Icons -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
     
     <style>
         :root {
@@ -31,14 +78,16 @@
             --bg-primary: #0a0a0a;
             --bg-secondary: #111111;
             --bg-tertiary: #1a1a1a;
-            --bg-card: #141414;
+            --bg-glass: rgba(20, 20, 20, 0.8);
+            --bg-glass-light: rgba(255, 255, 255, 0.05);
             
             --text-primary: #FFFFFF;
             --text-secondary: #E5E7EB;
-            --text-muted: #D1D5DB;
+            --text-muted: #9CA3AF;
             
-            --border-color: rgba(255, 255, 255, 0.08);
+            --border-glass: rgba(255, 255, 255, 0.1);
             --gradient-primary: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
         }
 
         * {
@@ -52,32 +101,98 @@
             color: var(--text-primary);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             line-height: 1.6;
+            overflow-x: hidden;
         }
 
-        /* Hero Section */
+        /* Enhanced Glassmorphism */
+        .glass {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .glass-light {
+            background: var(--bg-glass-light);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--border-glass);
+        }
+
+        /* Animated Background */
         .hero-section {
             min-height: 100vh;
-            background: linear-gradient(135deg, #0a0a0a 0%, #111111 50%, #0a0a0a 100%);
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(16, 185, 129, 0.05) 0%, transparent 50%),
+                linear-gradient(135deg, #0a0a0a 0%, #111111 50%, #0a0a0a 100%);
             position: relative;
             overflow: hidden;
         }
 
-        .hero-background {
+        .floating-shapes {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: 
-                radial-gradient(circle at 20% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
-            z-index: -1;
+            pointer-events: none;
+            z-index: 1;
         }
 
+        .shape {
+            position: absolute;
+            background: var(--gradient-glass);
+            border-radius: 50%;
+            animation: float 20s infinite linear;
+        }
+
+        .shape:nth-child(1) {
+            width: 80px;
+            height: 80px;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .shape:nth-child(2) {
+            width: 120px;
+            height: 120px;
+            left: 80%;
+            animation-delay: 5s;
+        }
+
+        .shape:nth-child(3) {
+            width: 60px;
+            height: 60px;
+            left: 60%;
+            animation-delay: 10s;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Navigation */
         .navbar {
-            background: rgba(10, 10, 10, 0.9);
+            background: var(--bg-glass);
             backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-glass);
+            z-index: 1000;
         }
 
         .navbar-brand {
@@ -89,15 +204,19 @@
             background-clip: text;
         }
 
+        /* Hero Content */
         .hero-content {
             padding: 8rem 0 4rem;
+            position: relative;
+            z-index: 2;
         }
 
         .hero-title {
-            font-size: 3.5rem;
-            font-weight: 800;
-            line-height: 1.2;
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 900;
+            line-height: 1.1;
             margin-bottom: 1.5rem;
+            letter-spacing: -0.02em;
         }
 
         .hero-gradient-text {
@@ -112,17 +231,64 @@
             color: var(--text-secondary);
             margin-bottom: 2rem;
             line-height: 1.6;
+            max-width: 600px;
         }
 
+        /* Live Status Badge */
+        .live-badge {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #EF4444, #DC2626);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+            animation: pulse 2s infinite;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+
+        /* Stats */
         .hero-stats {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
             gap: 2rem;
             margin: 3rem 0;
-            flex-wrap: wrap;
+            max-width: 600px;
         }
 
         .stat-item {
             text-align: center;
+            padding: 1.5rem;
+            background: var(--glass-light);
+            border-radius: 16px;
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border-glass);
+            transition: all 0.3s ease;
+        }
+
+        .stat-item:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-color);
         }
 
         .stat-number {
@@ -130,6 +296,7 @@
             font-weight: 800;
             color: var(--primary-color);
             display: block;
+            text-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
         }
 
         .stat-label {
@@ -139,13 +306,30 @@
 
         /* Buttons */
         .btn {
-            border-radius: 12px;
+            border-radius: 16px;
             font-weight: 600;
             font-size: 0.875rem;
-            padding: 0.875rem 2rem;
+            padding: 1rem 2.5rem;
             transition: all 0.3s ease;
             border: none;
             letter-spacing: 0.025em;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
         }
 
         .btn-primary {
@@ -160,37 +344,88 @@
             color: white;
         }
 
-        .btn-outline-secondary {
-            border: 2px solid var(--border-color);
+        .btn-glass {
+            background: var(--bg-glass);
             color: var(--text-secondary);
-            background: transparent;
+            border: 1px solid var(--border-glass);
+            backdrop-filter: blur(15px);
         }
 
-        .btn-outline-secondary:hover {
-            background: rgba(255, 255, 255, 0.05);
+        .btn-glass:hover {
+            background: var(--bg-glass-light);
             color: var(--text-primary);
             border-color: var(--primary-color);
         }
 
         /* Cards */
         .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
+            background: var(--bg-glass);
             backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
             transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--gradient-primary);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
         }
 
         .card:hover {
-            transform: translateY(-5px);
+            transform: translateY(-8px);
             border-color: rgba(16, 185, 129, 0.3);
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card:hover::before {
+            transform: scaleX(1);
+        }
+
+        /* Instructor Section */
+        .instructor-section {
+            padding: 6rem 0;
+            background: var(--bg-secondary);
+            position: relative;
+        }
+
+        .instructor-card {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .instructor-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: var(--gradient-primary);
+            margin: 0 auto 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: 800;
+            color: white;
+            text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
         }
 
         /* Features Section */
         .features-section {
             padding: 6rem 0;
-            background: var(--bg-secondary);
+            background: var(--bg-primary);
         }
 
         .feature-icon {
@@ -204,75 +439,34 @@
             margin: 0 auto 1.5rem;
             font-size: 2rem;
             color: white;
-        }
-
-        /* Course Preview */
-        .course-preview {
-            padding: 6rem 0;
-        }
-
-        .video-preview {
-            position: relative;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .video-preview img {
-            width: 100%;
-            height: auto;
-        }
-
-        .play-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-        }
-
-        .play-overlay:hover {
-            background: rgba(0, 0, 0, 0.7);
-        }
-
-        .play-button {
-            width: 80px;
-            height: 80px;
-            background: var(--gradient-primary);
-            border: none;
-            border-radius: 50%;
-            color: white;
-            font-size: 2rem;
-            transition: all 0.3s ease;
-        }
-
-        .play-button:hover {
-            transform: scale(1.1);
-            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.5);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
         }
 
         /* Testimonials */
         .testimonials-section {
             padding: 6rem 0;
-            background: var(--bg-primary);
+            background: var(--bg-secondary);
         }
 
         .testimonial-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
             padding: 2rem;
             height: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .testimonial-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(16, 185, 129, 0.3);
         }
 
         .testimonial-rating {
             color: var(--warning-color);
             margin-bottom: 1rem;
+            font-size: 1.2rem;
         }
 
         .testimonial-author {
@@ -294,17 +488,21 @@
             margin-right: 1rem;
         }
 
-        /* CTA Section */
-        .cta-section {
-            padding: 6rem 0;
-            background: var(--bg-secondary);
-            text-align: center;
+        /* Trading Preview */
+        .trading-preview {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
         }
 
         /* Footer */
         .footer {
             background: var(--bg-primary);
-            border-top: 1px solid var(--border-color);
+            border-top: 1px solid var(--border-glass);
             padding: 3rem 0 1rem;
         }
 
@@ -315,7 +513,7 @@
             }
             
             .hero-stats {
-                justify-content: center;
+                grid-template-columns: repeat(2, 1fr);
                 gap: 1rem;
             }
             
@@ -324,15 +522,27 @@
                 margin-bottom: 1rem;
             }
         }
+
+        /* Scroll animations */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.6s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
         <div class="container">
-            <a class="navbar-brand" href="#">TGFX Trade Lab</a>
+            <a class="navbar-brand" href="#" aria-label="TGFX Trade Lab Home">TGFX Trade Lab</a>
             
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             
@@ -340,6 +550,9 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="#features">Features</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#instructors">Instructors</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#courses">Courses</a>
@@ -360,59 +573,118 @@
 
     <!-- Hero Section -->
     <section class="hero-section">
-        <div class="hero-background"></div>
+        <div class="floating-shapes">
+            <div class="shape"></div>
+            <div class="shape"></div>
+            <div class="shape"></div>
+        </div>
+        
         <div class="container">
             <div class="row min-vh-100 align-items-center">
                 <div class="col-lg-6">
                     <div class="hero-content">
+                        <div class="live-badge">
+                            <div class="live-dot"></div>
+                            Live Trading Sessions Active
+                        </div>
+                        
                         <h1 class="hero-title">
                             Master Trading with 
-                            <span class="hero-gradient-text">Expert-Led</span>
-                            Video Courses
+                            <span class="hero-gradient-text">Ray & Jordan</span>
+                            in Real-Time
                         </h1>
+                        
                         <p class="hero-subtitle">
-                            Learn from professional traders with our comprehensive video library. 
-                            Track your progress, access premium content, and join a community of successful traders.
+                            Learn forex, stocks, and crypto trading through live sessions, comprehensive video courses, 
+                            and real-time market analysis. Join our transparent trading community where you see every trade live.
                         </p>
                         
                         <div class="d-flex gap-3 mb-4 flex-wrap">
                             <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
                                 <span class="material-symbols-outlined me-2">play_circle</span>
-                                Start Learning Free
+                                Join Live Sessions
                             </a>
-                            <a href="#courses" class="btn btn-outline-secondary btn-lg">
+                            <a href="#courses" class="btn btn-glass btn-lg">
                                 <span class="material-symbols-outlined me-2">visibility</span>
-                                Watch Demo
+                                Watch Trading Demo
                             </a>
                         </div>
                         
-                        <div class="hero-stats">
+                        <div class="hero-stats fade-in">
                             <div class="stat-item">
-                                <span class="stat-number">150+</span>
+                                <span class="stat-number">200+</span>
                                 <span class="stat-label">Video Lessons</span>
                             </div>
                             <div class="stat-item">
                                 <span class="stat-number">5,000+</span>
-                                <span class="stat-label">Students</span>
+                                <span class="stat-label">Active Students</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-number">4.8★</span>
-                                <span class="stat-label">Average Rating</span>
+                                <span class="stat-number">4.9★</span>
+                                <span class="stat-label">Student Rating</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-number">24/7</span>
-                                <span class="stat-label">Access</span>
+                                <span class="stat-number">Live</span>
+                                <span class="stat-label">Trading Room</span>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="col-lg-6">
-                    <div class="video-preview">
-                        <img src="https://via.placeholder.com/600x400/1a1a1a/10B981?text=Trading+Course+Preview" alt="Course Preview">
-                        <div class="play-overlay">
-                            <button class="play-button" onclick="playPreviewVideo()">
-                                <span class="material-symbols-outlined">play_arrow</span>
-                            </button>
+                    <div class="trading-preview fade-in">
+                        <img src="https://via.placeholder.com/600x400/1a1a1a/10B981?text=Live+Trading+Interface" alt="TGFX Live Trading Interface" class="img-fluid">
+                        <div class="position-absolute top-0 end-0 m-3">
+                            <span class="badge bg-danger">🔴 LIVE</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Instructors Section -->
+    <section class="instructor-section" id="instructors">
+        <div class="container">
+            <div class="row">
+                <div class="col-12 text-center mb-5">
+                    <h2 class="hero-gradient-text display-5 fw-bold mb-3 fade-in">Meet Your Instructors</h2>
+                    <p class="text-muted lead fade-in">Learn from professional traders with proven track records</p>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="instructor-card fade-in">
+                        <div class="instructor-avatar">R</div>
+                        <h3 class="text-white mb-2">Ray</h3>
+                        <p class="text-primary mb-3">Lead Trading Instructor & Founder</p>
+                        <p class="text-muted">
+                            Professional forex and stocks trader with years of market experience. 
+                            Known for transparent live trading and comprehensive market analysis. 
+                            Specializes in EUR/USD and technical analysis strategies.
+                        </p>
+                        <div class="d-flex justify-content-center gap-2 mt-3">
+                            <span class="badge bg-success">Forex Expert</span>
+                            <span class="badge bg-primary">Live Trading</span>
+                            <span class="badge bg-warning">Technical Analysis</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6">
+                    <div class="instructor-card fade-in">
+                        <div class="instructor-avatar">J</div>
+                        <h3 class="text-white mb-2">Jordan</h3>
+                        <p class="text-primary mb-3">Trading Instructor & Market Analyst</p>
+                        <p class="text-muted">
+                            Specialized in gold (XAU/USD) trading and market psychology. 
+                            Provides real-time trading insights and helps students develop 
+                            disciplined trading habits. Active in community support.
+                        </p>
+                        <div class="d-flex justify-content-center gap-2 mt-3">
+                            <span class="badge bg-warning">Gold Trading</span>
+                            <span class="badge bg-info">Market Psychology</span>
+                            <span class="badge bg-success">Risk Management</span>
                         </div>
                     </div>
                 </div>
@@ -425,80 +697,80 @@
         <div class="container">
             <div class="row">
                 <div class="col-12 text-center mb-5">
-                    <h2 class="hero-gradient-text display-5 fw-bold mb-3">Why Choose TGFX Trade Lab?</h2>
-                    <p class="text-muted lead">Everything you need to become a successful trader</p>
+                    <h2 class="hero-gradient-text display-5 fw-bold mb-3 fade-in">Why Choose TGFX Trade Lab?</h2>
+                    <p class="text-muted lead fade-in">Complete transparency, real-time learning, and proven results</p>
                 </div>
             </div>
             
             <div class="row g-4">
                 <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 text-center">
+                    <div class="card h-100 text-center fade-in">
                         <div class="card-body p-4">
                             <div class="feature-icon">
-                                <span class="material-symbols-outlined">school</span>
+                                <span class="material-symbols-outlined">live_tv</span>
                             </div>
-                            <h4 class="text-white mb-3">Expert-Led Courses</h4>
-                            <p class="text-muted">Learn from professional traders with years of experience in forex, stocks, and crypto markets.</p>
+                            <h4 class="text-white mb-3">Live Trading Sessions</h4>
+                            <p class="text-muted">Watch Ray and Jordan trade live in real-time. See every entry, exit, and thought process as it happens.</p>
                         </div>
                     </div>
                 </div>
                 
                 <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 text-center">
+                    <div class="card h-100 text-center fade-in">
+                        <div class="card-body p-4">
+                            <div class="feature-icon">
+                                <span class="material-symbols-outlined">visibility</span>
+                            </div>
+                            <h4 class="text-white mb-3">Full Transparency</h4>
+                            <p class="text-muted">Complete transparency in all trades. No hidden strategies, no cherry-picked results - see the full trading journey.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 text-center fade-in">
                         <div class="card-body p-4">
                             <div class="feature-icon">
                                 <span class="material-symbols-outlined">trending_up</span>
                             </div>
                             <h4 class="text-white mb-3">Progress Tracking</h4>
-                            <p class="text-muted">Monitor your learning journey with detailed progress tracking and completion certificates.</p>
+                            <p class="text-muted">Monitor your learning journey with detailed progress tracking, completion certificates, and skill assessments.</p>
                         </div>
                     </div>
                 </div>
                 
                 <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 text-center">
-                        <div class="card-body p-4">
-                            <div class="feature-icon">
-                                <span class="material-symbols-outlined">download</span>
-                            </div>
-                            <h4 class="text-white mb-3">Downloadable Resources</h4>
-                            <p class="text-muted">Access PDFs, spreadsheets, and trading templates to enhance your learning experience.</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 text-center">
-                        <div class="card-body p-4">
-                            <div class="feature-icon">
-                                <span class="material-symbols-outlined">devices</span>
-                            </div>
-                            <h4 class="text-white mb-3">Multi-Device Access</h4>
-                            <p class="text-muted">Learn anywhere, anytime on your desktop, tablet, or mobile device with seamless sync.</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 text-center">
+                    <div class="card h-100 text-center fade-in">
                         <div class="card-body p-4">
                             <div class="feature-icon">
                                 <span class="material-symbols-outlined">groups</span>
                             </div>
-                            <h4 class="text-white mb-3">Community Support</h4>
-                            <p class="text-muted">Join a community of traders, ask questions, and share your trading experiences.</p>
+                            <h4 class="text-white mb-3">Active Community</h4>
+                            <p class="text-muted">Join a supportive community of traders. Get quick responses to questions and learn from fellow students.</p>
                         </div>
                     </div>
                 </div>
                 
                 <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 text-center">
+                    <div class="card h-100 text-center fade-in">
                         <div class="card-body p-4">
                             <div class="feature-icon">
-                                <span class="material-symbols-outlined">workspace_premium</span>
+                                <span class="material-symbols-outlined">school</span>
                             </div>
-                            <h4 class="text-white mb-3">Premium Content</h4>
-                            <p class="text-muted">Unlock advanced strategies and exclusive content with our premium subscription.</p>
+                            <h4 class="text-white mb-3">Comprehensive Courses</h4>
+                            <p class="text-muted">From beginner basics to advanced strategies. Structured learning path for all skill levels with downloadable resources.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 text-center fade-in">
+                        <div class="card-body p-4">
+                            <div class="feature-icon">
+                                <span class="material-symbols-outlined">psychology</span>
+                            </div>
+                            <h4 class="text-white mb-3">Trading Psychology</h4>
+                            <p class="text-muted">Master the mental game of trading with psychology lessons, risk management, and disciplined trading habits.</p>
                         </div>
                     </div>
                 </div>
@@ -506,76 +778,95 @@
         </div>
     </section>
 
-    <!-- Course Preview Section -->
-    <section class="course-preview" id="courses">
+    <!-- Course Categories Section -->
+    <section class="course-preview" id="courses" style="padding: 6rem 0; background: var(--bg-secondary);">
         <div class="container">
             <div class="row align-items-center">
                 <div class="col-lg-6 mb-5 mb-lg-0">
-                    <h2 class="hero-gradient-text display-5 fw-bold mb-4">
-                        Comprehensive Trading Curriculum
-                    </h2>
-                    <p class="text-muted lead mb-4">
-                        From beginner basics to advanced strategies, our structured curriculum 
-                        covers everything you need to know about trading.
-                    </p>
-                    
-                    <div class="row g-3 mb-4">
-                        <div class="col-6">
-                            <div class="d-flex align-items-center">
-                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
-                                <span>Forex Trading</span>
+                    <div class="fade-in">
+                        <h2 class="hero-gradient-text display-5 fw-bold mb-4">
+                            Complete Trading Education
+                        </h2>
+                        <p class="text-muted lead mb-4">
+                            From absolute beginner to advanced trader. Our structured curriculum covers all aspects 
+                            of trading with live examples and real market conditions.
+                        </p>
+                        
+                        <div class="row g-3 mb-4">
+                            <div class="col-6">
+                                <div class="d-flex align-items-center">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span>Forex Trading (EUR/USD, GBP/USD)</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-flex align-items-center">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span>Gold Trading (XAU/USD)</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-flex align-items-center">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span>Stock Market Analysis</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-flex align-items-center">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span>Risk Management</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-flex align-items-center">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span>Technical Analysis</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-flex align-items-center">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span>Trading Psychology</span>
+                                </div>
                             </div>
                         </div>
-                        <div class="col-6">
-                            <div class="d-flex align-items-center">
-                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
-                                <span>Stock Analysis</span>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="d-flex align-items-center">
-                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
-                                <span>Crypto Trading</span>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="d-flex align-items-center">
-                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
-                                <span>Risk Management</span>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="d-flex align-items-center">
-                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
-                                <span>Technical Analysis</span>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="d-flex align-items-center">
-                                <span class="material-symbols-outlined text-success me-2">check_circle</span>
-                                <span>Psychology</span>
-                            </div>
-                        </div>
+                        
+                        <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
+                            <span class="material-symbols-outlined me-2">school</span>
+                            Start Learning Today
+                        </a>
                     </div>
-                    
-                    <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
-                        <span class="material-symbols-outlined me-2">school</span>
-                        Explore All Courses
-                    </a>
                 </div>
                 <div class="col-lg-6">
-                    <div class="row g-3">
+                    <div class="row g-3 fade-in">
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-body p-3">
                                     <div class="d-flex align-items-center mb-2">
                                         <span class="material-symbols-outlined text-primary me-2">play_circle</span>
-                                        <h6 class="text-white mb-0">Beginner Basics</h6>
+                                        <h6 class="text-white mb-0">Beginner Fundamentals</h6>
                                     </div>
-                                    <p class="text-muted small mb-2">12 lessons • 2.5 hours</p>
+                                    <p class="text-muted small mb-2">25 lessons • 5.2 hours</p>
                                     <div class="progress" style="height: 4px;">
-                                        <div class="progress-bar" style="width: 0%"></div>
+                                        <div class="progress-bar bg-success" style="width: 100%"></div>
                                     </div>
+                                    <small class="text-success">✓ Free Access</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="material-symbols-outlined text-warning me-2">workspace_premium</span>
+                                        <h6 class="text-white mb-0">Live Trading Room</h6>
+                                    </div>
+                                    <p class="text-muted small mb-2">Daily sessions • Real-time</p>
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-danger" style="width: 90%" aria-label="Live progress"></div>
+                                    </div>
+                                    <small class="text-danger">🔴 Currently Live</small>
                                 </div>
                             </div>
                         </div>
@@ -587,25 +878,11 @@
                                         <span class="material-symbols-outlined text-warning me-2">workspace_premium</span>
                                         <h6 class="text-white mb-0">Advanced Strategies</h6>
                                     </div>
-                                    <p class="text-muted small mb-2">18 lessons • 4.2 hours</p>
+                                    <p class="text-muted small mb-2">30 lessons • 6.8 hours</p>
                                     <div class="progress" style="height: 4px;">
-                                        <div class="progress-bar" style="width: 0%"></div>
+                                        <div class="progress-bar bg-primary" style="width: 75%"></div>
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-body p-3">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <span class="material-symbols-outlined text-primary me-2">play_circle</span>
-                                        <h6 class="text-white mb-0">Risk Management</h6>
-                                    </div>
-                                    <p class="text-muted small mb-2">8 lessons • 1.8 hours</p>
-                                    <div class="progress" style="height: 4px;">
-                                        <div class="progress-bar" style="width: 0%"></div>
-                                    </div>
+                                    <small class="text-warning">⭐ Premium Content</small>
                                 </div>
                             </div>
                         </div>
@@ -617,10 +894,11 @@
                                         <span class="material-symbols-outlined text-warning me-2">workspace_premium</span>
                                         <h6 class="text-white mb-0">Market Psychology</h6>
                                     </div>
-                                    <p class="text-muted small mb-2">15 lessons • 3.5 hours</p>
+                                    <p class="text-muted small mb-2">20 lessons • 4.1 hours</p>
                                     <div class="progress" style="height: 4px;">
-                                        <div class="progress-bar" style="width: 0%"></div>
+                                        <div class="progress-bar bg-info" style="width: 60%"></div>
                                     </div>
+                                    <small class="text-warning">⭐ Premium Content</small>
                                 </div>
                             </div>
                         </div>
@@ -635,14 +913,14 @@
         <div class="container">
             <div class="row">
                 <div class="col-12 text-center mb-5">
-                    <h2 class="hero-gradient-text display-5 fw-bold mb-3">What Our Students Say</h2>
-                    <p class="text-muted lead">Join thousands of successful traders who learned with us</p>
+                    <h2 class="hero-gradient-text display-5 fw-bold mb-3 fade-in">Real Student Success Stories</h2>
+                    <p class="text-muted lead fade-in">See what our community of traders have to say about their experience</p>
                 </div>
             </div>
             
             <div class="row g-4">
                 <div class="col-lg-4 col-md-6">
-                    <div class="testimonial-card">
+                    <div class="testimonial-card fade-in">
                         <div class="testimonial-rating">
                             <span class="material-symbols-outlined">star</span>
                             <span class="material-symbols-outlined">star</span>
@@ -651,20 +929,22 @@
                             <span class="material-symbols-outlined">star</span>
                         </div>
                         <p class="text-muted">
-                            "TGFX Trade Lab transformed my trading journey. The courses are comprehensive and easy to follow. I went from a complete beginner to consistently profitable in 6 months."
+                            "I absolutely love TGFX... Since the first time I saw Ray on YouTube I began to see that 
+                            his passion for trading education and helping others learn was something he took very serious. 
+                            My knowledge and understanding has grown so much and I'm grateful to be his student."
                         </p>
                         <div class="testimonial-author">
                             <div class="author-avatar">M</div>
                             <div>
-                                <h6 class="text-white mb-0">Michael Chen</h6>
-                                <small class="text-muted">Full-time Trader</small>
+                                <h6 class="text-white mb-0">motivatedryan</h6>
+                                <small class="text-muted">Verified Student</small>
                             </div>
                         </div>
                     </div>
                 </div>
                 
                 <div class="col-lg-4 col-md-6">
-                    <div class="testimonial-card">
+                    <div class="testimonial-card fade-in">
                         <div class="testimonial-rating">
                             <span class="material-symbols-outlined">star</span>
                             <span class="material-symbols-outlined">star</span>
@@ -673,35 +953,39 @@
                             <span class="material-symbols-outlined">star</span>
                         </div>
                         <p class="text-muted">
-                            "The quality of education here is outstanding. The instructors break down complex concepts into digestible lessons. The community support is also amazing!"
+                            "Been following these guys for a couple years and love what they have done for the trading community. 
+                            They trade live in front of your face. Full transparency and they have been making that better as time 
+                            does on, making adjustments to suit us learning more."
+                        </p>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">G</div>
+                            <div>
+                                <h6 class="text-white mb-0">gfather1738</h6>
+                                <small class="text-muted">Long-time Student</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="testimonial-card fade-in">
+                        <div class="testimonial-rating">
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                            <span class="material-symbols-outlined">star</span>
+                        </div>
+                        <p class="text-muted">
+                            "Gaining access to TGFX is the one decision i have made so far in my trading journey that has 
+                            had the biggest benefit. You will find Beginner, intermediate, advanced learning and then inner 
+                            market mastery containing hours and hours of in depth video explanations."
                         </p>
                         <div class="testimonial-author">
                             <div class="author-avatar">S</div>
                             <div>
-                                <h6 class="text-white mb-0">Sarah Johnson</h6>
-                                <small class="text-muted">Investment Advisor</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-lg-4 col-md-6">
-                    <div class="testimonial-card">
-                        <div class="testimonial-rating">
-                            <span class="material-symbols-outlined">star</span>
-                            <span class="material-symbols-outlined">star</span>
-                            <span class="material-symbols-outlined">star</span>
-                            <span class="material-symbols-outlined">star</span>
-                            <span class="material-symbols-outlined">star</span>
-                        </div>
-                        <p class="text-muted">
-                            "I love how I can learn at my own pace. The progress tracking keeps me motivated, and the downloadable resources are incredibly valuable."
-                        </p>
-                        <div class="testimonial-author">
-                            <div class="author-avatar">D</div>
-                            <div>
-                                <h6 class="text-white mb-0">David Rodriguez</h6>
-                                <small class="text-muted">Portfolio Manager</small>
+                                <h6 class="text-white mb-0">Stez#8750</h6>
+                                <small class="text-muted">Active Trader</small>
                             </div>
                         </div>
                     </div>
@@ -711,31 +995,31 @@
     </section>
 
     <!-- CTA Section -->
-    <section class="cta-section">
+    <section class="cta-section" style="padding: 6rem 0; background: var(--bg-primary); text-align: center;">
         <div class="container">
             <div class="row">
-                <div class="col-lg-8 mx-auto">
+                <div class="col-lg-8 mx-auto fade-in">
                     <h2 class="hero-gradient-text display-5 fw-bold mb-4">
-                        Ready to Start Your Trading Journey?
+                        Ready to Transform Your Trading?
                     </h2>
                     <p class="text-muted lead mb-5">
-                        Join thousands of students who are already learning and earning with our expert-led courses. 
-                        Start with our free content and upgrade when you're ready.
+                        Join Ray, Jordan, and thousands of successful traders in our live trading community. 
+                        Start with free content and experience the transparency that sets us apart.
                     </p>
                     
                     <div class="d-flex gap-3 justify-content-center flex-wrap">
                         <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
-                            <span class="material-symbols-outlined me-2">person_add</span>
-                            Get Started Free
+                            <span class="material-symbols-outlined me-2">live_tv</span>
+                            Join Live Trading Room
                         </a>
-                        <a href="{{ url_for('login') }}" class="btn btn-outline-secondary btn-lg">
+                        <a href="{{ url_for('login') }}" class="btn btn-glass btn-lg">
                             <span class="material-symbols-outlined me-2">login</span>
-                            Sign In
+                            Member Sign In
                         </a>
                     </div>
                     
                     <p class="text-muted small mt-4 mb-0">
-                        No credit card required • Free courses available • Cancel anytime
+                        ✓ Free courses available ✓ Live trading sessions ✓ Cancel anytime ✓ Full transparency
                     </p>
                 </div>
             </div>
@@ -749,85 +1033,74 @@
                 <div class="col-lg-4 mb-4">
                     <h5 class="hero-gradient-text mb-3">TGFX Trade Lab</h5>
                     <p class="text-muted">
-                        Empowering traders worldwide with comprehensive video courses, 
-                        expert strategies, and community support.
+                        Transparent trading education with live sessions, comprehensive courses, 
+                        and a supportive community of successful traders.
                     </p>
+                    <div class="d-flex gap-3 mt-3">
+                        <span class="badge bg-success">Live Trading</span>
+                        <span class="badge bg-primary">200+ Videos</span>
+                        <span class="badge bg-warning">5000+ Students</span>
+                    </div>
                 </div>
                 <div class="col-lg-2 col-md-6 mb-4">
-                    <h6 class="text-white mb-3">Platform</h6>
+                    <h6 class="text-white mb-3">Learning</h6>
                     <ul class="list-unstyled">
-                        <li><a href="#" class="text-muted text-decoration-none">Courses</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Premium</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Community</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Mobile App</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Live Trading Room</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Video Courses</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Progress Tracking</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Trading Signals</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-2 col-md-6 mb-4">
+                    <h6 class="text-white mb-3">Markets</h6>
+                    <ul class="list-unstyled">
+                        <li><a href="#" class="text-muted text-decoration-none">Forex Trading</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Gold (XAU/USD)</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Stock Analysis</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Crypto Trading</a></li>
                     </ul>
                 </div>
                 <div class="col-lg-2 col-md-6 mb-4">
                     <h6 class="text-white mb-3">Support</h6>
                     <ul class="list-unstyled">
                         <li><a href="#" class="text-muted text-decoration-none">Help Center</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Contact Us</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Community</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Contact Ray & Jordan</a></li>
                         <li><a href="#" class="text-muted text-decoration-none">FAQ</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Live Chat</a></li>
-                    </ul>
-                </div>
-                <div class="col-lg-2 col-md-6 mb-4">
-                    <h6 class="text-white mb-3">Company</h6>
-                    <ul class="list-unstyled">
-                        <li><a href="#" class="text-muted text-decoration-none">About</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Careers</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Press</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Partners</a></li>
                     </ul>
                 </div>
                 <div class="col-lg-2 col-md-6 mb-4">
                     <h6 class="text-white mb-3">Legal</h6>
                     <ul class="list-unstyled">
-                        <li><a href="#" class="text-muted text-decoration-none">Privacy</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Terms</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Privacy Policy</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Terms of Service</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Risk Disclaimer</a></li>
                         <li><a href="#" class="text-muted text-decoration-none">Cookie Policy</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Disclaimer</a></li>
                     </ul>
                 </div>
             </div>
             
-            <hr class="my-4" style="border-color: var(--border-color);">
+            <hr class="my-4" style="border-color: var(--border-glass);">
             
             <div class="row align-items-center">
                 <div class="col-md-6">
                     <p class="text-muted small mb-0">
-                        © 2024 TGFX Trade Lab. All rights reserved.
+                        © 2024 TGFX Trade Lab. All rights reserved. Trading involves risk.
                     </p>
                 </div>
                 <div class="col-md-6 text-md-end">
-                    <div class="d-flex justify-content-md-end gap-3">
-                        <a href="#" class="text-muted">
-                            <span class="material-symbols-outlined">facebook</span>
-                        </a>
-                        <a href="#" class="text-muted">
-                            <span class="material-symbols-outlined">twitter</span>
-                        </a>
-                        <a href="#" class="text-muted">
-                            <span class="material-symbols-outlined">linkedin</span>
-                        </a>
-                        <a href="#" class="text-muted">
-                            <span class="material-symbols-outlined">youtube</span>
-                        </a>
-                    </div>
+                    <p class="text-muted small mb-0">
+                        Learn with Ray & Jordan • Live Trading • Full Transparency
+                    </p>
                 </div>
             </div>
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        function playPreviewVideo() {
-            // In a real implementation, this would open a video modal or redirect to a preview
-            alert('Video preview coming soon! Sign up to access full courses.');
-        }
-
-        // Smooth scrolling for anchor links
+        // Enhanced smooth scrolling for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();
@@ -841,32 +1114,59 @@
             });
         });
 
-        // Animate elements on scroll
-        const observeElements = document.querySelectorAll('.card, .feature-icon');
+        // Intersection Observer for fade-in animations
+        const observeElements = document.querySelectorAll('.fade-in');
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
+                    entry.target.classList.add('visible');
                 }
             });
+        }, {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
         });
 
         observeElements.forEach(el => {
-            el.style.opacity = '0';
-            el.style.transform = 'translateY(30px)';
-            el.style.transition = 'all 0.6s ease';
             observer.observe(el);
         });
 
-        // Navbar background on scroll
+        // Enhanced navbar background on scroll
         window.addEventListener('scroll', () => {
             const navbar = document.querySelector('.navbar');
             if (window.scrollY > 100) {
                 navbar.style.background = 'rgba(10, 10, 10, 0.95)';
+                navbar.style.backdropFilter = 'blur(25px)';
             } else {
-                navbar.style.background = 'rgba(10, 10, 10, 0.9)';
+                navbar.style.background = 'rgba(20, 20, 20, 0.8)';
+                navbar.style.backdropFilter = 'blur(20px)';
             }
+        });
+
+        // Parallax effect for hero section
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
+            const rate = scrolled * -0.5;
+            const heroSection = document.querySelector('.hero-section');
+            if (heroSection && scrolled < window.innerHeight) {
+                heroSection.style.transform = `translateY(${rate}px)`;
+            }
+        });
+
+        // Live badge animation enhancement
+        const liveBadge = document.querySelector('.live-badge');
+        if (liveBadge) {
+            setInterval(() => {
+                liveBadge.style.transform = 'scale(1.05)';
+                setTimeout(() => {
+                    liveBadge.style.transform = 'scale(1)';
+                }, 150);
+            }, 3000);
+        }
+
+        // Add loading animation
+        window.addEventListener('load', () => {
+            document.body.classList.add('loaded');
         });
     </script>
 </body>
