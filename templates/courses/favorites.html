@@ -44,8 +44,8 @@
                     Your Favorite Videos
                 </h5>
                 <div class="d-flex gap-2">
-                    <!-- View Toggle -->
-                    <div class="btn-group btn-group-sm">
+                    <!-- View Toggle (Hidden on mobile) -->
+                    <div class="btn-group btn-group-sm d-none d-md-flex">
                         <button class="btn btn-outline-secondary active" onclick="toggleView('list')" id="listViewBtn">
                             <span class="material-symbols-outlined">list</span>
                         </button>
@@ -136,7 +136,7 @@
                                     </div>
                                     
                                     <!-- Status Badges -->
-                                    <div class="d-flex gap-2 align-items-center">
+                                    <div class="d-flex gap-2 align-items-center flex-wrap">
                                         <span class="badge bg-info">{{ video.category.name }}</span>
                                         
                                         {% if not video.is_free %}
@@ -163,8 +163,8 @@
                                     </div>
                                 </div>
                                 
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="d-flex gap-3 text-muted small">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                                    <div class="d-flex gap-3 text-muted small flex-wrap">
                                         {% if video.duration %}
                                         <span>
                                             <span class="material-symbols-outlined me-1" style="font-size: 14px;">schedule</span>
@@ -188,7 +188,7 @@
                                     </div>
                                     
                                     <!-- Action Buttons -->
-                                    <div class="d-flex gap-1">
+                                    <div class="d-flex gap-1 flex-wrap mt-2 mt-md-0">
                                         <button class="btn btn-sm btn-danger" 
                                                 onclick="removeFavorite({{ video.id }})" 
                                                 id="fav-btn-{{ video.id }}"
@@ -241,7 +241,7 @@
                 <div id="gridView" style="display: none;">
                     <div class="row g-4 p-4">
                         {% for video in videos %}
-                        <div class="col-lg-4 col-md-6">
+                        <div class="col-lg-4 col-md-6 col-sm-6">
                             <div class="video-card">
                                 <div class="position-relative">
                                     {% if video.thumbnail_url %}
@@ -395,6 +395,20 @@
 <script>
 let currentView = 'list';
 
+// Mobile detection function
+function isMobile() {
+    return window.innerWidth <= 768;
+}
+
+// Initialize view based on screen size
+function initializeView() {
+    if (isMobile()) {
+        toggleView('grid');
+    } else {
+        toggleView('list');
+    }
+}
+
 function toggleView(view) {
     currentView = view;
     
@@ -406,19 +420,21 @@ function toggleView(view) {
     if (view === 'grid') {
         listView.style.display = 'none';
         gridView.style.display = 'block';
-        listBtn.classList.remove('active');
-        gridBtn.classList.add('active');
+        if (listBtn) listBtn.classList.remove('active');
+        if (gridBtn) gridBtn.classList.add('active');
     } else {
         listView.style.display = 'block';
         gridView.style.display = 'none';
-        listBtn.classList.add('active');
-        gridBtn.classList.remove('active');
+        if (listBtn) listBtn.classList.add('active');
+        if (gridBtn) gridBtn.classList.remove('active');
     }
 }
 
 function sortVideos(sortBy) {
     const videoItems = Array.from(document.querySelectorAll('.video-item'));
-    const container = videoItems[0].parentNode;
+    const container = videoItems[0]?.parentNode;
+    
+    if (!container) return;
     
     videoItems.sort((a, b) => {
         switch(sortBy) {
@@ -456,7 +472,7 @@ async function removeFavorite(videoId) {
             // Remove the video item from the page
             setTimeout(() => {
                 const videoItem = document.querySelector(`[data-video-id="${videoId}"]`) || 
-                                 document.querySelector(`#fav-btn-${videoId}`).closest('.video-item, .col-lg-4, .col-md-6');
+                                 document.querySelector(`#fav-btn-${videoId}`).closest('.video-item, .col-lg-4, .col-md-6, .col-sm-6');
                 if (videoItem) {
                     videoItem.style.transition = 'all 0.5s ease';
                     videoItem.style.opacity = '0';
@@ -522,8 +538,24 @@ function showSubscriptionModal() {
     modal.show();
 }
 
+// Handle window resize to adjust view
+window.addEventListener('resize', function() {
+    // Debounce resize events
+    clearTimeout(window.resizeTimer);
+    window.resizeTimer = setTimeout(function() {
+        if (isMobile() && currentView === 'list') {
+            toggleView('grid');
+        } else if (!isMobile() && currentView === 'grid') {
+            toggleView('list');
+        }
+    }, 250);
+});
+
 // Add smooth animations
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize view based on screen size
+    initializeView();
+    
     // Animate video items
     const videoItems = document.querySelectorAll('.video-item, .video-card');
     videoItems.forEach((item, index) => {
@@ -737,6 +769,89 @@ document.addEventListener('DOMContentLoaded', function() {
 @keyframes shimmer {
     0%, 100% { opacity: 0.7; }
     50% { opacity: 1; }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    /* Improve grid view spacing on mobile */
+    #gridView .row.g-4 {
+        --bs-gutter-x: 1rem;
+        --bs-gutter-y: 1rem;
+    }
+    
+    /* Make video cards full width on very small screens */
+    @media (max-width: 576px) {
+        #gridView .col-lg-4,
+        #gridView .col-md-6,
+        #gridView .col-sm-6 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+    }
+    
+    /* Improve list view on mobile */
+    .video-item .d-flex {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+    
+    .video-thumbnail {
+        width: 100%;
+        height: 200px;
+        margin-bottom: 1rem;
+        margin-right: 0 !important;
+    }
+    
+    /* Better mobile layout for video info */
+    .video-item .flex-grow-1 {
+        width: 100%;
+    }
+    
+    /* Stack badges and action buttons */
+    .video-item .d-flex.gap-2.align-items-center.flex-wrap {
+        justify-content: flex-start;
+    }
+    
+    .video-item .d-flex.gap-1.flex-wrap {
+        margin-top: 0.75rem;
+        width: 100%;
+    }
+    
+    .video-item .d-flex.gap-1.flex-wrap > * {
+        margin-bottom: 0.25rem;
+    }
+    
+    /* Improve readability on mobile */
+    .video-item h6 {
+        font-size: 1rem;
+        line-height: 1.3;
+    }
+    
+    .video-item .text-muted.small {
+        font-size: 0.875rem;
+    }
+    
+    /* Better spacing for mobile cards */
+    .card-header {
+        padding: 1rem 1rem 0.75rem;
+    }
+    
+    .video-item .p-4 {
+        padding: 1.5rem 1rem !important;
+    }
+    
+    /* Improve modal on mobile */
+    .modal-dialog {
+        margin: 1rem;
+    }
+}
+
+/* Tablet improvements */
+@media (min-width: 769px) and (max-width: 1024px) {
+    #gridView .col-lg-4 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
 }
 </style>
 {% endblock %}
