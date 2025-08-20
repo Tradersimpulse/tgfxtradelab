@@ -3,25 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TGFX Trade Lab - Learn Forex, Stocks & Crypto Trading with Ray & Jordan | Live Trading Education</title>
+    <title>TGFX Trade Lab - Master Forex, Futures & Prop Firm Challenges with Ray & Jordan | Live Trading Education</title>
     
     <!-- Enhanced SEO Meta Tags -->
-    <meta name="description" content="Master forex, futures, and crypto trading with TGFX Trade Lab. Learn from Ray and Jordan through live trading sessions, comprehensive video courses, and real-time market analysis. Join 5,000+ successful traders.">
-    <meta name="keywords" content="forex trading, futures trading, crypto trading, trading education, live trading room, Ray TGFX, Jordan trading, trading courses, market analysis, trading strategies, forex signals, NQ futures">
+    <meta name="description" content="Master forex, futures, and crypto trading with TGFX Trade Lab. Learn prop firm challenge strategies from Ray and Jordan through live trading sessions, comprehensive video courses, and real-time market analysis. Join 5,000+ successful traders.">
+    <meta name="keywords" content="forex trading, futures trading, crypto trading, prop firm challenges, funded trading, trading education, live trading room, Ray TGFX, Jordan trading, trading courses, market analysis, trading strategies, forex signals, NQ futures">
     <meta name="author" content="TGFX Trade Lab">
     <meta name="robots" content="index, follow">
     
     <!-- Open Graph / Social Media -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="TGFX Trade Lab - Live Trading Education with Ray & Jordan">
-    <meta property="og:description" content="Learn forex, futures, and crypto trading through live sessions, video courses, and real-time market analysis. Join our community of successful traders.">
+    <meta property="og:description" content="Learn forex, futures, and crypto trading through live sessions, video courses, and prop firm challenge strategies. Join our community of successful traders.">
     <meta property="og:image" content="https://tgfx-tradelab.com/og-image.jpg">
     <meta property="og:url" content="https://tgfx-tradelab.com">
     
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="TGFX Trade Lab - Live Trading Education">
-    <meta name="twitter:description" content="Master forex, futures, and crypto trading with Ray & Jordan. Live trading sessions, comprehensive courses, real-time analysis.">
+    <meta name="twitter:description" content="Master forex, futures, and crypto trading with Ray & Jordan. Live trading sessions, prop firm strategies, comprehensive courses, real-time analysis.">
     <meta name="twitter:image" content="https://tgfx-tradelab.com/twitter-image.jpg">
     
     <!-- Structured Data for SEO -->
@@ -30,7 +30,7 @@
         "@context": "https://schema.org",
         "@type": "EducationalOrganization",
         "name": "TGFX Trade Lab",
-        "description": "Professional trading education platform offering live trading sessions and comprehensive video courses for forex, futures, and crypto trading",
+        "description": "Professional trading education platform offering live trading sessions and comprehensive video courses for forex, futures, crypto trading, and prop firm challenge strategies",
         "url": "https://tgfx-tradelab.com",
         "logo": "https://tgfx-tradelab.com/logo.png",
         "founder": {
@@ -41,7 +41,7 @@
         "offers": {
             "@type": "Course",
             "name": "Complete Trading Education Program",
-            "description": "Comprehensive forex, futures, and crypto trading education with live sessions",
+            "description": "Comprehensive forex, futures, and crypto trading education with live sessions and prop firm challenge strategies",
             "provider": {
                 "@type": "Organization",
                 "name": "TGFX Trade Lab"
@@ -86,7 +86,8 @@
             --text-muted: #9CA3AF;
             
             --border-glass: rgba(255, 255, 255, 0.1);
-            --gradient-primary: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            --gradient-primary: linear-gradient(135deg, #10B981 0%, #3B82F6 100%);
+            --gradient-button: linear-gradient(135deg, #10B981 0%, #06B6D4 50%, #3B82F6 100%);
             --gradient-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
         }
 
@@ -333,9 +334,26 @@
         }
 
         .btn-primary {
-            background: var(--gradient-primary);
+            background: var(--gradient-button);
             color: white;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.6s;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
         }
 
         .btn-primary:hover {
@@ -420,6 +438,15 @@
             font-weight: 800;
             color: white;
             text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+            overflow: hidden;
+            border: 3px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .instructor-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
 
         /* Features Section */
@@ -589,24 +616,20 @@
                         </div>
                         
                         <h1 class="hero-title">
-                            Master Trading with 
-                            <span class="hero-gradient-text">Ray & Jordan</span>
-                            in Real-Time
+                            Master Trading & 
+                            <span class="hero-gradient-text">Prop Firm Challenges</span>
+                            with Ray & Jordan
                         </h1>
                         
                         <p class="hero-subtitle">
                             Learn forex, futures, and crypto trading through live sessions, comprehensive video courses, 
-                            and real-time market analysis. Join our transparent trading community where you see every trade live.
+                            and real-time market analysis. Master prop firm challenges and join our transparent trading community where you see every trade live.
                         </p>
                         
                         <div class="d-flex gap-3 mb-4 flex-wrap">
                             <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
-                                <span class="material-symbols-outlined me-2">play_circle</span>
-                                Join Live Sessions
-                            </a>
-                            <a href="#courses" class="btn btn-glass btn-lg">
-                                <span class="material-symbols-outlined me-2">visibility</span>
-                                Watch Trading Demo
+                                <span class="material-symbols-outlined me-2">workspace_premium</span>
+                                Get Access (Free)
                             </a>
                         </div>
                         
@@ -632,7 +655,7 @@
                 </div>
                 <div class="col-lg-6">
                     <div class="trading-preview fade-in">
-                        <img src="https://via.placeholder.com/600x400/1a1a1a/10B981?text=Live+Trading+Interface" alt="TGFX Live Trading Interface" class="img-fluid">
+                        <img src="https://tgfx-tradelab.s3.us-east-1.amazonaws.com/Website+Images/livestream.png" alt="TGFX Live Trading Interface" class="img-fluid">
                         <div class="position-absolute top-0 end-0 m-3">
                             <span class="badge bg-danger">🔴 LIVE</span>
                         </div>
@@ -655,36 +678,40 @@
             <div class="row g-4">
                 <div class="col-lg-6">
                     <div class="instructor-card fade-in">
-                        <div class="instructor-avatar">R</div>
+                        <div class="instructor-avatar">
+                            <img src="https://tgfx-tradelab.s3.us-east-1.amazonaws.com/Website+Images/Ray.jpg" alt="Ray - Lead Trading Instructor">
+                        </div>
                         <h3 class="text-white mb-2">Ray</h3>
                         <p class="text-primary mb-3">Lead Trading Instructor & Founder</p>
                         <p class="text-white">
                             Professional forex and futures trader with years of market experience. 
                             Known for transparent live trading and comprehensive market analysis. 
-                            Specializes in EUR/USD, NQ futures, and technical analysis strategies.
+                            Specializes in EUR/USD, NQ futures, prop firm challenges, and technical analysis strategies.
                         </p>
                         <div class="d-flex justify-content-center gap-2 mt-3">
                             <span class="badge bg-success">Forex Expert</span>
                             <span class="badge bg-primary">Live Trading</span>
-                            <span class="badge bg-warning">Technical Analysis</span>
+                            <span class="badge bg-info">Prop Firm Challenges</span>
                         </div>
                     </div>
                 </div>
                 
                 <div class="col-lg-6">
                     <div class="instructor-card fade-in">
-                        <div class="instructor-avatar">J</div>
+                        <div class="instructor-avatar">
+                            <img src="https://tgfx-tradelab.s3.us-east-1.amazonaws.com/Website+Images/Jordan+.jpg" alt="Jordan - Trading Instructor & Market Analyst">
+                        </div>
                         <h3 class="text-white mb-2">Jordan</h3>
                         <p class="text-primary mb-3">Trading Instructor & Market Analyst</p>
                         <p class="text-white">
                             Specialized in gold (XAU/USD) and futures trading with focus on market psychology. 
-                            Provides real-time trading insights and helps students develop 
-                            disciplined trading habits. Expert in NQ futures and active in community support.
+                            Expert in prop firm challenge strategies and funded account management.
+                            Provides real-time trading insights and helps students develop disciplined trading habits.
                         </p>
                         <div class="d-flex justify-content-center gap-2 mt-3">
                             <span class="badge bg-warning">Gold Trading</span>
                             <span class="badge bg-info">NQ Futures</span>
-                            <span class="badge bg-success">Market Psychology</span>
+                            <span class="badge bg-success">Funded Trading</span>
                         </div>
                     </div>
                 </div>
@@ -767,6 +794,18 @@
                     <div class="card h-100 text-center fade-in">
                         <div class="card-body p-4">
                             <div class="feature-icon">
+                                <span class="material-symbols-outlined">account_balance</span>
+                            </div>
+                            <h4 class="text-white mb-3">Prop Firm Strategies</h4>
+                            <p class="text-white">Master prop firm challenges and funded account strategies. Learn the exact techniques for passing evaluations and managing funded accounts.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 text-center fade-in">
+                        <div class="card-body p-4">
+                            <div class="feature-icon">
                                 <span class="material-symbols-outlined">psychology</span>
                             </div>
                             <h4 class="text-white mb-3">Trading Psychology</h4>
@@ -788,8 +827,8 @@
                             Complete Trading Education
                         </h2>
                         <p class="text-white lead mb-4">
-                            From absolute beginner to advanced trader. Our structured curriculum covers all aspects 
-                            of trading with live examples and real market conditions.
+                            From absolute beginner to funded trader. Our structured curriculum covers all aspects 
+                            of trading with live examples, prop firm challenge strategies, and real market conditions.
                         </p>
                         
                         <div class="row g-3 mb-4">
@@ -814,6 +853,12 @@
                             <div class="col-6">
                                 <div class="d-flex align-items-center">
                                     <span class="material-symbols-outlined text-success me-2">check_circle</span>
+                                    <span>Prop Firm Challenges</span>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="d-flex align-items-center">
+                                    <span class="material-symbols-outlined text-success me-2">check_circle</span>
                                     <span>Risk Management</span>
                                 </div>
                             </div>
@@ -832,8 +877,8 @@
                         </div>
                         
                         <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
-                            <span class="material-symbols-outlined me-2">school</span>
-                            Start Learning Today
+                            <span class="material-symbols-outlined me-2">workspace_premium</span>
+                            Get Access Today
                         </a>
                     </div>
                 </div>
@@ -881,6 +926,22 @@
                                     <p class="text-white-50 small mb-2">30 lessons • 6.8 hours</p>
                                     <div class="progress" style="height: 4px;">
                                         <div class="progress-bar bg-primary" style="width: 75%"></div>
+                                    </div>
+                                    <small class="text-warning">⭐ Premium Content</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body p-3">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="material-symbols-outlined text-warning me-2">workspace_premium</span>
+                                        <h6 class="text-white mb-0">Prop Firm Mastery</h6>
+                                    </div>
+                                    <p class="text-white-50 small mb-2">15 lessons • 3.5 hours</p>
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-warning" style="width: 85%"></div>
                                     </div>
                                     <small class="text-warning">⭐ Premium Content</small>
                                 </div>
@@ -1009,8 +1070,8 @@
                     
                     <div class="d-flex gap-3 justify-content-center flex-wrap">
                         <a href="{{ url_for('signup') }}" class="btn btn-primary btn-lg">
-                            <span class="material-symbols-outlined me-2">live_tv</span>
-                            Join Live Trading Room
+                            <span class="material-symbols-outlined me-2">workspace_premium</span>
+                            Get Access (Free)
                         </a>
                         <a href="{{ url_for('login') }}" class="btn btn-glass btn-lg">
                             <span class="material-symbols-outlined me-2">login</span>
@@ -1034,7 +1095,7 @@
                     <h5 class="hero-gradient-text mb-3">TGFX Trade Lab</h5>
                     <p class="text-white">
                         Transparent trading education with live sessions, comprehensive courses, 
-                        and a supportive community of successful traders.
+                        prop firm challenge strategies, and a supportive community of successful traders.
                     </p>
                     <div class="d-flex gap-3 mt-3">
                         <span class="badge bg-success">Live Trading</span>
@@ -1057,7 +1118,7 @@
                         <li><a href="#" class="text-muted text-decoration-none">Forex Trading</a></li>
                         <li><a href="#" class="text-muted text-decoration-none">Gold (XAU/USD)</a></li>
                         <li><a href="#" class="text-muted text-decoration-none">Futures Trading (NQ, ES)</a></li>
-                        <li><a href="#" class="text-muted text-decoration-none">Crypto Trading</a></li>
+                        <li><a href="#" class="text-muted text-decoration-none">Prop Firm Challenges</a></li>
                     </ul>
                 </div>
                 <div class="col-lg-2 col-md-6 mb-4">
