@@ -1,416 +1,405 @@
+<!-- templates/manage_subscription.html -->
 {% extends "base.html" %}
 
-{% block title %}Premium Subscription - TGFX Trade Lab{% endblock %}
+{% block title %}Manage Subscription - TGFX Trade Lab{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="text-center">
-            <h1 class="text-gradient-primary mb-3">
-                <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">workspace_premium</span>
-                Upgrade to Premium
-            </h1>
-            <p class="text-muted mb-0 lead">Unlock exclusive trading content and accelerate your learning</p>
-        </div>
-    </div>
-</div>
-
-<!-- Current Status (if user has subscription) -->
-{% if current_user.has_subscription %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="alert alert-success">
-            <div class="d-flex align-items-center">
-                <span class="material-symbols-outlined me-3" style="font-size: 2rem;">check_circle</span>
-                <div>
-                    <h5 class="mb-1">You're already a Premium member!</h5>
-                    <p class="mb-0">
-                        Your {{ current_user.get_subscription_plan_display() }} subscription is active
-                        {% if current_user.subscription_expires and current_user.subscription_plan != 'lifetime' %}
-                        until {{ current_user.subscription_expires.strftime('%B %d, %Y') }}
-                        {% elif current_user.subscription_plan == 'lifetime' %}
-                        for life!
-                        {% endif %}
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<!-- Pricing Cards -->
-<div class="row justify-content-center mb-5">
-    <!-- Free Plan -->
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="card h-100 {% if not current_user.has_subscription %}border-primary{% endif %}">
-            <div class="card-header text-center py-4">
-                <h3 class="text-white mb-2">Free</h3>
-                <div class="display-4 text-gradient-primary mb-2">$0</div>
-                <p class="text-muted mb-0">Forever</p>
-            </div>
-            <div class="card-body">
-                <ul class="list-unstyled">
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Access to free video lessons
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Basic progress tracking
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Favorite videos feature
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Community access
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-muted">cancel</span>
-                        <span class="text-muted">Premium video content</span>
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-muted">cancel</span>
-                        <span class="text-muted">Downloadable resources</span>
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-muted">cancel</span>
-                        <span class="text-muted">Priority support</span>
-                    </li>
-                </ul>
-            </div>
-            <div class="card-footer text-center">
-                {% if not current_user.has_subscription %}
-                <span class="badge bg-primary">Current Plan</span>
-                {% else %}
-                <button class="btn btn-outline-secondary" disabled>Your Free Plan</button>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    
-    <!-- Premium Monthly Plan -->
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="card h-100 {% if current_user.subscription_plan == 'monthly' %}border-success{% else %}border-primary{% endif %}">
-            <div class="card-header text-center py-4 bg-gradient-primary">
-                <h3 class="text-white mb-2">Monthly</h3>
-                <div class="display-4 text-white mb-2">$80</div>
-                <p class="text-white mb-0 opacity-75">per month</p>
-            </div>
-            <div class="card-body">
-                <ul class="list-unstyled">
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        <strong>Everything in Free</strong>
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Access to all premium videos
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Downloadable course materials
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Advanced progress analytics
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Priority customer support
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Monthly live Q&A sessions
-                    </li>
-                </ul>
-            </div>
-            <div class="card-footer text-center">
-                {% if current_user.subscription_plan == 'monthly' %}
-                <span class="badge bg-success">Current Plan</span>
-                {% else %}
-                <button class="btn btn-primary btn-lg w-100" onclick="startSubscription('monthly')" id="monthly-btn">
-                    <span class="material-symbols-outlined me-2">credit_card</span>
-                    Subscribe Monthly
-                </button>
-                <p class="text-muted small mt-2 mb-0">Cancel anytime</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    
-    <!-- Premium Annual Plan -->
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="card h-100 border-warning position-relative {% if current_user.subscription_plan == 'annual' %}border-success{% endif %}">
-            <!-- Popular Badge -->
-            <div class="position-absolute top-0 start-50 translate-middle">
-                <span class="badge bg-warning text-dark px-3 py-2">Most Popular</span>
-            </div>
-            
-            <div class="card-header text-center py-4 bg-gradient-annual">
-                <h3 class="text-white mb-2">Annual</h3>
-                <div class="d-flex align-items-center justify-content-center mb-2">
-                    <span class="text-white-muted text-decoration-line-through me-2">$960</span>
-                    <div class="display-4 text-white">$777</div>
-                </div>
-                <p class="text-white mb-1">per year</p>
-                <span class="badge bg-success">Save $183</span>
-            </div>
-            <div class="card-body">
-                <ul class="list-unstyled">
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        <strong>Everything in Monthly</strong>
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        2 months free (19% savings)
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Exclusive annual member content
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Trading strategy PDFs
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        One-on-one monthly consultation
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Priority in live sessions
-                    </li>
-                </ul>
-            </div>
-            <div class="card-footer text-center">
-                {% if current_user.subscription_plan == 'annual' %}
-                <span class="badge bg-success">Current Plan</span>
-                {% else %}
-                <button class="btn btn-annual btn-lg w-100" onclick="startSubscription('annual')" id="annual-btn">
-                    <span class="material-symbols-outlined me-2">payments</span>
-                    Subscribe Annually
-                </button>
-                <p class="text-muted small mt-2 mb-0">Best value • Cancel anytime</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Lifetime Plan -->
-    <div class="col-lg-3 col-md-6 mb-4">
-        <div class="card h-100 border-gold position-relative {% if current_user.subscription_plan == 'lifetime' %}border-success{% endif %}">
-            <!-- Ultimate Badge -->
-            <div class="position-absolute top-0 start-50 translate-middle">
-                <span class="badge bg-gold text-dark px-3 py-2">🏆 Ultimate</span>
-            </div>
-            
-            <div class="card-header text-center py-4 bg-gradient-gold">
-                <h3 class="text-dark mb-2">Lifetime</h3>
-                <div class="d-flex align-items-center justify-content-center mb-2">
-                    <span class="text-muted text-decoration-line-through me-2">$3,997</span>
-                    <div class="display-4 text-dark">$1,497</div>
-                </div>
-                <p class="text-dark mb-1">one-time payment</p>
-                <span class="badge bg-success">Save $2,500+</span>
-            </div>
-            <div class="card-body">
-                <ul class="list-unstyled">
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        <strong>Everything in Annual</strong>
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        <strong>Lifetime access to all content</strong>
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        All future courses included
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Exclusive lifetime member perks
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        Direct access to instructors
-                    </li>
-                    <li class="mb-3">
-                        <span class="material-symbols-outlined me-2 text-success">check_circle</span>
-                        VIP community access
-                    </li>
-                </ul>
-            </div>
-            <div class="card-footer text-center">
-                {% if current_user.subscription_plan == 'lifetime' %}
-                <span class="badge bg-success">Current Plan</span>
-                <p class="text-success small mt-2 mb-0">🎉 Lifetime Access Active!</p>
-                {% else %}
-                <button class="btn btn-gold btn-lg w-100" onclick="startSubscription('lifetime')" id="lifetime-btn">
-                    <span class="material-symbols-outlined me-2">workspace_premium</span>
-                    Get Lifetime Access
-                </button>
-                <p class="text-muted small mt-2 mb-0">One-time payment • No recurring fees</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Features Comparison Table -->
-<div class="row mb-5">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header text-center">
-                <h3 class="text-gradient-primary mb-2">
-                    <span class="material-symbols-outlined me-2">compare</span>
-                    Feature Comparison
-                </h3>
-                <p class="text-muted mb-0">See what's included in each plan</p>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-dark">
-                        <thead>
-                            <tr>
-                                <th>Feature</th>
-                                <th class="text-center">Free</th>
-                                <th class="text-center">Monthly</th>
-                                <th class="text-center">Annual</th>
-                                <th class="text-center">Lifetime</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Basic Video Lessons</td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                            </tr>
-                            <tr>
-                                <td>Premium Video Content</td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                            </tr>
-                            <tr>
-                                <td>Downloadable Resources</td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                            </tr>
-                            <tr>
-                                <td>Monthly Live Q&A</td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                            </tr>
-                            <tr>
-                                <td>One-on-One Consultation</td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                            </tr>
-                            <tr>
-                                <td>All Future Content</td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                            </tr>
-                            <tr>
-                                <td>VIP Community Access</td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                            </tr>
-                            <tr>
-                                <td>Direct Instructor Access</td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-muted">cancel</span></td>
-                                <td class="text-center"><span class="material-symbols-outlined text-success">check_circle</span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Subscription Management for Active Subscribers -->
-{% if current_user.has_subscription %}
-<div class="row mb-5">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="text-gradient-primary mb-0">
-                    <span class="material-symbols-outlined me-2">manage_accounts</span>
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="text-center">
+                <h1 class="text-gradient-primary mb-3">
+                    <span class="material-symbols-outlined me-2" style="font-size: 2.5rem;">manage_accounts</span>
                     Manage Your Subscription
-                </h4>
+                </h1>
+                <p class="text-muted mb-0 lead">Update your plan, payment method, or billing information</p>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-8">
-                        <h5>Current Plan: {{ current_user.get_subscription_plan_display() }}</h5>
-                        <p class="text-muted mb-3">
-                            {% if current_user.subscription_plan == 'lifetime' %}
-                            🎉 You have lifetime access - enjoy all current and future content forever!
-                            {% elif current_user.subscription_cancel_at_period_end %}
-                            ⚠️ Your subscription is set to cancel on {{ current_user.subscription_expires.strftime('%B %d, %Y') if current_user.subscription_expires else 'the end of your billing period' }}. You'll retain access until then.
-                            {% else %}
-                            {% if current_user.subscription_expires %}
-                            Your subscription will renew on {{ current_user.subscription_expires.strftime('%B %d, %Y') }}.
-                            {% endif %}
-                            {% endif %}
-                        </p>
-                        
-                        {% if current_user.subscription_plan != 'lifetime' %}
-                        <div class="d-flex flex-wrap gap-2">
-                            {% if current_user.subscription_cancel_at_period_end %}
-                            <!-- Reactivate Button -->
-                            <button class="btn btn-success" onclick="reactivateSubscription()">
-                                <span class="material-symbols-outlined me-2">restart_alt</span>
-                                Reactivate Subscription
-                            </button>
-                            {% else %}
-                            <!-- Cancel Button -->
-                            <button class="btn btn-outline-warning" onclick="showCancelModal()">
-                                <span class="material-symbols-outlined me-2">pause_circle</span>
-                                Cancel Subscription
-                            </button>
-                            {% endif %}
+        </div>
+    </div>
+
+    <!-- Current Subscription Status -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="text-gradient-primary mb-0">
+                        <span class="material-symbols-outlined me-2">account_circle</span>
+                        Current Subscription Status
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <div class="d-flex align-items-center mb-3">
+                                {% if current_user.subscription_plan == 'monthly' %}
+                                <div class="status-indicator bg-gradient-primary me-3"></div>
+                                <div>
+                                    <h5 class="mb-1">Monthly Plan - $80/month</h5>
+                                    <p class="text-muted mb-0">Billed monthly • Full access to premium content</p>
+                                </div>
+                                {% elif current_user.subscription_plan == 'annual' %}
+                                <div class="status-indicator bg-gradient-annual me-3"></div>
+                                <div>
+                                    <h5 class="mb-1">Annual Plan - $777/year</h5>
+                                    <p class="text-muted mb-0">Billed annually • Save $183 vs monthly • Best value</p>
+                                </div>
+                                {% elif current_user.subscription_plan == 'lifetime' %}
+                                <div class="status-indicator bg-gradient-gold me-3"></div>
+                                <div>
+                                    <h5 class="mb-1">🏆 Lifetime Access - $1,497</h5>
+                                    <p class="text-muted mb-0">One-time payment • Never pay again • All future content included</p>
+                                </div>
+                                {% else %}
+                                <div class="status-indicator bg-secondary me-3"></div>
+                                <div>
+                                    <h5 class="mb-1">Free Plan</h5>
+                                    <p class="text-muted mb-0">Limited access to course content</p>
+                                </div>
+                                {% endif %}
+                            </div>
                             
-                            <!-- Update Payment Method -->
-                            <button class="btn btn-outline-primary" onclick="updatePaymentMethod()">
-                                <span class="material-symbols-outlined me-2">credit_card</span>
-                                Update Payment Method
-                            </button>
+                            <!-- Subscription Details -->
+                            {% if current_user.has_subscription %}
+                            <div class="subscription-details">
+                                {% if current_user.subscription_plan == 'lifetime' %}
+                                <p class="text-success mb-2">
+                                    <span class="material-symbols-outlined me-2">check_circle</span>
+                                    🎉 You have lifetime access - enjoy all current and future content forever!
+                                </p>
+                                {% elif current_user.subscription_cancel_at_period_end %}
+                                <p class="text-warning mb-2">
+                                    <span class="material-symbols-outlined me-2">warning</span>
+                                    ⚠️ Your subscription is set to cancel on {{ current_user.subscription_expires.strftime('%B %d, %Y') if current_user.subscription_expires else 'the end of your billing period' }}. You'll retain access until then.
+                                </p>
+                                {% else %}
+                                <p class="text-info mb-2">
+                                    <span class="material-symbols-outlined me-2">schedule</span>
+                                    {% if current_user.subscription_expires %}
+                                    Your subscription will renew on {{ current_user.subscription_expires.strftime('%B %d, %Y') }}.
+                                    {% endif %}
+                                </p>
+                                {% endif %}
+                                
+                                <!-- Payment Info -->
+                                {% if current_user.last_payment_date %}
+                                <p class="text-muted small mb-0">
+                                    Last payment: ${{ "%.2f"|format(current_user.last_payment_amount or 0) }} on {{ current_user.last_payment_date.strftime('%B %d, %Y') }}
+                                </p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-4 text-md-end">
+                            <div class="subscription-status-card">
+                                {% if current_user.subscription_plan == 'lifetime' %}
+                                <span class="badge bg-gold text-dark fs-6 px-3 py-2">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 1rem;">workspace_premium</span>
+                                    🏆 Lifetime Member
+                                </span>
+                                {% elif current_user.subscription_cancel_at_period_end %}
+                                <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 1rem;">schedule</span>
+                                    Ending Soon
+                                </span>
+                                {% elif current_user.has_subscription %}
+                                <span class="badge bg-success fs-6 px-3 py-2">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 1rem;">check_circle</span>
+                                    Active
+                                </span>
+                                {% else %}
+                                <span class="badge bg-secondary fs-6 px-3 py-2">
+                                    <span class="material-symbols-outlined me-1" style="font-size: 1rem;">person</span>
+                                    Free Plan
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    {% if current_user.has_subscription and current_user.subscription_plan != 'lifetime' %}
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="text-gradient-primary mb-0">
+                        <span class="material-symbols-outlined me-2">settings</span>
+                        Subscription Actions
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        {% if current_user.subscription_cancel_at_period_end %}
+                        <!-- Reactivate Button -->
+                        <div class="col-md-6">
+                            <div class="action-card border-success">
+                                <div class="action-icon bg-success">
+                                    <span class="material-symbols-outlined">restart_alt</span>
+                                </div>
+                                <div class="action-content">
+                                    <h6 class="mb-1">Reactivate Subscription</h6>
+                                    <p class="text-muted small mb-2">Continue your subscription and keep premium access</p>
+                                    <button class="btn btn-success" onclick="reactivateSubscription()">
+                                        <span class="material-symbols-outlined me-2">restart_alt</span>
+                                        Reactivate Now
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <!-- Cancel Button -->
+                        <div class="col-md-6">
+                            <div class="action-card border-warning">
+                                <div class="action-icon bg-warning">
+                                    <span class="material-symbols-outlined">pause_circle</span>
+                                </div>
+                                <div class="action-content">
+                                    <h6 class="mb-1">Cancel Subscription</h6>
+                                    <p class="text-muted small mb-2">Cancel at end of billing period</p>
+                                    <button class="btn btn-outline-warning" onclick="showCancelModal()">
+                                        <span class="material-symbols-outlined me-2">pause_circle</span>
+                                        Cancel Subscription
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         {% endif %}
+                        
+                        <!-- Update Payment Method -->
+                        <div class="col-md-6">
+                            <div class="action-card border-primary">
+                                <div class="action-icon bg-primary">
+                                    <span class="material-symbols-outlined">credit_card</span>
+                                </div>
+                                <div class="action-content">
+                                    <h6 class="mb-1">Update Payment Method</h6>
+                                    <p class="text-muted small mb-2">Change your credit card or payment details</p>
+                                    <button class="btn btn-outline-primary" onclick="updatePaymentMethod()">
+                                        <span class="material-symbols-outlined me-2">credit_card</span>
+                                        Update Payment
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div class="col-md-4 text-md-end">
-                        <div class="bg-dark border border-secondary rounded p-3">
-                            <h6 class="mb-2 text-light">Subscription Status</h6>
-                            {% if current_user.subscription_plan == 'lifetime' %}
-                            <span class="badge bg-gold text-dark fs-6">🏆 Lifetime Member</span>
-                            {% elif current_user.subscription_cancel_at_period_end %}
-                            <span class="badge bg-warning text-dark fs-6">Ending Soon</span>
-                            {% else %}
-                            <span class="badge bg-success fs-6">Active</span>
-                            {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Plan Upgrade Options -->
+    {% if not current_user.subscription_plan == 'lifetime' %}
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="text-gradient-primary mb-0">
+                        <span class="material-symbols-outlined me-2">upgrade</span>
+                        Upgrade Your Plan
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <!-- Monthly Plan -->
+                        {% if current_user.subscription_plan != 'monthly' %}
+                        <div class="col-lg-4">
+                            <div class="upgrade-card {% if not current_user.has_subscription %}border-primary{% endif %}">
+                                <div class="upgrade-header bg-gradient-primary">
+                                    <h5 class="text-white mb-2">Monthly Plan</h5>
+                                    <div class="h3 text-white mb-1">$80</div>
+                                    <p class="text-white opacity-75 mb-0">per month</p>
+                                </div>
+                                <div class="upgrade-body">
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            All premium video content
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            Downloadable resources
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            Priority support
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            Monthly live Q&A sessions
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="upgrade-footer">
+                                    {% if not current_user.has_subscription %}
+                                    <button class="btn btn-primary w-100" onclick="startSubscription('monthly')">
+                                        <span class="material-symbols-outlined me-2">credit_card</span>
+                                        Start Monthly Plan
+                                    </button>
+                                    <p class="text-muted small text-center mt-2 mb-0">Cancel anytime</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Annual Plan -->
+                        {% if current_user.subscription_plan != 'annual' %}
+                        <div class="col-lg-4">
+                            <div class="upgrade-card border-warning position-relative">
+                                <!-- Popular Badge -->
+                                <div class="popular-badge">
+                                    <span class="badge bg-warning text-dark px-3 py-2">Most Popular</span>
+                                </div>
+                                
+                                <div class="upgrade-header bg-gradient-annual">
+                                    <h5 class="text-white mb-2">Annual Plan</h5>
+                                    <div class="d-flex align-items-center justify-content-center mb-2">
+                                        <span class="text-white-muted text-decoration-line-through me-2">$960</span>
+                                        <div class="h3 text-white mb-0">$777</div>
+                                    </div>
+                                    <p class="text-white opacity-75 mb-1">per year</p>
+                                    <span class="badge bg-success">Save $183</span>
+                                </div>
+                                <div class="upgrade-body">
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            <strong>Everything in Monthly</strong>
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            2 months free (19% savings)
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            Trading strategy PDFs
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            Monthly consultation call
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="upgrade-footer">
+                                    {% if current_user.subscription_plan == 'monthly' %}
+                                    <button class="btn btn-annual w-100" onclick="upgradeToAnnual()">
+                                        <span class="material-symbols-outlined me-2">upgrade</span>
+                                        Upgrade to Annual
+                                    </button>
+                                    <p class="text-muted small text-center mt-2 mb-0">Prorated billing</p>
+                                    {% elif not current_user.has_subscription %}
+                                    <button class="btn btn-annual w-100" onclick="startSubscription('annual')">
+                                        <span class="material-symbols-outlined me-2">payments</span>
+                                        Start Annual Plan
+                                    </button>
+                                    <p class="text-muted small text-center mt-2 mb-0">Best value • Cancel anytime</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Lifetime Plan -->
+                        <div class="col-lg-4">
+                            <div class="upgrade-card border-gold position-relative">
+                                <!-- Ultimate Badge -->
+                                <div class="popular-badge">
+                                    <span class="badge bg-gold text-dark px-3 py-2">🏆 Ultimate</span>
+                                </div>
+                                
+                                <div class="upgrade-header bg-gradient-gold">
+                                    <h5 class="text-dark mb-2">Lifetime Access</h5>
+                                    <div class="d-flex align-items-center justify-content-center mb-2">
+                                        <span class="text-muted text-decoration-line-through me-2">$3,997</span>
+                                        <div class="h3 text-dark mb-0">$1,497</div>
+                                    </div>
+                                    <p class="text-dark opacity-75 mb-1">one-time payment</p>
+                                    <span class="badge bg-success">Save $2,500+</span>
+                                </div>
+                                <div class="upgrade-body">
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            <strong>Everything in Annual</strong>
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            <strong>Lifetime access to all content</strong>
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            All future courses included
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="material-symbols-outlined me-2 text-success">check_circle</span>
+                                            VIP community access
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="upgrade-footer">
+                                    <button class="btn btn-gold w-100" onclick="upgradeToLifetime()">
+                                        <span class="material-symbols-outlined me-2">workspace_premium</span>
+                                        Get Lifetime Access
+                                    </button>
+                                    <p class="text-muted small text-center mt-2 mb-0">One-time payment • No recurring fees</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Billing History -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="text-gradient-primary mb-0">
+                        <span class="material-symbols-outlined me-2">receipt</span>
+                        Billing History
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div id="billingHistory">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="text-muted mt-2">Loading billing history...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subscription Timeline -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="text-gradient-primary mb-0">
+                        <span class="material-symbols-outlined me-2">timeline</span>
+                        Subscription Timeline
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div id="subscriptionTimeline">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="text-muted mt-2">Loading subscription timeline...</p>
                         </div>
                     </div>
                 </div>
@@ -418,37 +407,6 @@
         </div>
     </div>
 </div>
-{% endif %}
-
-<!-- Value Proposition for Lifetime -->
-{% if not current_user.subscription_plan == 'lifetime' %}
-<div class="row mb-5">
-    <div class="col-12">
-        <div class="card bg-gradient-gold text-dark">
-            <div class="card-body text-center py-5">
-                <h3 class="mb-3">🚀 Why Choose Lifetime Access?</h3>
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <div class="h2">💰</div>
-                        <h5>Massive Savings</h5>
-                        <p>Pay once, save $2,500+ over time compared to monthly subscriptions</p>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="h2">🎓</div>
-                        <h5>All Future Content</h5>
-                        <p>Get every new course, update, and feature we ever release</p>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="h2">🔒</div>
-                        <h5>Price Protection</h5>
-                        <p>Lock in this price forever - never worry about price increases</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
 
 <!-- Loading Modal -->
 <div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
@@ -458,8 +416,8 @@
                 <div class="spinner-border text-primary mb-3" role="status">
                     <span class="visually-hidden">Loading...</span>
                 </div>
-                <h5>Redirecting to secure checkout...</h5>
-                <p class="text-muted mb-0">Please wait while we prepare your subscription</p>
+                <h5>Processing your request...</h5>
+                <p class="text-muted mb-0">Please wait while we update your subscription</p>
             </div>
         </div>
     </div>
@@ -505,15 +463,6 @@
                     <label for="cancelFeedback" class="form-label">Additional feedback (Optional)</label>
                     <textarea class="form-control" id="cancelFeedback" rows="3" placeholder="Tell us more about your experience..."></textarea>
                 </div>
-                
-                <div class="bg-dark border border-primary p-3 rounded mb-3">
-                    <h6 class="text-primary">Before you go...</h6>
-                    <ul class="mb-0 small text-light">
-                        <li>You'll keep access until {{ current_user.subscription_expires.strftime('%B %d, %Y') if current_user.subscription_expires else 'your billing period ends' }}</li>
-                        <li>You can reactivate anytime before then</li>
-                        <li>All your progress and favorites will be saved</li>
-                    </ul>
-                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Subscription</button>
@@ -527,15 +476,120 @@
 </div>
 
 <style>
-/* Annual Plan Styling - White text */
+/* Status Indicator */
+.status-indicator {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.status-indicator::after {
+    content: '✓';
+    color: white;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+/* Subscription Status Card */
+.subscription-status-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+}
+
+/* Action Cards */
+.action-card {
+    background: var(--bg-tertiary);
+    border: 1px solid;
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: all 0.3s ease;
+}
+
+.action-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.action-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+}
+
+.action-content {
+    flex-grow: 1;
+}
+
+/* Upgrade Cards */
+.upgrade-card {
+    background: var(--bg-card);
+    border: 1px solid;
+    border-radius: 16px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    height: 100%;
+}
+
+.upgrade-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.upgrade-header {
+    padding: 2rem 1.5rem;
+    text-align: center;
+}
+
+.upgrade-body {
+    padding: 1.5rem;
+}
+
+.upgrade-footer {
+    padding: 1.5rem;
+    padding-top: 0;
+}
+
+.popular-badge {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+}
+
+/* Plan-specific styling */
 .bg-gradient-annual {
     background: linear-gradient(135deg, #f39c12, #e67e22);
+}
+
+.bg-gradient-gold {
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+}
+
+.border-gold {
+    border-color: #FFD700 !important;
 }
 
 .text-white-muted {
     color: rgba(255, 255, 255, 0.7) !important;
 }
 
+/* Button Styling */
 .btn-annual {
     background: linear-gradient(135deg, #f39c12, #e67e22);
     border: none;
@@ -548,15 +602,6 @@
     color: white;
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(243, 156, 18, 0.3);
-}
-
-/* Gold styling for lifetime */
-.border-gold {
-    border-color: #FFD700 !important;
-}
-
-.bg-gradient-gold {
-    background: linear-gradient(135deg, #FFD700, #FFA500);
 }
 
 .btn-gold {
@@ -578,53 +623,75 @@
     color: #000 !important;
 }
 
-/* Dark theme modal styling */
+/* Timeline Styling */
+.timeline-item {
+    padding: 1rem;
+    border-left: 3px solid var(--border-color);
+    margin-left: 1rem;
+    position: relative;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 1.5rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--primary-color);
+}
+
+.timeline-item:last-child {
+    border-left-color: transparent;
+}
+
+/* Billing History */
+.billing-item {
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.billing-item:hover {
+    background: var(--bg-tertiary);
+}
+
+/* Modal Styling */
 .modal-content {
-    background-color: #1a1a1a;
-    border: 1px solid #333;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
 }
 
 .modal-header {
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .modal-footer {
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border-color);
 }
 
 .form-select, .form-control {
-    background-color: #2d2d2d;
-    border: 1px solid #444;
-    color: #fff;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
 }
 
 .form-select:focus, .form-control:focus {
-    background-color: #2d2d2d;
-    border-color: #0d6efd;
-    color: #fff;
+    background-color: var(--bg-secondary);
+    border-color: var(--primary-color);
+    color: var(--text-primary);
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 
 .form-select option {
-    background-color: #2d2d2d;
-    color: #fff;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
-/* Card animations */
-.card {
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-}
-
-.table th, .table td {
-    vertical-align: middle;
-}
-
-/* Button loading state */
+/* Loading States */
 .btn-loading {
     position: relative;
     pointer-events: none;
@@ -648,118 +715,116 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .upgrade-card {
+        margin-bottom: 1rem;
+    }
+    
+    .action-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .action-icon {
+        margin-bottom: 1rem;
+    }
+}
 </style>
 
 <script>
-function startSubscription(planType) {
-    const hasActiveSubscription = {{ 'true' if current_user.has_subscription else 'false' }};
-    const currentPlan = '{{ current_user.subscription_plan or "none" }}';
-    
-    // Show confirmation for lifetime plan
-    if (planType === 'lifetime') {
-        let confirmMessage = '🎉 You\'re about to get LIFETIME access to TGFX Trade Lab!\n\n✅ One-time payment of $499\n✅ Never pay again\n✅ All future content included\n✅ VIP community access\n\n';
-        
-        if (hasActiveSubscription) {
-            confirmMessage += '⚠️ This will cancel your current subscription and you\'ll be charged the full lifetime amount.\n\n';
-        }
-        
-        confirmMessage += 'Proceed to checkout?';
-        
-        if (!confirm(confirmMessage)) {
-            return;
-        }
-    }
-    
-    // Show loading state
-    const button = document.getElementById(planType + '-btn');
-    const originalText = button.innerHTML;
-    button.classList.add('btn-loading');
-    button.innerHTML = '<span class="material-symbols-outlined me-2">hourglass_empty</span>Processing...';
-    button.disabled = true;
-    
-    // Show loading modal
-    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-    loadingModal.show();
-    
-    // For existing subscribers with specific upgrade paths, try upgrade endpoints first
-    // Otherwise, use checkout session for new subscriptions
-    let endpoint, requestBody;
-    
-    if (hasActiveSubscription && currentPlan === 'monthly' && planType === 'annual') {
-        // Try monthly to annual upgrade first
-        endpoint = '/api/user/upgrade-to-annual';
-        requestBody = {};
-    } else if (hasActiveSubscription && planType === 'lifetime') {
-        // Try lifetime upgrade first  
-        endpoint = '/api/user/upgrade-to-lifetime';
-        requestBody = {};
-    } else {
-        // Default to checkout session for new subscriptions or other changes
-        endpoint = '/api/create-checkout-session';
-        requestBody = { plan_type: planType };
-    }
-    
-    // Make the API call with fallback logic
-    makeSubscriptionRequest(endpoint, requestBody, planType, loadingModal, button, originalText);
-}
+document.addEventListener('DOMContentLoaded', function() {
+    loadBillingHistory();
+    loadSubscriptionTimeline();
+});
 
-function makeSubscriptionRequest(endpoint, requestBody, planType, loadingModal, button, originalText) {
-    fetch(endpoint, {
+function startSubscription(planType) {
+    showLoadingModal();
+    
+    fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCsrfToken()
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({ plan_type: planType })
     })
     .then(response => response.json())
     .then(data => {
-        if (data.success) {
-            if (data.checkout_url) {
-                // Redirect to Stripe checkout (for new subscriptions or lifetime)
-                window.location.href = data.checkout_url;
-            } else {
-                // Plan change completed - reload page to show updated status
-                loadingModal.hide();
-                alert(data.message || 'Subscription updated successfully!');
-                window.location.reload();
-            }
+        if (data.success && data.checkout_url) {
+            window.location.href = data.checkout_url;
         } else {
-            // If upgrade endpoint fails with "no active subscription", try checkout session instead
-            if (data.error && data.error.includes('No active subscription') && endpoint !== '/api/create-checkout-session') {
-                console.log('Upgrade failed, trying checkout session instead...');
-                makeSubscriptionRequest('/api/create-checkout-session', { plan_type: planType }, planType, loadingModal, button, originalText);
-                return;
-            }
-            
-            // Hide loading modal and show error
-            loadingModal.hide();
-            alert('Error: ' + (data.error || 'Failed to process subscription change'));
-            
-            // Reset button
-            button.classList.remove('btn-loading');
-            button.innerHTML = originalText;
-            button.disabled = false;
+            hideLoadingModal();
+            alert('Error: ' + (data.error || 'Failed to create checkout session'));
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        
-        // If this was an upgrade endpoint, try checkout session as fallback
-        if (endpoint !== '/api/create-checkout-session') {
-            console.log('API error, trying checkout session as fallback...');
-            makeSubscriptionRequest('/api/create-checkout-session', { plan_type: planType }, planType, loadingModal, button, originalText);
-            return;
-        }
-        
-        // Hide loading modal and show error
-        loadingModal.hide();
+        hideLoadingModal();
         alert('Network error. Please try again.');
-        
-        // Reset button
-        button.classList.remove('btn-loading');
-        button.innerHTML = originalText;
-        button.disabled = false;
+    });
+}
+
+function upgradeToAnnual() {
+    if (!confirm('Upgrade to Annual Plan?\n\n✅ Save $183 per year\n✅ Get 2 months free\n✅ Exclusive annual member content\n\nYour next billing will be prorated.')) {
+        return;
+    }
+    
+    showLoadingModal();
+    
+    fetch('/api/user/upgrade-to-annual', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            hideLoadingModal();
+            alert(data.message || 'Successfully upgraded to annual plan!');
+            window.location.reload();
+        } else {
+            hideLoadingModal();
+            alert('Error: ' + (data.error || 'Failed to upgrade subscription'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        hideLoadingModal();
+        alert('Network error. Please try again.');
+    });
+}
+
+function upgradeToLifetime() {
+    if (!confirm('🎉 Upgrade to Lifetime Access?\n\n✅ One-time payment of $1,497\n✅ Never pay again\n✅ All future content included\n✅ VIP community access\n\n⚠️ This will cancel your current subscription.\n\nProceed to checkout?')) {
+        return;
+    }
+    
+    showLoadingModal();
+    
+    fetch('/api/user/upgrade-to-lifetime', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.checkout_url) {
+            window.location.href = data.checkout_url;
+        } else {
+            hideLoadingModal();
+            alert('Error: ' + (data.error || 'Failed to create lifetime checkout'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        hideLoadingModal();
+        alert('Network error. Please try again.');
     });
 }
 
@@ -772,7 +837,6 @@ function confirmCancellation() {
     const reason = document.getElementById('cancelReason').value;
     const feedback = document.getElementById('cancelFeedback').value;
     
-    // Show loading in cancel button
     const cancelBtn = document.querySelector('#cancelModal .btn-warning');
     const originalText = cancelBtn.innerHTML;
     cancelBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Canceling...';
@@ -792,7 +856,6 @@ function confirmCancellation() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Hide modal and show success message
             bootstrap.Modal.getInstance(document.getElementById('cancelModal')).hide();
             alert(data.message || 'Subscription canceled successfully.');
             window.location.reload();
@@ -815,6 +878,8 @@ function reactivateSubscription() {
         return;
     }
     
+    showLoadingModal();
+    
     fetch('/api/user/reactivate-subscription', {
         method: 'POST',
         headers: {
@@ -825,22 +890,23 @@ function reactivateSubscription() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            hideLoadingModal();
             alert(data.message || 'Subscription reactivated successfully!');
             window.location.reload();
         } else {
+            hideLoadingModal();
             alert('Error: ' + (data.error || 'Failed to reactivate subscription'));
         }
     })
     .catch(error => {
         console.error('Error:', error);
+        hideLoadingModal();
         alert('Network error. Please try again.');
     });
 }
 
 function updatePaymentMethod() {
-    // Show loading
-    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
-    loadingModal.show();
+    showLoadingModal();
     
     fetch('/api/user/update-payment-method', {
         method: 'POST',
@@ -852,38 +918,140 @@ function updatePaymentMethod() {
     .then(response => response.json())
     .then(data => {
         if (data.success && data.url) {
-            // Redirect to Stripe Customer Portal
             window.location.href = data.url;
         } else {
-            loadingModal.hide();
+            hideLoadingModal();
             alert('Error: ' + (data.error || 'Failed to open payment method update'));
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        loadingModal.hide();
+        hideLoadingModal();
         alert('Network error. Please try again.');
     });
 }
 
+function loadBillingHistory() {
+    fetch('/api/user/billing-history')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            displayBillingHistory(data.invoices);
+        } else {
+            document.getElementById('billingHistory').innerHTML = 
+                '<div class="text-center text-muted py-4">No billing history available</div>';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading billing history:', error);
+        document.getElementById('billingHistory').innerHTML = 
+            '<div class="text-center text-danger py-4">Error loading billing history</div>';
+    });
+}
+
+function displayBillingHistory(invoices) {
+    const container = document.getElementById('billingHistory');
+    
+    if (!invoices || invoices.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4">No billing history available</div>';
+        return;
+    }
+    
+    let html = '';
+    invoices.forEach(invoice => {
+        const statusBadge = invoice.status === 'paid' ? 
+            '<span class="badge bg-success">Paid</span>' :
+            '<span class="badge bg-warning">Pending</span>';
+            
+        html += `
+            <div class="billing-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">${invoice.description}</h6>
+                        <small class="text-muted">${invoice.date}</small>
+                    </div>
+                    <div class="text-end">
+                        <div class="h6 mb-1">$${invoice.amount}</div>
+                        ${statusBadge}
+                    </div>
+                </div>
+                ${invoice.pdf_url ? 
+                    `<div class="mt-2">
+                        <a href="${invoice.pdf_url}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <span class="material-symbols-outlined me-1" style="font-size: 0.875rem;">download</span>
+                            Download PDF
+                        </a>
+                    </div>` : ''
+                }
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function loadSubscriptionTimeline() {
+    fetch('/api/subscription/timeline')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            displaySubscriptionTimeline(data.timeline);
+        } else {
+            document.getElementById('subscriptionTimeline').innerHTML = 
+                '<div class="text-center text-muted py-4">No subscription timeline available</div>';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading timeline:', error);
+        document.getElementById('subscriptionTimeline').innerHTML = 
+            '<div class="text-center text-danger py-4">Error loading subscription timeline</div>';
+    });
+}
+
+function displaySubscriptionTimeline(timeline) {
+    const container = document.getElementById('subscriptionTimeline');
+    
+    if (!timeline || timeline.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4">No subscription timeline available</div>';
+        return;
+    }
+    
+    let html = '';
+    timeline.forEach(event => {
+        const eventDate = new Date(event.date).toLocaleDateString();
+        const amountDisplay = event.amount ? `$${event.amount}` : '';
+        
+        html += `
+            <div class="timeline-item">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1">${event.description}</h6>
+                        <small class="text-muted">${eventDate}</small>
+                    </div>
+                    ${amountDisplay ? `<div class="fw-bold text-success">${amountDisplay}</div>` : ''}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function showLoadingModal() {
+    const loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+    loadingModal.show();
+}
+
+function hideLoadingModal() {
+    const loadingModal = bootstrap.Modal.getInstance(document.getElementById('loadingModal'));
+    if (loadingModal) {
+        loadingModal.hide();
+    }
+}
+
 function getCsrfToken() {
-    // Get CSRF token from meta tag or cookie
     const token = document.querySelector('meta[name="csrf-token"]');
     return token ? token.getAttribute('content') : '';
 }
-
-// Handle page visibility change to reset buttons if user comes back from Stripe
-document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) {
-        // Reset all buttons when page becomes visible
-        const buttons = document.querySelectorAll('.btn-loading');
-        buttons.forEach(button => {
-            button.classList.remove('btn-loading');
-            button.disabled = false;
-            // You might want to refresh the page to show updated subscription status
-        });
-    }
-});
 </script>
 {% endblock %}
-
