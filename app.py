@@ -943,6 +943,10 @@ def api_delete_whop_price_mapping(mapping_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/favicon.ico')
+def favicon():
+    return redirect(url_for('static', filename='favicon.png'))
+
 # User-facing verification endpoint
 @app.route('/api/verify-whop-purchase', methods=['POST'])
 @login_required
