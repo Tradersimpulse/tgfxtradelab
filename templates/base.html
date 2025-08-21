@@ -179,6 +179,42 @@
         padding-top: 5rem; /* INCREASE THIS - was 4rem, now 5rem to account for mobile toggle */
     }
 
+
+    /* scrolling admin CSS
+
+    /* Make admin dropdown scrollable when too tall */
+.nav-dropdown-menu {
+    max-height: 60vh; /* Limit height to 60% of viewport */
+    overflow-y: auto; /* Enable vertical scrolling */
+    overflow-x: hidden; /* Hide horizontal scrolling */
+}
+
+/* For collapsed sidebar absolute positioned menus */
+.sidebar.collapsed .nav-dropdown-menu {
+    max-height: 70vh; /* Slightly taller for collapsed mode */
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Custom scrollbar for the dropdown */
+.nav-dropdown-menu::-webkit-scrollbar {
+    width: 6px;
+}
+
+.nav-dropdown-menu::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+}
+
+.nav-dropdown-menu::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.nav-dropdown-menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(16, 185, 129, 0.6);
+}
+
     /* ===== ADDITIONAL BOOTSTRAP 5 + DARK THEME FIXES ===== */
         
         /* Bootstrap 5 compatibility fixes */
