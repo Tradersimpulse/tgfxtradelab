@@ -179,6 +179,418 @@
         padding-top: 5rem; /* INCREASE THIS - was 4rem, now 5rem to account for mobile toggle */
     }
 
+    /* ===== ADDITIONAL BOOTSTRAP 5 + DARK THEME FIXES ===== */
+        
+        /* Bootstrap 5 compatibility fixes */
+        .me-1 { margin-right: 0.25rem !important; }
+        .me-2 { margin-right: 0.5rem !important; }
+        .mb-1 { margin-bottom: 0.25rem !important; }
+        .mb-3 { margin-bottom: 1rem !important; }
+        .mb-4 { margin-bottom: 1.5rem !important; }
+        .fw-bold { font-weight: 700 !important; }
+        .g-0 { gap: 0 !important; }
+        
+        /* Text size utilities */
+        .text-xs {
+            font-size: 0.75rem !important;
+            line-height: 1rem !important;
+        }
+        
+        /* Border utilities for Bootstrap 5 */
+        .border-start {
+            border-left: var(--bs-border-width) solid var(--bs-border-color) !important;
+        }
+        
+        .border-4 {
+            border-width: 4px !important;
+        }
+        
+        /* Updated border colors for stats cards */
+        .border-primary {
+            border-color: var(--primary-color) !important;
+        }
+        
+        .border-success {
+            border-color: var(--success-color) !important;
+        }
+        
+        .border-info {
+            border-color: var(--primary-color) !important;
+        }
+        
+        .border-warning {
+            border-color: var(--warning-color) !important;
+        }
+        
+        /* Modal improvements */
+        .modal-content {
+            background-color: var(--bg-secondary) !important;
+            border: 1px solid var(--border-color) !important;
+            color: var(--text-primary) !important;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .modal-header {
+            background-color: var(--bg-tertiary) !important;
+            border-bottom: 1px solid var(--border-color) !important;
+            color: var(--text-primary) !important;
+            border-radius: 12px 12px 0 0;
+            padding: 1.5rem;
+        }
+        
+        .modal-title {
+            color: var(--text-primary) !important;
+            font-weight: 600;
+        }
+        
+        .modal-body {
+            background-color: var(--bg-secondary) !important;
+            color: var(--text-primary) !important;
+            padding: 1.5rem;
+        }
+        
+        .modal-footer {
+            background-color: var(--bg-tertiary) !important;
+            border-top: 1px solid var(--border-color) !important;
+            border-radius: 0 0 12px 12px;
+            padding: 1.5rem;
+        }
+        
+        /* Bootstrap 5 close button fix */
+        .btn-close {
+            background: transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23ffffff'%3e%3cpath d='m.235 1.027 4.896 4.896 4.896-4.896a.75.75 0 1 1 1.06 1.06L6.191 6.984l4.896 4.896a.75.75 0 1 1-1.06 1.06L5.13 8.043.235 12.939a.75.75 0 0 1-1.06-1.06L4.07 6.984.235 2.087a.75.75 0 0 1 1.06-1.06z'/%3e%3c/svg%3e") center/1em auto no-repeat !important;
+            border: 0;
+            border-radius: 0.375rem;
+            opacity: 1;
+            padding: 0.375rem;
+            width: 1em;
+            height: 1em;
+        }
+        
+        .btn-close:hover {
+            opacity: 0.8;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Form styling improvements */
+        .form-label {
+            color: var(--text-secondary) !important;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-control {
+            background-color: var(--bg-input) !important;
+            border: 1px solid var(--border-color) !important;
+            color: var(--text-primary) !important;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        
+        .form-control:focus {
+            background-color: var(--bg-input) !important;
+            border-color: var(--primary-color) !important;
+            color: var(--text-primary) !important;
+            box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.25) !important;
+        }
+        
+        .form-control::placeholder {
+            color: #9CA3AF !important;
+            opacity: 1;
+        }
+        
+        .form-text {
+            color: var(--text-muted) !important;
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+        }
+        
+        /* Textarea specific */
+        textarea.form-control {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        /* Checkbox styling */
+        .form-check {
+            padding-left: 1.5rem;
+            margin-bottom: 0;
+        }
+        
+        .form-check-input {
+            background-color: var(--bg-input) !important;
+            border: 1px solid var(--border-color) !important;
+            width: 1.25rem;
+            height: 1.25rem;
+            margin-top: 0.125rem;
+            margin-left: -1.5rem;
+        }
+        
+        .form-check-input:checked {
+            background-color: var(--primary-color) !important;
+            border-color: var(--primary-color) !important;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='white'%3e%3cpath fill-rule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clip-rule='evenodd'/%3e%3c/svg%3e") !important;
+        }
+        
+        .form-check-input:focus {
+            border-color: var(--primary-color) !important;
+            box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.25) !important;
+        }
+        
+        .form-check-label {
+            color: var(--text-primary) !important;
+            font-size: 0.875rem;
+            margin-left: 0.5rem;
+        }
+        
+        /* Button improvements for small buttons */
+        .btn-sm {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            line-height: 1.2;
+        }
+        
+        .btn-sm .material-symbols-outlined {
+            font-size: 14px !important;
+            line-height: 1;
+        }
+        
+        /* Enhanced button styling */
+        .btn {
+            border: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+            text-decoration: none;
+        }
+        
+        .btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.25) !important;
+        }
+        
+        /* Table improvements */
+        .table {
+            color: var(--text-primary) !important;
+            background-color: transparent !important;
+        }
+        
+        .table thead th {
+            background-color: var(--bg-tertiary) !important;
+            border-color: var(--border-color) !important;
+            color: var(--text-secondary) !important;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.75rem;
+            padding: 1rem 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        .table tbody td {
+            background-color: transparent !important;
+            border-color: var(--border-color) !important;
+            color: var(--text-primary) !important;
+            vertical-align: middle;
+            padding: 0.875rem 0.75rem;
+        }
+        
+        .table-bordered {
+            border: 1px solid var(--border-color) !important;
+        }
+        
+        .table-bordered th,
+        .table-bordered td {
+            border: 1px solid var(--border-color) !important;
+        }
+        
+        .table tbody tr:hover {
+            background-color: rgba(16, 185, 129, 0.05) !important;
+        }
+        
+        /* Code element improvements */
+        code {
+            background-color: var(--bg-tertiary) !important;
+            color: var(--primary-color) !important;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        /* Badge improvements */
+        .badge {
+            font-weight: 600;
+            border-radius: 6px;
+            padding: 0.5em 0.75em;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+        
+        .bg-success {
+            background: linear-gradient(135deg, #10B981, #059669) !important;
+            color: #FFFFFF !important;
+        }
+        
+        .bg-warning {
+            background: linear-gradient(135deg, #F59E0B, #D97706) !important;
+            color: #FFFFFF !important;
+        }
+        
+        .bg-danger {
+            background: linear-gradient(135deg, #EF4444, #DC2626) !important;
+            color: #FFFFFF !important;
+        }
+        
+        .bg-secondary {
+            background: linear-gradient(135deg, #374151, #4B5563) !important;
+            color: #FFFFFF !important;
+        }
+        
+        .bg-info {
+            background: linear-gradient(135deg, #10B981, #059669) !important;
+            color: #FFFFFF !important;
+        }
+        
+        .bg-primary {
+            background: linear-gradient(135deg, #10B981, #059669) !important;
+            color: #FFFFFF !important;
+        }
+        
+        /* Material Icons sizing */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            line-height: 1;
+        }
+        
+        .material-symbols-outlined.fa-2x {
+            font-size: 2rem !important;
+        }
+        
+        /* Loading spinner */
+        .spinner-border {
+            color: var(--primary-color) !important;
+        }
+        
+        .visually-hidden {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+        
+        /* Alert improvements */
+        .alert {
+            border-radius: 12px;
+            border: 1px solid;
+            padding: 1rem 1.5rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+        }
+        
+        .alert .material-symbols-outlined {
+            margin-right: 0.75rem;
+            font-size: 1.25rem;
+        }
+        
+        /* Responsive table */
+        .table-responsive {
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-card);
+        }
+        
+        /* Stats card enhancements */
+        .card.shadow {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+        }
+        
+        .card.h-100 {
+            height: 100% !important;
+        }
+        
+        .py-2 {
+            padding-top: 0.5rem !important;
+            padding-bottom: 0.5rem !important;
+        }
+        
+        .py-3 {
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+        }
+        
+        /* Text utilities */
+        .text-uppercase {
+            text-transform: uppercase !important;
+        }
+        
+        .text-muted {
+            color: var(--text-muted) !important;
+        }
+        
+        /* Ensure proper spacing */
+        .mb-0 {
+            margin-bottom: 0 !important;
+        }
+        
+        .h5 {
+            font-size: 1.25rem !important;
+            font-weight: 700 !important;
+            line-height: 1.2 !important;
+            margin: 0;
+        }
+        
+        /* Row and column fixes */
+        .row.g-0 > * {
+            padding-right: 0;
+            padding-left: 0;
+        }
+        
+        .col-auto {
+            flex: 0 0 auto;
+            width: auto;
+        }
+        
+        /* Make sure no element has white background */
+        * {
+            background-color: inherit;
+        }
+        
+        /* Specific overrides for elements that might default to white */
+        .container,
+        .container-fluid,
+        .row,
+        .col,
+        .col-auto,
+        .col-md-6,
+        .col-xl-3 {
+            background-color: transparent !important;
+        }
+
     /* ===== WHOP PAGES DARK THEME FIXES ===== */
         
         /* Table fixes for better dark theme integration */
