@@ -5685,7 +5685,7 @@ def api_upgrade_to_annual():
         create_notification(
             current_user.id,
             'Upgraded to Annual!',
-            'You have successfully upgraded to the annual plan. You\'ll save $49 per year and get exclusive annual benefits!',
+            'You have successfully upgraded to the annual plan. You\'ll save $183 per year and get exclusive annual benefits!',
             'subscription'
         )
         
