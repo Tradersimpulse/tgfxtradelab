@@ -5,25 +5,26 @@
 {% block content %}
 <div class="container-fluid px-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0 text-gray-800">Whop Transactions</h1>
+        <h1 class="h3 mb-0">Whop Transactions</h1>
         <a href="{{ url_for('admin_whop_price_mappings') }}" class="btn btn-primary">
-            <i class="fas fa-cog"></i> Price Mappings
+            <span class="material-symbols-outlined me-1" style="font-size: 16px;">settings</span>
+            Price Mappings
         </a>
     </div>
 
     <!-- Stats Cards -->
     <div class="row mb-4">
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card border-start border-4 border-primary shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">
                                 Total Transactions</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_transactions }}</div>
+                            <div class="h5 mb-0 fw-bold">{{ total_transactions }}</div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-shopping-cart fa-2x text-gray-300"></i>
+                            <span class="material-symbols-outlined fa-2x text-muted">shopping_cart</span>
                         </div>
                     </div>
                 </div>
@@ -31,16 +32,16 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
+            <div class="card border-start border-4 border-success shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs fw-bold text-success text-uppercase mb-1">
                                 Access Granted</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ access_granted }}</div>
+                            <div class="h5 mb-0 fw-bold">{{ access_granted }}</div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            <span class="material-symbols-outlined fa-2x text-muted">check_circle</span>
                         </div>
                     </div>
                 </div>
@@ -48,16 +49,16 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
+            <div class="card border-start border-4 border-info shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs fw-bold text-info text-uppercase mb-1">
                                 Verified</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ verified_transactions }}</div>
+                            <div class="h5 mb-0 fw-bold">{{ verified_transactions }}</div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-clipboard-check fa-2x text-gray-300"></i>
+                            <span class="material-symbols-outlined fa-2x text-muted">verified</span>
                         </div>
                     </div>
                 </div>
@@ -65,16 +66,16 @@
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card border-start border-4 border-warning shadow h-100 py-2">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                    <div class="row g-0 align-items-center">
+                        <div class="col me-2">
+                            <div class="text-xs fw-bold text-warning text-uppercase mb-1">
                                 Total Revenue</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">${{ "%.2f"|format(total_revenue) }}</div>
+                            <div class="h5 mb-0 fw-bold">${{ "%.2f"|format(total_revenue) }}</div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                            <span class="material-symbols-outlined fa-2x text-muted">attach_money</span>
                         </div>
                     </div>
                 </div>
@@ -85,7 +86,7 @@
     <!-- Transactions Table -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Whop Transactions</h6>
+            <h6 class="m-0 fw-bold text-primary">Whop Transactions</h6>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -115,29 +116,37 @@
                             <td>${{ "%.2f"|format(transaction.amount or 0) }}</td>
                             <td>
                                 {% if transaction.status == 'access_granted' %}
-                                <span class="badge badge-success">{{ transaction.status|title }}</span>
+                                <span class="badge bg-success">{{ transaction.status|title }}</span>
                                 {% elif transaction.status == 'verified' %}
-                                <span class="badge badge-info">{{ transaction.status|title }}</span>
+                                <span class="badge bg-info">{{ transaction.status|title }}</span>
                                 {% elif transaction.status == 'pending' %}
-                                <span class="badge badge-warning">{{ transaction.status|title }}</span>
+                                <span class="badge bg-warning">{{ transaction.status|title }}</span>
                                 {% else %}
-                                <span class="badge badge-danger">{{ transaction.status|title }}</span>
+                                <span class="badge bg-danger">{{ transaction.status|title }}</span>
                                 {% endif %}
                             </td>
                             <td>
-                                <small>{{ transaction.whop_price_id }}</small>
+                                <small><code>{{ transaction.whop_price_id }}</code></small>
                             </td>
                             <td>
-                                <small>{{ transaction.app_price_id or 'Not mapped' }}</small>
+                                <small>
+                                    {% if transaction.app_price_id %}
+                                    <code>{{ transaction.app_price_id }}</code>
+                                    {% else %}
+                                    <span class="text-muted">Not mapped</span>
+                                    {% endif %}
+                                </small>
                             </td>
                             <td>{{ transaction.created_at.strftime('%m/%d/%Y %H:%M') }}</td>
                             <td>
                                 {% if transaction.status != 'access_granted' %}
-                                <button class="btn btn-sm btn-success" onclick="grantAccess({{ transaction.id }})">
+                                <button class="btn btn-sm btn-success me-1 mb-1" onclick="grantAccess({{ transaction.id }})">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">check</span>
                                     Grant Access
                                 </button>
                                 {% endif %}
-                                <button class="btn btn-sm btn-info" onclick="viewDetails({{ transaction.id }})">
+                                <button class="btn btn-sm btn-info mb-1" onclick="viewDetails({{ transaction.id }})">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">visibility</span>
                                     View
                                 </button>
                             </td>
@@ -151,14 +160,12 @@
 </div>
 
 <!-- Modal for transaction details -->
-<div class="modal fade" id="transactionModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
+<div class="modal fade" id="transactionModal" tabindex="-1" aria-labelledby="transactionModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Transaction Details</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+                <h5 class="modal-title" id="transactionModalTitle">Transaction Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="transactionDetails">
                 <!-- Transaction details will be loaded here -->
@@ -179,26 +186,86 @@ function grantAccess(transactionId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Access granted successfully!');
-                location.reload();
+                window.TGFXLiveKit.utils.showNotification('success', 'Access granted successfully!');
+                setTimeout(() => location.reload(), 1000);
             } else {
-                alert('Error: ' + data.error);
+                window.TGFXLiveKit.utils.showNotification('error', 'Error: ' + data.error);
             }
         })
         .catch(error => {
-            alert('Error granting access: ' + error);
+            window.TGFXLiveKit.utils.showNotification('error', 'Error granting access: ' + error);
         });
     }
 }
 
 function viewDetails(transactionId) {
-    // You can implement a detailed view here
-    alert('Transaction details view - to be implemented');
+    // Show modal with transaction details
+    const modal = new bootstrap.Modal(document.getElementById('transactionModal'));
+    document.getElementById('transactionDetails').innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading transaction details...</p>
+        </div>
+    `;
+    modal.show();
+    
+    // Fetch transaction details
+    fetch(`/api/admin/whop-transaction/${transactionId}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const transaction = data.transaction;
+            document.getElementById('transactionDetails').innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="fw-bold">Transaction Information</h6>
+                        <p><strong>ID:</strong> ${transaction.id}</p>
+                        <p><strong>Email:</strong> ${transaction.email}</p>
+                        <p><strong>Amount:</strong> $${(transaction.amount || 0).toFixed(2)}</p>
+                        <p><strong>Status:</strong> 
+                            <span class="badge bg-${transaction.status === 'access_granted' ? 'success' : 
+                                                    transaction.status === 'verified' ? 'info' : 
+                                                    transaction.status === 'pending' ? 'warning' : 'danger'}">
+                                ${transaction.status}
+                            </span>
+                        </p>
+                        <p><strong>Created:</strong> ${new Date(transaction.created_at).toLocaleString()}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-bold">Price Information</h6>
+                        <p><strong>Whop Price ID:</strong><br><code>${transaction.whop_price_id}</code></p>
+                        <p><strong>App Price ID:</strong><br>
+                            ${transaction.app_price_id ? `<code>${transaction.app_price_id}</code>` : '<span class="text-muted">Not mapped</span>'}
+                        </p>
+                        ${transaction.user ? `
+                        <h6 class="fw-bold mt-3">User Information</h6>
+                        <p><strong>Username:</strong> ${transaction.user.username}</p>
+                        <p><strong>User ID:</strong> ${transaction.user.id}</p>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        } else {
+            document.getElementById('transactionDetails').innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Error:</strong> ${data.error}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        document.getElementById('transactionDetails').innerHTML = `
+            <div class="alert alert-danger">
+                <strong>Error:</strong> Failed to load transaction details.
+            </div>
+        `;
+    });
 }
 
-// Initialize DataTable without jQuery
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    // Simple table sorting - you can enhance this or remove if not needed
     console.log('Whop transactions page loaded');
 });
 </script>
