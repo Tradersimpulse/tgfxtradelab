@@ -4142,6 +4142,480 @@ def admin_trading_signals():
     
     return render_template('admin/trading_signals.html', signals=signals)
 
+# COMPLETE DISCORD WEBHOOK INTEGRATION POINTS
+# Copy and paste these exact code sections into your existing app.py
+
+# ==============================================================================
+# 1. REPLACE YOUR EXISTING admin_add_video ROUTE WITH THIS:
+# ==============================================================================
+
+@app.route('/admin/video/add', methods=['GET', 'POST'])
+@login_required
+def admin_add_video():
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        form = VideoFormWithTags()
+    except NameError:
+        form = VideoForm()
+    
+    form.category_id.choices = [(c.id, c.name) for c in Category.query.all()]
+    
+    if form.validate_on_submit():
+        tags_data = None
+        if hasattr(form, 'tags'):
+            tags_data = form.tags.data
+        
+        # Handle integer fields properly
+        order_index = form.order_index.data
+        if order_index == '' or order_index is None:
+            order_index = 0
+        else:
+            order_index = int(order_index)
+        
+        # Get thumbnail URL from form (manual override)
+        thumbnail_url = form.thumbnail_url.data if form.thumbnail_url.data else None
+        
+        video = Video(
+            title=form.title.data,
+            description=form.description.data,
+            s3_url=form.s3_url.data,
+            thumbnail_url=thumbnail_url,  # Will be updated if auto-generated
+            category_id=form.category_id.data,
+            is_free=form.is_free.data,
+            order_index=order_index
+        )
+        db.session.add(video)
+        db.session.flush()  # Get the video ID
+        
+        # Auto-generate thumbnail if no manual thumbnail provided
+        if not thumbnail_url:
+            category = Category.query.get(form.category_id.data)
+            if category and category.background_image_url:
+                try:
+                    # Generate thumbnail
+                    thumbnail_image = generate_thumbnail(
+                        category.background_image_url,
+                        category.name,
+                        video.title
+                    )
+                    
+                    # Upload to S3
+                    auto_thumbnail_url = upload_thumbnail_to_s3(thumbnail_image, video.id, video.title)
+                    
+                    if auto_thumbnail_url:
+                        video.thumbnail_url = auto_thumbnail_url
+                        print(f"✅ Auto-generated thumbnail for video: {video.title}")
+                    else:
+                        print(f"⚠️ Failed to upload auto-generated thumbnail for video: {video.title}")
+                        
+                except Exception as e:
+                    print(f"❌ Error auto-generating thumbnail: {e}")
+        
+        # Process tags
+        if tags_data is not None:
+            try:
+                process_video_tags(video, tags_data)
+            except:
+                pass
+        
+        db.session.commit()
+        
+        # 🆕 DISCORD WEBHOOK: Send Discord notification for new video
+        try:
+            category = Category.query.get(form.category_id.data)
+            webhook_success = send_new_video_webhook(video, category)
+            if webhook_success:
+                print(f"✅ Discord notified about new video: {video.title}")
+            else:
+                print(f"⚠️ Failed to notify Discord about new video: {video.title}")
+        except Exception as e:
+            print(f"❌ Discord webhook error for new video: {e}")
+            # Don't let webhook failures break the main functionality
+        
+        # Broadcast notification about new video
+        broadcast_notification(
+            'New Video Available!',
+            f'Check out our latest video: "{video.title}"',
+            'new_video'
+        )
+        
+        flash('Video added successfully!', 'success')
+        return redirect(url_for('admin_videos'))
+    
+    return render_template('admin/video_form.html', form=form, title='Add Video')
+
+# ==============================================================================
+# 2. REPLACE YOUR EXISTING api_start_stream ROUTE WITH THIS:
+# ==============================================================================
+
+@app.route('/api/stream/start', methods=['POST'])
+@login_required
+def api_start_stream():
+    if not current_user.is_admin or not current_user.can_stream:
+        return jsonify({'error': 'Access denied - not authorized to stream'}), 403
+    
+    user_active_stream = Stream.query.filter_by(
+        created_by=current_user.id,
+        is_active=True
+    ).first()
+    if user_active_stream:
+        return jsonify({'error': 'You already have an active stream'}), 400
+    
+    active_stream_count = Stream.query.filter_by(is_active=True).count()
+    if active_stream_count >= 2:
+        return jsonify({'error': 'Maximum concurrent streams reached (2)'}), 400
+    
+    data = request.get_json()
+    title = data.get('title', 'Live Stream')
+    description = data.get('description', '')
+    stream_type = data.get('stream_type', 'general')
+    
+    streamer_name = current_user.display_name or current_user.username
+    
+    if streamer_name not in title:
+        title = f"{streamer_name}'s {title}"
+    
+    # Create LiveKit room name
+    room_name = f"stream-{streamer_name.lower()}-{uuid.uuid4().hex[:12]}"
+    
+    # Create LiveKit room
+    room_info = create_livekit_room(room_name, streamer_name)
+    if not room_info:
+        return jsonify({'error': 'Failed to create LiveKit room'}), 500
+    
+    # Generate publisher token for the streamer
+    participant_identity = f"streamer-{current_user.id}"
+    streamer_token = generate_livekit_token(
+        room_name,
+        participant_identity,
+        streamer_name,
+        is_publisher=True
+    )
+    
+    if not streamer_token:
+        delete_livekit_room(room_name)
+        return jsonify({'error': 'Failed to create streamer token'}), 500
+    
+    # Create database record
+    stream = Stream(
+        title=title,
+        description=description,
+        room_name=room_name,
+        room_sid=getattr(room_info, 'sid', f"RM_{uuid.uuid4().hex[:12]}"),
+        is_active=True,
+        is_recording=False,  # Will be updated if recording starts
+        started_at=datetime.utcnow(),
+        created_by=current_user.id,
+        streamer_name=streamer_name,
+        stream_type=stream_type
+    )
+    
+    db.session.add(stream)
+    db.session.commit()
+    
+    # Try to start auto-recording for admin streams
+    recording_started = False
+    recording_info = None
+    
+    if current_user.is_admin:
+        try:
+            print(f"🎬 Attempting auto-recording for {streamer_name}'s stream...")
+            
+            recording_info = start_livekit_cloud_recording(
+                room_name=room_name,
+                stream_id=stream.id,
+                streamer_name=streamer_name
+            )
+            
+            if recording_info and recording_info.get('recording_id'):
+                stream.is_recording = True
+                stream.recording_id = recording_info.get('recording_id')
+                db.session.commit()
+                recording_started = True
+                print(f"✅ Auto-recording started for {streamer_name}'s stream")
+            else:
+                print("⚠️ Recording function returned None or no recording_id")
+                
+        except Exception as e:
+            print(f"⚠️ Auto-recording failed: {e}")
+            # Continue with stream even if recording fails
+    
+    # 🆕 DISCORD WEBHOOK: Send Discord notification for live stream start
+    try:
+        webhook_success = send_live_stream_webhook(stream, action="started")
+        if webhook_success:
+            print(f"✅ Discord notified about live stream: {stream.title}")
+        else:
+            print(f"⚠️ Failed to notify Discord about live stream: {stream.title}")
+    except Exception as e:
+        print(f"❌ Discord webhook error for live stream: {e}")
+    
+    # Broadcast notification about new stream via WebSocket
+    if socketio:
+        socketio.emit('new_stream_started', {
+            'stream_id': stream.id,
+            'title': stream.title,
+            'streamer_name': stream.streamer_name,
+            'message': f'{streamer_name} is now live!',
+            'is_recording': recording_started
+        })
+    
+    # Also send traditional notification
+    broadcast_notification(
+        'Live Stream Started!',
+        f'{streamer_name} is now live: "{title}"' + (' 🔴 Recording' if recording_started else ''),
+        'live_stream'
+    )
+    
+    return jsonify({
+        'success': True,
+        'stream': {
+            'id': stream.id,
+            'title': stream.title,
+            'streamer_name': stream.streamer_name,
+            'room_name': stream.room_name,
+            'room_sid': stream.room_sid,
+            'livekit_token': streamer_token,
+            'livekit_url': app.config.get('LIVEKIT_URL'),
+            'participant_identity': participant_identity,
+            'is_recording': recording_started
+        }
+    })
+
+# ==============================================================================
+# 3. UPDATE YOUR EXISTING api_stop_stream ROUTE - ADD DISCORD WEBHOOK:
+# ==============================================================================
+
+@app.route('/api/stream/stop', methods=['POST'])
+@login_required
+def api_stop_stream():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    data = request.get_json()
+    stream_id = data.get('stream_id')
+    
+    if stream_id:
+        stream = Stream.query.filter_by(
+            id=stream_id,
+            created_by=current_user.id,
+            is_active=True
+        ).first()
+    else:
+        stream = Stream.query.filter_by(
+            created_by=current_user.id,
+            is_active=True
+        ).first()
+    
+    if not stream:
+        return jsonify({'error': 'No active stream found or access denied'}), 400
+    
+    recording_url = None
+    recording_saved = False
+    video_created = False
+    
+    # Get recording URL before stopping
+    if stream.is_recording and stream.recording_id:
+        print(f"🔴 Getting recording info for egress {stream.recording_id}...")
+        
+        # First, get the recording URL from egress info
+        recording_info = get_egress_info(stream.recording_id)
+        if recording_info and recording_info.get('recording_url'):
+            recording_url = recording_info['recording_url']
+            print(f"📁 Retrieved recording URL: {recording_url}")
+        
+        # Now stop the recording
+        print(f"⏹️ Stopping recording {stream.recording_id}...")
+        stop_result = stop_livekit_egress_recording(stream.recording_id)
+        
+        if stop_result.get('success'):
+            print(f"✅ Recording stopped successfully")
+            
+            # Use URL from stop result if available, otherwise use the one we got earlier
+            if stop_result.get('recording_url'):
+                recording_url = stop_result['recording_url']
+            elif not recording_url and recording_info and recording_info.get('filepath'):
+                # Build URL from filepath
+                s3_key = recording_info['filepath']
+                aws_region = app.config.get('AWS_REGION', 'us-east-1')
+                s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
+                recording_url = f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}"
+            
+            # Save the recording URL to the database
+            stream.recording_url = recording_url
+            recording_saved = True
+            
+            print(f"💾 Saving recording URL to database: {recording_url}")
+    
+    # Calculate stream duration before updating ended_at
+    duration_minutes = 0
+    if stream.started_at:
+        stream.ended_at = datetime.utcnow()
+        duration = stream.ended_at - stream.started_at
+        duration_minutes = int(duration.total_seconds() / 60)
+    
+    # 🆕 DISCORD WEBHOOK: Send Discord notification BEFORE stopping stream
+    try:
+        webhook_success = send_live_stream_webhook(stream, action="ended")
+        if webhook_success:
+            print(f"✅ Discord notified about stream ending: {stream.title}")
+        else:
+            print(f"⚠️ Failed to notify Discord about stream ending: {stream.title}")
+    except Exception as e:
+        print(f"❌ Discord webhook error for stream ending: {e}")
+    
+    # AUTO-ADD TO LIVE TRADING SESSIONS COURSE
+    if recording_saved and recording_url:
+        try:
+            # Find or create the Live Trading Sessions category
+            live_sessions_category = Category.query.filter_by(
+                name='Live Trading Sessions'
+            ).first()
+            
+            if not live_sessions_category:
+                # Create the category if it doesn't exist
+                live_sessions_category = Category(
+                    name='Live Trading Sessions',
+                    description='Recorded live trading sessions from our professional traders',
+                    order_index=1  # Put it at the top
+                )
+                db.session.add(live_sessions_category)
+                db.session.flush()
+                print(f"📁 Created Live Trading Sessions category")
+            
+            # Create video title with trader name and date
+            video_date = stream.started_at.strftime('%B %d, %Y')  # August 15, 2025
+            video_title = f"{stream.streamer_name} - {video_date}"
+            
+            # Create description
+            video_description = f"Live trading session with {stream.streamer_name}\n"
+            video_description += f"Duration: {duration_minutes} minutes\n"
+            video_description += f"Stream Type: {stream.stream_type}\n"
+            if stream.description:
+                video_description += f"\n{stream.description}"
+            
+            # Get the next order index for this category
+            max_order = db.session.query(db.func.max(Video.order_index)).filter_by(
+                category_id=live_sessions_category.id
+            ).scalar() or 0
+            
+            # Create the video entry
+            new_video = Video(
+                title=video_title,
+                description=video_description,
+                s3_url=recording_url,
+                thumbnail_url=None,  # You could generate a thumbnail later
+                duration=duration_minutes * 60,  # Store in seconds
+                is_free=False,  # Set to True if you want free access
+                order_index=max_order + 1,
+                category_id=live_sessions_category.id,
+                created_at=datetime.utcnow()
+            )
+            db.session.add(new_video)
+            db.session.flush()
+            
+            # Add tags for the video
+            trader_tag = get_or_create_tag(stream.streamer_name)
+            live_tag = get_or_create_tag('Live Session')
+            trading_tag = get_or_create_tag('Live Trading')
+            
+            new_video.tags.append(trader_tag)
+            new_video.tags.append(live_tag)
+            new_video.tags.append(trading_tag)
+            
+            # Add date tag (e.g., "August 2025")
+            month_year_tag = get_or_create_tag(stream.started_at.strftime('%B %Y'))
+            new_video.tags.append(month_year_tag)
+            
+            # Add stream type tag
+            if stream.stream_type:
+                type_tag = get_or_create_tag(stream.stream_type.replace('_', ' ').title())
+                new_video.tags.append(type_tag)
+            
+            video_created = True
+            print(f"📹 Created video entry: {video_title}")
+            print(f"📺 Video ID: {new_video.id}")
+            print(f"🔗 Video URL: {recording_url}")
+            
+            # Create notification for users
+            broadcast_notification(
+                'New Live Session Recording Available!',
+                f"{stream.streamer_name}'s live trading session from {video_date} is now available to watch.",
+                'new_video',
+                target_users='all'
+            )
+            
+        except Exception as e:
+            print(f"❌ Error creating video entry: {e}")
+            db.session.rollback()
+            video_created = False
+    
+    # Notify all viewers BEFORE stopping the stream
+    room_id = f"stream_{stream.id}"
+    if socketio and room_id in stream_rooms:
+        end_message = {
+            'stream_id': stream.id,
+            'message': f'{stream.streamer_name} has ended the stream',
+            'redirect': True
+        }
+        
+        if recording_url:
+            end_message['recording_url'] = recording_url
+            end_message['recording_message'] = 'Recording has been saved and added to courses'
+        
+        socketio.emit('stream_ending', {
+            'stream_id': stream.id,
+            'message': 'Stream is ending in 3 seconds...'
+        }, room=room_id)
+        
+        time.sleep(1)
+        
+        socketio.emit('stream_ended', end_message, room=room_id)
+        
+        if room_id in stream_rooms:
+            del stream_rooms[room_id]
+    
+    # Delete LiveKit room
+    if stream.room_name:
+        delete_livekit_room(stream.room_name)
+    
+    # Update database
+    stream.is_active = False
+    stream.is_recording = False
+    
+    # Update all viewer records
+    StreamViewer.query.filter_by(stream_id=stream.id, is_active=True).update({
+        'is_active': False,
+        'left_at': datetime.utcnow()
+    })
+    
+    # Commit all changes
+    db.session.commit()
+    print(f"✅ Stream {stream.id} ended. Recording URL saved: {recording_url}")
+    
+    response_data = {
+        'success': True,
+        'message': f'{stream.streamer_name}\'s stream ended',
+        'duration_minutes': duration_minutes
+    }
+    
+    if recording_saved and recording_url:
+        response_data['recording'] = {
+            'saved': True,
+            'url': recording_url,
+            'message': f'Recording saved and added to course library (Duration: {duration_minutes} minutes)',
+            'video_created': video_created
+        }
+    
+    return jsonify(response_data)
+
+# ==============================================================================
+# 4. UPDATE YOUR EXISTING admin_add_trading_signal ROUTE - ADD DISCORD WEBHOOK:
+# ==============================================================================
+
 @app.route('/admin/trading-signal/add', methods=['GET', 'POST'])
 @login_required
 def admin_add_trading_signal():
@@ -4196,6 +4670,16 @@ def admin_add_trading_signal():
             
             # Update aggregated stats
             update_trading_stats(signal)
+            
+            # 🆕 DISCORD WEBHOOK: Send Discord notification for trading signal (NO DETAILS)
+            try:
+                webhook_success = send_trading_signal_webhook(signal)
+                if webhook_success:
+                    print(f"✅ Discord notified about new trading signal: {signal.pair_name}")
+                else:
+                    print(f"⚠️ Failed to notify Discord about trading signal: {signal.pair_name}")
+            except Exception as e:
+                print(f"❌ Discord webhook error for trading signal: {e}")
             
             flash('Trading signal added successfully!', 'success')
             return redirect(url_for('admin_trading_signals'))
@@ -5412,7 +5896,7 @@ def stripe_webhook_enhanced():
         return jsonify({'error': str(e)}), 500
 
 def handle_subscription_created_enhanced(subscription_data, event_record):
-    """Enhanced subscription creation handler"""
+    """Enhanced subscription creation handler - NO Discord notification for subscribers"""
     user = User.query.filter_by(stripe_customer_id=subscription_data['customer']).first()
     if not user:
         return
@@ -5422,16 +5906,25 @@ def handle_subscription_created_enhanced(subscription_data, event_record):
     # Update user with subscription data
     update_user_from_stripe_subscription(user, subscription_data)
     
-    # Send welcome notification
+    # Send in-app welcome notification ONLY (no Discord)
     create_notification(
         user.id,
         'Welcome to Premium!',
         f'Your {user.get_subscription_plan_display()} subscription is now active!',
         'subscription'
     )
+    
+    # Create in-app activity log ONLY (no Discord)
+    create_user_activity(
+        user.id,
+        'subscription_activated',
+        f'Premium subscription activated ({user.subscription_plan})'
+    )
+    
+    print(f"✅ User {user.username} subscription activated: {user.subscription_plan} (no Discord notification)")
 
 def handle_payment_succeeded_enhanced(invoice_data, event_record):
-    """Enhanced payment success handler"""
+    """Enhanced payment success handler - NO Discord notification for payments"""
     user = User.query.filter_by(stripe_customer_id=invoice_data['customer']).first()
     if not user:
         return
@@ -5452,6 +5945,7 @@ def handle_payment_succeeded_enhanced(invoice_data, event_record):
         user.subscription_status = 'active'
         user.subscription_expires = datetime.utcnow() + timedelta(days=36500)  # 100 years
         
+        # In-app notification ONLY (no Discord)
         create_notification(
             user.id,
             'Lifetime Access Activated! 🏆',
@@ -5460,6 +5954,7 @@ def handle_payment_succeeded_enhanced(invoice_data, event_record):
         )
     
     db.session.commit()
+    print(f"✅ Payment processed for {user.username}: ${event_record.amount:.2f} (no Discord notification)")
 
 def update_user_from_stripe_subscription(user, subscription_data):
     """Update user model from Stripe subscription data"""
@@ -5584,6 +6079,42 @@ def admin_grant_user_subscription(user_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/admin/discord-notifications')
+@login_required
+def admin_discord_notifications():
+    """Admin page for managing Discord community notifications"""
+    if not current_user.is_admin:
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('admin/discord_notifications.html')
+
+@app.route('/api/admin/webhook-status')
+@login_required
+def api_webhook_status():
+    """Get Discord webhook configuration status"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    webhook_url = app.config.get('APP_UPDATE_DISCORD_WEBHOOK_URL')
+    
+    return jsonify({
+        'configured': bool(webhook_url),
+        'url_preview': webhook_url[:50] + '***' if webhook_url else None,
+        'enabled_notifications': [
+            'New Videos',
+            'Live Streams', 
+            'Trade Signals (announcement only)',
+            'Course Completions'
+        ],
+        'disabled_notifications': [
+            'New Subscribers',
+            'System Notifications',
+            'Trade Signal Details'
+        ]
+    })
+
 
 
 @app.route('/api/user/notifications')
@@ -7995,7 +8526,7 @@ def watch_video(video_id):
 @app.route('/api/video/completion', methods=['POST'])
 @login_required
 def toggle_video_completion():
-    """Manually toggle video completion status"""
+    """Enhanced video completion with course completion tracking and Discord notifications"""
     try:
         data = request.get_json()
         video_id = data.get('video_id')
@@ -8042,20 +8573,65 @@ def toggle_video_completion():
         
         db.session.commit()
         
-        # Create activity if status changed
-        if old_completed != completed:
-            if completed:
+        # Check for course completion if video was just completed
+        if not old_completed and completed:
+            category = video.category
+            
+            # Count total and completed videos in this category
+            total_videos_in_category = Video.query.filter_by(category_id=category.id).count()
+            completed_videos_in_category = db.session.query(UserProgress)\
+                .join(Video)\
+                .filter(Video.category_id == category.id)\
+                .filter(UserProgress.user_id == current_user.id)\
+                .filter(UserProgress.completed == True)\
+                .count()
+            
+            # If user completed all videos in category AND it's a real course (more than 1 video)
+            if (completed_videos_in_category == total_videos_in_category and 
+                total_videos_in_category > 1):
+                
+                # 🆕 DISCORD WEBHOOK: Course completion notification
+                try:
+                    completion_stats = {
+                        'completed': completed_videos_in_category,
+                        'total': total_videos_in_category
+                    }
+                    webhook_success = send_course_completion_webhook(current_user, category, completion_stats)
+                    if webhook_success:
+                        print(f"✅ Discord notified about course completion: {category.name}")
+                    else:
+                        print(f"⚠️ Failed to notify Discord about course completion: {category.name}")
+                except Exception as e:
+                    print(f"❌ Discord webhook error for course completion: {e}")
+                
+                # In-app notification for course completion
+                create_notification(
+                    current_user.id,
+                    'Course Completed! 🎓',
+                    f'Congratulations! You completed the "{category.name}" course!',
+                    'achievement'
+                )
+                
+                # Create course completion activity
+                create_user_activity(
+                    current_user.id,
+                    'course_completed',
+                    f'Completed entire "{category.name}" course ({completed_videos_in_category} videos)'
+                )
+            else:
+                # Regular video completion activity
                 create_user_activity(
                     current_user.id, 
                     'video_completed', 
                     f'Completed "{video.title}"'
                 )
-            else:
-                create_user_activity(
-                    current_user.id, 
-                    'video_progress_reset', 
-                    f'Marked "{video.title}" as incomplete'
-                )
+        elif old_completed != completed and not completed:
+            # Video marked as incomplete
+            create_user_activity(
+                current_user.id, 
+                'video_progress_reset', 
+                f'Marked "{video.title}" as incomplete'
+            )
         
         return jsonify({
             'success': True,
@@ -8551,9 +9127,14 @@ def admin_add_video():
         # 🆕 DISCORD WEBHOOK: Send Discord notification for new video
         try:
             category = Category.query.get(form.category_id.data)
-            send_new_video_webhook(video, category)
+            webhook_success = send_new_video_webhook(video, category)
+            if webhook_success:
+                print(f"✅ Discord notified about new video: {video.title}")
+            else:
+                print(f"⚠️ Failed to notify Discord about new video: {video.title}")
         except Exception as e:
-            print(f"Failed to send Discord webhook for new video: {e}")
+            print(f"❌ Discord webhook error for new video: {e}")
+            # Don't let webhook failures break the main functionality
         
         # Broadcast notification about new video
         broadcast_notification(
@@ -8566,6 +9147,7 @@ def admin_add_video():
         return redirect(url_for('admin_videos'))
     
     return render_template('admin/video_form.html', form=form, title='Add Video')
+
     
 @app.route('/admin/video/edit/<int:video_id>', methods=['GET', 'POST'])
 @login_required
@@ -9136,11 +9718,15 @@ def api_start_stream():
             print(f"⚠️ Auto-recording failed: {e}")
             # Continue with stream even if recording fails
     
-    # 🆕 DISCORD WEBHOOK: Send Discord notification for new live stream
+    # 🆕 DISCORD WEBHOOK: Send Discord notification for live stream start
     try:
-        send_live_stream_webhook(stream, action="started")
+        webhook_success = send_live_stream_webhook(stream, action="started")
+        if webhook_success:
+            print(f"✅ Discord notified about live stream: {stream.title}")
+        else:
+            print(f"⚠️ Failed to notify Discord about live stream: {stream.title}")
     except Exception as e:
-        print(f"Failed to send Discord webhook for live stream: {e}")
+        print(f"❌ Discord webhook error for live stream: {e}")
     
     # Broadcast notification about new stream via WebSocket
     if socketio:
@@ -9368,41 +9954,102 @@ def upload_stream_recording():
 @app.route('/api/admin/test-discord-webhook', methods=['POST'])
 @login_required
 def api_test_discord_webhook():
+    """Enhanced test endpoint for streamlined Discord webhooks"""
     if not current_user.is_admin:
         return jsonify({'error': 'Access denied'}), 403
     
     try:
-        test_fields = [
-            {
-                "name": "🧪 Test Field",
-                "value": "This is a test notification",
-                "inline": True
-            },
-            {
-                "name": "⚡ Status",
-                "value": "Integration Working",
-                "inline": True
-            }
-        ]
+        data = request.get_json() or {}
+        test_type = data.get('type', 'basic')
         
-        success = send_discord_webhook(
-            title="🎉 Discord Integration Test",
-            description="**Discord webhooks are now active!**\n\nYou'll receive notifications for:\n• 📹 New videos\n• 🔴 Live streams\n• 📚 New courses",
-            color=5763719,  # Gold color
-            fields=test_fields
-        )
+        test_results = {}
         
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'Discord webhook test sent successfully!'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'Discord webhook test failed. Check console for errors.'
-            })
-            
+        if test_type == 'basic' or test_type == 'all':
+            # Test basic webhook
+            basic_test = test_discord_webhook()
+            test_results['basic_webhook'] = basic_test
+        
+        if test_type == 'video' or test_type == 'all':
+            # Test new video webhook with sample data
+            try:
+                sample_video = Video.query.first()
+                sample_category = Category.query.first()
+                if sample_video and sample_category:
+                    video_test = send_new_video_webhook(sample_video, sample_category)
+                    test_results['video_webhook'] = video_test
+                else:
+                    test_results['video_webhook'] = False
+                    test_results['video_error'] = "No sample video/category found"
+            except Exception as e:
+                test_results['video_webhook'] = False
+                test_results['video_error'] = str(e)
+        
+        if test_type == 'stream' or test_type == 'all':
+            # Test stream webhook with mock data
+            try:
+                mock_stream = type('MockStream', (), {
+                    'title': 'Test Live Trading Session',
+                    'description': 'This is a test stream notification',
+                    'streamer_name': 'Ray',
+                    'stream_type': 'trading',
+                    'started_at': datetime.utcnow(),
+                    'is_recording': True,
+                    'viewer_count': 0
+                })()
+                
+                stream_test = send_live_stream_webhook(mock_stream, "started")
+                test_results['stream_webhook'] = stream_test
+            except Exception as e:
+                test_results['stream_webhook'] = False
+                test_results['stream_error'] = str(e)
+        
+        if test_type == 'signal' or test_type == 'all':
+            # Test trading signal webhook with mock data (no sensitive details)
+            try:
+                mock_signal = type('MockSignal', (), {
+                    'trader_name': 'Ray',
+                    'pair_name': 'EURUSD',
+                    'trade_type': 'Buy',
+                    'date': datetime.utcnow().date(),
+                    'linked_video_id': None
+                })()
+                
+                signal_test = send_trading_signal_webhook(mock_signal)
+                test_results['signal_webhook'] = signal_test
+            except Exception as e:
+                test_results['signal_webhook'] = False
+                test_results['signal_error'] = str(e)
+        
+        if test_type == 'completion' or test_type == 'all':
+            # Test course completion webhook with mock data
+            try:
+                mock_user = type('MockUser', (), {
+                    'username': 'TestUser'
+                })()
+                
+                mock_category = type('MockCategory', (), {
+                    'name': 'Forex Fundamentals'
+                })()
+                
+                mock_stats = {
+                    'completed': 8,
+                    'total': 8
+                }
+                
+                completion_test = send_course_completion_webhook(mock_user, mock_category, mock_stats)
+                test_results['completion_webhook'] = completion_test
+            except Exception as e:
+                test_results['completion_webhook'] = False
+                test_results['completion_error'] = str(e)
+        
+        overall_success = any(test_results.get(key) for key in test_results if 'error' not in key)
+        
+        return jsonify({
+            'success': overall_success,
+            'message': f'Discord webhook test completed for: {test_type}',
+            'results': test_results
+        })
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
@@ -9474,6 +10121,16 @@ def api_stop_stream():
         stream.ended_at = datetime.utcnow()
         duration = stream.ended_at - stream.started_at
         duration_minutes = int(duration.total_seconds() / 60)
+    
+    # 🆕 DISCORD WEBHOOK: Send Discord notification BEFORE stopping stream
+    try:
+        webhook_success = send_live_stream_webhook(stream, action="ended")
+        if webhook_success:
+            print(f"✅ Discord notified about stream ending: {stream.title}")
+        else:
+            print(f"⚠️ Failed to notify Discord about stream ending: {stream.title}")
+    except Exception as e:
+        print(f"❌ Discord webhook error for stream ending: {e}")
     
     # AUTO-ADD TO LIVE TRADING SESSIONS COURSE
     if recording_saved and recording_url:
