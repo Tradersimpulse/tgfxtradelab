@@ -8,7 +8,7 @@ from datetime import timedelta
 
 class Config:
     """Base configuration class"""
-    
+    APP_UPDATE_DISCORD_WEBHOOK_URL = os.environ.get('APP_UPDATE_DISCORD_WEBHOOK_URL')
     # Flask Core Settings
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     
