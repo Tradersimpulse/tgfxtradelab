@@ -5,20 +5,22 @@
 {% block content %}
 <div class="container-fluid px-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0 text-gray-800">Whop Price Mappings</h1>
+        <h1 class="h3 mb-0">Whop Price Mappings</h1>
         <div>
-            <a href="{{ url_for('admin_whop_transactions') }}" class="btn btn-secondary mr-2">
-                <i class="fas fa-arrow-left"></i> Back to Transactions
+            <a href="{{ url_for('admin_whop_transactions') }}" class="btn btn-secondary me-2">
+                <span class="material-symbols-outlined me-1" style="font-size: 16px;">arrow_back</span>
+                Back to Transactions
             </a>
             <button class="btn btn-primary" onclick="showAddMappingModal()">
-                <i class="fas fa-plus"></i> Add Mapping
+                <span class="material-symbols-outlined me-1" style="font-size: 16px;">add</span>
+                Add Mapping
             </button>
         </div>
     </div>
 
     <!-- Info Alert -->
     <div class="alert alert-info">
-        <i class="fas fa-info-circle"></i>
+        <span class="material-symbols-outlined me-2">info</span>
         <strong>Price Mappings:</strong> These map Whop.com price IDs to your app's Stripe price IDs. 
         When a user purchases through Whop, their subscription will be mapped to the correct plan in your app.
     </div>
@@ -26,7 +28,7 @@
     <!-- Mappings Table -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Price Mappings</h6>
+            <h6 class="m-0 fw-bold text-primary">Price Mappings</h6>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -54,17 +56,19 @@
                             <td><code>{{ mapping.app_price_id }}</code></td>
                             <td>
                                 {% if mapping.is_active %}
-                                <span class="badge badge-success">Active</span>
+                                <span class="badge bg-success">Active</span>
                                 {% else %}
-                                <span class="badge badge-secondary">Inactive</span>
+                                <span class="badge bg-secondary">Inactive</span>
                                 {% endif %}
                             </td>
                             <td>{{ mapping.created_at.strftime('%m/%d/%Y') }}</td>
                             <td>
-                                <button class="btn btn-sm btn-warning" onclick="editMapping({{ mapping.id }})">
+                                <button class="btn btn-sm btn-warning me-1" onclick="editMapping({{ mapping.id }})">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">edit</span>
                                     Edit
                                 </button>
                                 <button class="btn btn-sm btn-danger" onclick="deleteMapping({{ mapping.id }})">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">delete</span>
                                     Delete
                                 </button>
                             </td>
@@ -78,37 +82,35 @@
 </div>
 
 <!-- Add/Edit Mapping Modal -->
-<div class="modal fade" id="mappingModal" tabindex="-1" role="dialog">
-    <div class="modal-dialog" role="document">
+<div class="modal fade" id="mappingModal" tabindex="-1" aria-labelledby="mappingModalTitle" aria-hidden="true">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="mappingModalTitle">Add Price Mapping</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="mappingForm">
-                    <div class="form-group">
-                        <label for="productName">Product Name</label>
+                    <div class="mb-3">
+                        <label for="productName" class="form-label">Product Name</label>
                         <input type="text" class="form-control" id="productName" required>
-                        <small class="form-text text-muted">Human-readable name for this mapping</small>
+                        <div class="form-text">Human-readable name for this mapping</div>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="whopPriceId">Whop Price ID</label>
+                    <div class="mb-3">
+                        <label for="whopPriceId" class="form-label">Whop Price ID</label>
                         <input type="text" class="form-control" id="whopPriceId" required placeholder="price_1abc123...">
-                        <small class="form-text text-muted">The price ID from Whop.com/Stripe</small>
+                        <div class="form-text">The price ID from Whop.com/Stripe</div>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="appPriceId">App Price ID</label>
+                    <div class="mb-3">
+                        <label for="appPriceId" class="form-label">App Price ID</label>
                         <input type="text" class="form-control" id="appPriceId" required placeholder="price_1xyz789...">
-                        <small class="form-text text-muted">Your app's corresponding Stripe price ID</small>
+                        <div class="form-text">Your app's corresponding Stripe price ID</div>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="description">Description (Optional)</label>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description (Optional)</label>
                         <textarea class="form-control" id="description" rows="2"></textarea>
                     </div>
                     
@@ -119,7 +121,7 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="saveMapping()">Save Mapping</button>
             </div>
         </div>
@@ -135,7 +137,7 @@ function showAddMappingModal() {
     document.getElementById('mappingForm').reset();
     document.getElementById('isActive').checked = true;
     
-    // Show modal without jQuery
+    // Show modal with Bootstrap 5
     const modal = new bootstrap.Modal(document.getElementById('mappingModal'));
     modal.show();
 }
@@ -154,15 +156,15 @@ function editMapping(mappingId) {
             document.getElementById('description').value = data.mapping.description || '';
             document.getElementById('isActive').checked = data.mapping.is_active;
             
-            // Show modal without jQuery
+            // Show modal with Bootstrap 5
             const modal = new bootstrap.Modal(document.getElementById('mappingModal'));
             modal.show();
         } else {
-            alert('Error loading mapping: ' + data.error);
+            window.TGFXLiveKit.utils.showNotification('error', 'Error loading mapping: ' + data.error);
         }
     })
     .catch(error => {
-        alert('Error loading mapping: ' + error);
+        window.TGFXLiveKit.utils.showNotification('error', 'Error loading mapping: ' + error);
     });
 }
 
@@ -177,14 +179,14 @@ function deleteMapping(mappingId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Price mapping deleted successfully!');
-                location.reload();
+                window.TGFXLiveKit.utils.showNotification('success', 'Price mapping deleted successfully!');
+                setTimeout(() => location.reload(), 1000);
             } else {
-                alert('Error deleting mapping: ' + data.error);
+                window.TGFXLiveKit.utils.showNotification('error', 'Error deleting mapping: ' + data.error);
             }
         })
         .catch(error => {
-            alert('Error deleting mapping: ' + error);
+            window.TGFXLiveKit.utils.showNotification('error', 'Error deleting mapping: ' + error);
         });
     }
 }
@@ -214,19 +216,19 @@ function saveMapping() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Price mapping saved successfully!');
-            // Hide modal without jQuery
+            window.TGFXLiveKit.utils.showNotification('success', 'Price mapping saved successfully!');
+            // Hide modal with Bootstrap 5
             const modal = bootstrap.Modal.getInstance(document.getElementById('mappingModal'));
             if (modal) {
                 modal.hide();
             }
-            location.reload();
+            setTimeout(() => location.reload(), 1000);
         } else {
-            alert('Error: ' + data.error);
+            window.TGFXLiveKit.utils.showNotification('error', 'Error: ' + data.error);
         }
     })
     .catch(error => {
-        alert('Error saving mapping: ' + error);
+        window.TGFXLiveKit.utils.showNotification('error', 'Error saving mapping: ' + error);
     });
 }
 </script>
