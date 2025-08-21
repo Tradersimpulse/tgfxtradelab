@@ -1486,40 +1486,45 @@ def migrate_category_background_images():
         print(f"❌ Error migrating category background images: {e}")
         return False
 
-def send_discord_webhook(title, description, color=5814783, fields=None, thumbnail_url=None):
+def send_discord_webhook(title, description, color=5814783, fields=None, thumbnail_url=None, footer_text=None):
     """
-    Send a Discord webhook notification
+    Send Discord webhook with simplified, public-friendly messaging
     """
     try:
-        if not APP_UPDATE_DISCORD_WEBHOOK_URL:
+        webhook_url = current_app.config.get('APP_UPDATE_DISCORD_WEBHOOK_URL')
+        if not webhook_url:
             print("⚠️ Discord webhook URL not configured")
             return False
         
+        # Create embed
         embed = {
             "title": title,
             "description": description,
             "color": color,
             "timestamp": datetime.utcnow().isoformat(),
             "footer": {
-                "text": "TGFX Trade Lab",
+                "text": footer_text or "TGFX Trade Lab",
                 "icon_url": "https://tgfx-tradelab.s3.amazonaws.com/logo.png"
             }
         }
         
+        # Add optional fields
         if fields:
             embed["fields"] = fields
             
         if thumbnail_url:
             embed["thumbnail"] = {"url": thumbnail_url}
         
+        # Create webhook payload
         webhook_data = {
             "embeds": [embed],
             "username": "TGFX Trade Lab",
             "avatar_url": "https://tgfx-tradelab.s3.amazonaws.com/logo.png"
         }
         
+        # Send webhook
         response = requests.post(
-            APP_UPDATE_DISCORD_WEBHOOK_URL,
+            webhook_url,
             json=webhook_data,
             headers={"Content-Type": "application/json"},
             timeout=10
@@ -1529,7 +1534,7 @@ def send_discord_webhook(title, description, color=5814783, fields=None, thumbna
             print(f"✅ Discord webhook sent: {title}")
             return True
         else:
-            print(f"❌ Discord webhook failed: {response.status_code} - {response.text}")
+            print(f"❌ Discord webhook failed: {response.status_code}")
             return False
             
     except Exception as e:
@@ -1929,122 +1934,276 @@ def enhanced_initialize_app():
 
 def send_new_video_webhook(video, category):
     """Send Discord notification for new video"""
-    fields = [
-        {
-            "name": "📁 Category",
-            "value": category.name,
-            "inline": True
-        },
-        {
-            "name": "🎯 Access",
-            "value": "Free" if video.is_free else "Premium",
-            "inline": True
-        },
-        {
-            "name": "⏱️ Duration",
-            "value": f"{video.duration // 60} minutes" if video.duration else "Unknown",
-            "inline": True
-        }
-    ]
-    
-    # Add tags if available
-    if hasattr(video, 'tags') and video.tags:
-        tag_names = [tag.name for tag in video.tags[:3]]  # Show first 3 tags
-        fields.append({
-            "name": "🏷️ Tags",
-            "value": ", ".join(tag_names),
-            "inline": True
-        })
-    
-    description = f"🎥 **New video available in {category.name}**\n\n"
-    if video.description:
-        # Limit description to 150 characters for Discord
-        desc_preview = video.description[:150] + "..." if len(video.description) > 150 else video.description
-        description += f"{desc_preview}\n\n"
-    
-    description += f"{'🆓 **Free Access**' if video.is_free else '💎 **Premium Content**'}"
-    
-    send_discord_webhook(
-        title=f"📹 {video.title}",
-        description=description,
-        color=3447003,  # Blue color for videos
-        fields=fields,
-        thumbnail_url=video.thumbnail_url
-    )
+    try:
+        # Create fields with public-friendly information
+        fields = [
+            {
+                "name": "📁 Category",
+                "value": category.name,
+                "inline": True
+            },
+            {
+                "name": "🎯 Access",
+                "value": "🆓 Free" if video.is_free else "💎 Premium",
+                "inline": True
+            }
+        ]
+        
+        # Add duration if available
+        if video.duration:
+            duration_minutes = video.duration // 60
+            duration_seconds = video.duration % 60
+            fields.append({
+                "name": "⏱️ Duration",
+                "value": f"{duration_minutes}:{duration_seconds:02d}",
+                "inline": True
+            })
+        
+        # Add top tags if available (limit to 2 for cleaner look)
+        if hasattr(video, 'tags') and video.tags:
+            tag_names = [tag.name for tag in video.tags[:2]]
+            if tag_names:
+                fields.append({
+                    "name": "🏷️ Topics",
+                    "value": ", ".join(tag_names),
+                    "inline": False
+                })
+        
+        # Create clean description
+        description = f"🎥 **New educational content is now available!**\n\n"
+        
+        if video.description and len(video.description) > 10:
+            # Show first sentence or 100 characters, whichever is shorter
+            desc_preview = video.description.split('.')[0]
+            if len(desc_preview) > 100:
+                desc_preview = video.description[:100] + "..."
+            description += f"*{desc_preview}*\n\n"
+        
+        description += f"{'🆓 **Free for everyone**' if video.is_free else '💎 **Premium members only**'}"
+        
+        return send_discord_webhook(
+            title=f"📹 {video.title}",
+            description=description,
+            color=3447003,  # Blue
+            fields=fields,
+            thumbnail_url=video.thumbnail_url,
+            footer_text=f"New Video • {category.name}"
+        )
+        
+    except Exception as e:
+        print(f"❌ Error sending new video webhook: {e}")
+        return False
 
 def send_live_stream_webhook(stream, action="started"):
     """Send Discord notification for live stream events"""
-    if action == "started":
-        emoji = "🔴"
-        color = 15158332  # Red color for live streams
-        title = f"{emoji} {stream.streamer_name} is now LIVE!"
-        description = f"**{stream.title}**\n\n"
+    try:
+        if action == "started":
+            emoji = "🔴"
+            color = 15158332  # Red
+            title = f"{emoji} {stream.streamer_name} is LIVE!"
+            
+            description = f"**{stream.title}**\n\n"
+            
+            if stream.description and len(stream.description) > 10:
+                desc_preview = stream.description[:120] + "..." if len(stream.description) > 120 else stream.description
+                description += f"*{desc_preview}*\n\n"
+            
+            description += "🎮 **Join the live session now!**"
+            
+            fields = [
+                {
+                    "name": "👤 Trader",
+                    "value": stream.streamer_name,
+                    "inline": True
+                },
+                {
+                    "name": "📺 Type",
+                    "value": stream.stream_type.replace('_', ' ').title(),
+                    "inline": True
+                },
+                {
+                    "name": "⏰ Started",
+                    "value": f"<t:{int(stream.started_at.timestamp())}:R>" if stream.started_at else "Now",
+                    "inline": True
+                }
+            ]
+            
+            if stream.is_recording:
+                description += "\n📹 *Session will be recorded and added to the course library*"
+                
+            footer_text = f"Live Stream • {stream.stream_type.title()}"
         
-        if stream.description:
-            desc_preview = stream.description[:150] + "..." if len(stream.description) > 150 else stream.description
-            description += f"{desc_preview}\n\n"
+        elif action == "ended":
+            emoji = "⏹️"
+            color = 9807270  # Gray
+            title = f"{emoji} Stream Ended"
+            
+            description = f"**{stream.streamer_name}'s session has ended**\n\n"
+            description += f"*{stream.title}*\n\n"
+            
+            # Calculate duration
+            if stream.started_at and stream.ended_at:
+                duration = stream.ended_at - stream.started_at
+                duration_minutes = int(duration.total_seconds() / 60)
+                description += f"⏱️ **Session Length:** {duration_minutes} minutes\n"
+            
+            if stream.recording_url:
+                description += "📼 **Recording will be available in the course library soon**"
+            
+            fields = [
+                {
+                    "name": "👤 Trader",
+                    "value": stream.streamer_name,
+                    "inline": True
+                },
+                {
+                    "name": "👥 Viewers",
+                    "value": str(stream.viewer_count or 0),
+                    "inline": True
+                }
+            ]
+            
+            footer_text = f"Stream Ended • {duration_minutes}min" if 'duration_minutes' in locals() else "Stream Ended"
         
-        description += "🎮 **Join the live stream now!**"
+        return send_discord_webhook(
+            title=title,
+            description=description,
+            color=color,
+            fields=fields,
+            footer_text=footer_text
+        )
         
+    except Exception as e:
+        print(f"❌ Error sending live stream webhook: {e}")
+        return False
+
+def send_trading_signal_webhook(signal):
+    """Send Discord notification for new trading signals - NO TRADE DETAILS"""
+    try:
+        # Determine emoji based on trade type but don't reveal details
+        emoji = "📊"
+        color = 5763719  # Gold
+        
+        # Very minimal information - just announce that a signal was posted
+        description = f"📊 **New trade analysis from {signal.trader_name}**\n\n"
+        description += f"💱 **Market:** {signal.pair_name}\n"
+        description += f"📅 **Date:** {signal.date.strftime('%B %d, %Y')}\n\n"
+        description += "💎 **Premium members can view full details in the trading signals section**"
+        
+        # Only show basic, non-sensitive information
         fields = [
             {
-                "name": "👤 Streamer",
-                "value": stream.streamer_name,
+                "name": "👤 Trader",
+                "value": signal.trader_name,
                 "inline": True
             },
             {
-                "name": "📺 Type",
-                "value": stream.stream_type.replace('_', ' ').title(),
+                "name": "💱 Pair",
+                "value": signal.pair_name,
                 "inline": True
             },
             {
-                "name": "⏰ Started",
-                "value": stream.started_at.strftime("%I:%M %p UTC") if stream.started_at else "Now",
+                "name": "📅 Date",
+                "value": signal.date.strftime('%m/%d/%Y'),
                 "inline": True
             }
         ]
         
-        if stream.is_recording:
+        # If there's a linked video, mention it but don't give details
+        if signal.linked_video_id:
             fields.append({
-                "name": "📹 Recording",
-                "value": "✅ Yes",
-                "inline": True
+                "name": "🎥 Live Session",
+                "value": "✅ Linked to live trading video",
+                "inline": False
             })
-    
-    elif action == "ended":
-        emoji = "⏹️"
-        color = 9807270  # Gray color for ended streams
-        title = f"{emoji} {stream.streamer_name}'s stream has ended"
-        description = f"**{stream.title}**\n\n"
         
-        # Calculate duration
-        if stream.started_at and stream.ended_at:
-            duration = stream.ended_at - stream.started_at
-            duration_minutes = int(duration.total_seconds() / 60)
-            description += f"⏱️ **Duration:** {duration_minutes} minutes\n"
+        return send_discord_webhook(
+            title=f"{emoji} New Trade Analysis - {signal.pair_name}",
+            description=description,
+            color=color,
+            fields=fields,
+            footer_text=f"Trading Signal • {signal.trader_name}"
+        )
         
-        if stream.recording_url:
-            description += "📼 **Recording saved and added to course library**"
+    except Exception as e:
+        print(f"❌ Error sending trading signal webhook: {e}")
+        return False
+
+def send_course_completion_webhook(user, category, completion_stats):
+    """Send Discord notification for course completions"""
+    try:
+        description = f"🎓 **Course completed!**\n\n"
+        description += f"**{user.username}** just finished the **{category.name}** course!\n\n"
+        description += f"🎯 Completed **{completion_stats['completed']}/{completion_stats['total']} videos**\n\n"
+        description += "👏 *Congratulations on advancing your trading education!*"
         
         fields = [
             {
-                "name": "👤 Streamer",
-                "value": stream.streamer_name,
+                "name": "🎓 Course",
+                "value": category.name,
                 "inline": True
             },
             {
-                "name": "👥 Peak Viewers",
-                "value": str(stream.viewer_count),
+                "name": "📊 Progress",
+                "value": f"{completion_stats['completed']}/{completion_stats['total']} videos",
+                "inline": True
+            },
+            {
+                "name": "🏆 Achievement",
+                "value": "Course Completed",
                 "inline": True
             }
         ]
-    
-    send_discord_webhook(
-        title=title,
-        description=description,
-        color=color,
-        fields=fields
-    )
+        
+        return send_discord_webhook(
+            title=f"🏆 Course Completion: {category.name}",
+            description=description,
+            color=10181046,  # Purple
+            fields=fields,
+            footer_text=f"Course Completed • {user.username}"
+        )
+        
+    except Exception as e:
+        print(f"❌ Error sending course completion webhook: {e}")
+        return False
+
+def test_discord_webhook():
+    """Test Discord webhook with a sample message"""
+    try:
+        test_fields = [
+            {
+                "name": "🧪 Test Status",
+                "value": "✅ Integration Active",
+                "inline": True
+            },
+            {
+                "name": "📢 Notifications",
+                "value": "Videos, Streams, Signals, Completions",
+                "inline": True
+            }
+        ]
+        
+        description = """**🎉 Discord notifications are now active!**
+
+Your community will receive updates for:
+• 📹 **New educational videos**
+• 🔴 **Live trading sessions** 
+• 📊 **New trade analyses** *(premium details in app)*
+• 🏆 **Course completions**
+
+Everything is working perfectly! 🚀"""
+        
+        return send_discord_webhook(
+            title="🎉 TGFX Trade Lab Notifications Active",
+            description=description,
+            color=5763719,  # Gold
+            fields=test_fields,
+            footer_text="Integration Test • All Systems Go"
+        )
+        
+    except Exception as e:
+        print(f"❌ Error in test webhook: {e}")
+        return False
 
 def send_new_course_webhook(category):
     """Send Discord notification for new course/category"""
