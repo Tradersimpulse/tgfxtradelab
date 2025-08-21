@@ -2548,22 +2548,21 @@
                         <span class="material-symbols-outlined me-2" style="font-size: 16px;">dashboard</span>
                         Dashboard
                     </a>
+
+                                        <!-- Stream Control -->
+                    <a href="{{ url_for('admin_stream') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'stream' in request.endpoint %}active{% endif %}">
+                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">live_tv</span>
+                        Stream Control
+                        <span class="stream-status-badge live ms-auto" id="adminStreamBadge" style="display: none;">LIVE</span>
+                    </a>
                     
                     <!-- Content Management -->
                     <a href="{{ url_for('admin_videos') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'video' in request.endpoint %}active{% endif %}">
                         <span class="material-symbols-outlined me-2" style="font-size: 16px;">video_library</span>
                         Videos
                     </a>
-                    <a href="{{ url_for('admin_categories') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'categor' in request.endpoint %}active{% endif %}">
-                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">category</span>
-                        Categories
-                    </a>
-                    <a href="{{ url_for('admin_tags') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'tag' in request.endpoint %}active{% endif %}">
-                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">label</span>
-                        Tags
-                    </a>
-                    
-                    <!-- NEW: Trading Signals Management -->
+
+                                        <!-- NEW: Trading Signals Management -->
                     <a href="{{ url_for('admin_trading_signals') }}" class="nav-dropdown-item {% if request.endpoint in ['admin_trading_signals', 'admin_add_trading_signal', 'admin_edit_trading_signal'] %}active{% endif %}">
                         <span class="material-symbols-outlined me-2" style="font-size: 16px;">show_chart</span>
                         Trading Signals
@@ -2574,14 +2573,15 @@
                         <span class="material-symbols-outlined me-2" style="font-size: 16px;">group</span>
                         User Management
                     </a>
-                    
-                    <!-- Stream Control -->
-                    <a href="{{ url_for('admin_stream') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'stream' in request.endpoint %}active{% endif %}">
-                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">live_tv</span>
-                        Stream Control
-                        <span class="stream-status-badge live ms-auto" id="adminStreamBadge" style="display: none;">LIVE</span>
+
+                    <a href="{{ url_for('admin_categories') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'categor' in request.endpoint %}active{% endif %}">
+                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">category</span>
+                        Categories
                     </a>
-                    
+                    <a href="{{ url_for('admin_tags') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'tag' in request.endpoint %}active{% endif %}">
+                        <span class="material-symbols-outlined me-2" style="font-size: 16px;">label</span>
+                        Tags
+                    </a> 
                     <a href="{{ url_for('admin_recommendations') }}" class="nav-dropdown-item {% if 'admin' in request.endpoint and 'recommendation' in request.endpoint %}active{% endif %}">
                         <span class="material-symbols-outlined me-2" style="font-size: 16px;">recommend</span>
                         Recommendations
