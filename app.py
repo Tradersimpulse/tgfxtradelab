@@ -62,6 +62,7 @@ app = Flask(__name__)
 
 APP_UPDATE_DISCORD_WEBHOOK_URL = app.config.get('APP_UPDATE_DISCORD_WEBHOOK_URL')
 
+mail = Mail(app)
 # FIXED: Load configuration with better error handling
 try:
     config_class = get_config()
@@ -880,6 +881,196 @@ def stripe_webhook_whop():
         print(f"❌ Error processing webhook: {e}")
         return jsonify({'error': str(e)}), 500
 
+def create_serializer():
+    return URLSafeTimedSerializer(app.config['SECRET_KEY'])
+
+def generate_reset_token(email):
+    """Generate a secure token for password reset"""
+    serializer = create_serializer()
+    return serializer.dumps(email, salt='password-reset-salt')
+
+def verify_reset_token(token, expiration=3600):
+    """Verify the reset token and return email if valid"""
+    serializer = create_serializer()
+    try:
+        email = serializer.loads(token, salt='password-reset-salt', max_age=expiration)
+        return email
+    except:
+        return None
+
+def send_reset_email(user, token):
+    """Send password reset email to user"""
+    try:
+        reset_url = url_for('reset_password', token=token, _external=True)
+        
+        # Create HTML email content
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Password Reset - TGFX Trade Lab</title>
+            <style>
+                body {{
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                    background-color: #0a0a0a;
+                    color: #ffffff;
+                    margin: 0;
+                    padding: 20px;
+                }}
+                .container {{
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background: linear-gradient(135deg, #141414 0%, #1a1a1a 100%);
+                    border-radius: 20px;
+                    padding: 40px;
+                    border: 1px solid rgba(16, 185, 129, 0.2);
+                }}
+                .logo {{
+                    text-align: center;
+                    font-size: 2rem;
+                    font-weight: 800;
+                    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    margin-bottom: 30px;
+                }}
+                .content {{
+                    line-height: 1.6;
+                    color: #e5e7eb;
+                }}
+                .button {{
+                    display: inline-block;
+                    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+                    color: white;
+                    padding: 12px 32px;
+                    text-decoration: none;
+                    border-radius: 12px;
+                    font-weight: 600;
+                    margin: 20px 0;
+                    text-align: center;
+                }}
+                .button:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+                }}
+                .footer {{
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid rgba(255, 255, 255, 0.08);
+                    font-size: 0.875rem;
+                    color: #9ca3af;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="logo">TGFX Trade Lab</div>
+                
+                <div class="content">
+                    <h2 style="color: #ffffff; margin-bottom: 20px;">Reset Your Password</h2>
+                    
+                    <p>Hello {user.username},</p>
+                    
+                    <p>You requested a password reset for your TGFX Trade Lab account. Click the button below to reset your password:</p>
+                    
+                    <div style="text-align: center;">
+                        <a href="{reset_url}" class="button">Reset My Password</a>
+                    </div>
+                    
+                    <p><strong>This link will expire in 1 hour.</strong></p>
+                    
+                    <p>If you didn't request this password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+                    
+                    <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+                    <p style="word-break: break-all; color: #10B981;">{reset_url}</p>
+                </div>
+                
+                <div class="footer">
+                    <p>This email was sent by TGFX Trade Lab. If you have any questions, please contact our support team.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Create plain text version
+        text_content = f"""
+        TGFX Trade Lab - Password Reset
+        
+        Hello {user.username},
+        
+        You requested a password reset for your TGFX Trade Lab account.
+        
+        Click this link to reset your password: {reset_url}
+        
+        This link will expire in 1 hour.
+        
+        If you didn't request this password reset, you can safely ignore this email.
+        
+        Best regards,
+        TGFX Trade Lab Team
+        """
+        
+        # Send using Flask-Mail if configured, otherwise use basic SMTP
+        try:
+            msg = Message(
+                subject='Reset Your Password - TGFX Trade Lab',
+                recipients=[user.email],
+                html=html_content,
+                body=text_content
+            )
+            mail.send(msg)
+            print(f"✅ Password reset email sent to {user.email}")
+            return True
+        except Exception as e:
+            print(f"❌ Flask-Mail failed: {e}")
+            # Fallback to basic SMTP
+            return send_email_smtp(user.email, 'Reset Your Password - TGFX Trade Lab', html_content, text_content)
+            
+    except Exception as e:
+        print(f"❌ Error sending reset email: {e}")
+        return False
+
+def send_email_smtp(to_email, subject, html_content, text_content):
+    """Fallback SMTP email sending"""
+    try:
+        from_email = app.config.get('MAIL_USERNAME')
+        password = app.config.get('MAIL_PASSWORD')
+        smtp_server = app.config.get('MAIL_SERVER', 'smtp.gmail.com')
+        smtp_port = app.config.get('MAIL_PORT', 587)
+        
+        if not all([from_email, password]):
+            print("❌ Email credentials not configured")
+            return False
+        
+        msg = MimeMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = from_email
+        msg['To'] = to_email
+        
+        # Add both plain text and HTML versions
+        text_part = MimeText(text_content, 'plain')
+        html_part = MimeText(html_content, 'html')
+        
+        msg.attach(text_part)
+        msg.attach(html_part)
+        
+        # Send email
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(from_email, password)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"✅ SMTP email sent successfully to {to_email}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ SMTP email failed: {e}")
+        return False
+
 def handle_whop_payment_succeeded(invoice_data, customer_data, whop_transaction):
     """Handle successful Whop payment"""
     try:
@@ -926,6 +1117,138 @@ def api_get_whop_price_mapping(mapping_id):
             }
         })
         
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Add these routes to your app.py
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Forgot password page"""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    form = ForgotPasswordForm()
+    
+    if form.validate_on_submit():
+        try:
+            user = User.query.filter_by(email=form.email.data.lower().strip()).first()
+            
+            if user:
+                # Generate reset token
+                token = generate_reset_token(user.email)
+                
+                # Send reset email
+                email_sent = send_reset_email(user, token)
+                
+                if email_sent:
+                    flash('Password reset instructions have been sent to your email address. Please check your inbox.', 'info')
+                    
+                    # Create user activity log
+                    create_user_activity(
+                        user.id,
+                        'password_reset_requested',
+                        f'Password reset requested for email: {user.email}'
+                    )
+                else:
+                    flash('There was an error sending the reset email. Please try again later.', 'error')
+            else:
+                # Don't reveal if email exists or not for security
+                flash('If an account with that email address exists, password reset instructions have been sent.', 'info')
+            
+            # Always redirect to prevent form resubmission
+            return redirect(url_for('forgot_password'))
+            
+        except Exception as e:
+            print(f"Error in forgot password: {e}")
+            flash('An error occurred. Please try again.', 'error')
+    
+    return render_template('auth/forgot_password.html', form=form)
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    """Reset password with token"""
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    # Verify the token
+    email = verify_reset_token(token)
+    if not email:
+        flash('The password reset link is invalid or has expired.', 'error')
+        return redirect(url_for('forgot_password'))
+    
+    # Find user by email
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        flash('Invalid reset link.', 'error')
+        return redirect(url_for('forgot_password'))
+    
+    form = ResetPasswordForm()
+    
+    if form.validate_on_submit():
+        try:
+            # Update user password
+            user.password_hash = generate_password_hash(form.password.data)
+            db.session.commit()
+            
+            # Create user activity log
+            create_user_activity(
+                user.id,
+                'password_reset_completed',
+                f'Password successfully reset for user: {user.username}'
+            )
+            
+            # Create notification
+            create_notification(
+                user.id,
+                'Password Updated',
+                'Your password has been successfully updated. If you did not make this change, please contact support immediately.',
+                'security'
+            )
+            
+            flash('Your password has been successfully updated! You can now log in with your new password.', 'success')
+            return redirect(url_for('login'))
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error resetting password: {e}")
+            flash('An error occurred while updating your password. Please try again.', 'error')
+    
+    return render_template('auth/reset_password.html', form=form, token=token)
+
+@app.route('/api/test-email', methods=['POST'])
+@login_required
+def api_test_email():
+    """Test email configuration (admin only)"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        # Test email by sending to admin
+        test_content = """
+        <h2>Email Test</h2>
+        <p>This is a test email from TGFX Trade Lab.</p>
+        <p>If you receive this, your email configuration is working correctly!</p>
+        """
+        
+        success = send_email_smtp(
+            current_user.email,
+            'TGFX Trade Lab - Email Test',
+            test_content,
+            'This is a test email from TGFX Trade Lab.'
+        )
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Test email sent successfully to {current_user.email}'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Failed to send test email. Check your email configuration.'
+            })
+            
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
