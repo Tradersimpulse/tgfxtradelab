@@ -10,7 +10,7 @@ try:
 except ImportError:
     print("⚠ Gevent not available, using default threading")
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, Mail, Message
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
@@ -39,6 +39,10 @@ import base64
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import textwrap
+from itsdangerous import URLSafeTimedSerializer
+import smtplib
+from email.mime.text import MimeMessage
+from email.mime.multipart import MimeMultipart
 
 
 # Later in the file (around line 60-90), your LiveKit section should look like:
