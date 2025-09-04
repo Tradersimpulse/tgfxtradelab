@@ -10,7 +10,8 @@ try:
 except ImportError:
     print("⚠ Gevent not available, using default threading")
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, Mail, Message
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask_mail import Mail, Message  # Mail comes from flask_mail, not flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
