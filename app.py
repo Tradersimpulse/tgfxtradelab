@@ -42,7 +42,7 @@ from io import BytesIO
 import textwrap
 from itsdangerous import URLSafeTimedSerializer
 import smtplib
-from email.mime.text import MimeMessage
+from email.mime.text import MimeText
 from email.mime.multipart import MimeMultipart
 
 
