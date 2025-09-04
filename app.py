@@ -64,7 +64,7 @@ app = Flask(__name__)
 
 APP_UPDATE_DISCORD_WEBHOOK_URL = app.config.get('APP_UPDATE_DISCORD_WEBHOOK_URL')
 
-mail = Mail(app)
+
 # FIXED: Load configuration with better error handling
 try:
     config_class = get_config()
@@ -150,6 +150,14 @@ try:
 except Exception as e:
     print(f"❌ Login manager error: {e}")
     sys.exit(1)
+
+# Initialize Flask-Mail
+try:
+    mail = Mail(app)
+    print("✓ Flask-Mail initialized successfully")
+except Exception as e:
+    print(f"❌ Flask-Mail initialization error: {e}")
+    mail = None
 
 # Association table for many-to-many relationship between videos and tags
 video_tags = db.Table('video_tags',
