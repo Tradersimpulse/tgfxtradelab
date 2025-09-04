@@ -75,3 +75,5 @@ eventlet==0.33.3
 
 # Database Migration (optional)
 Flask-Migrate==4.0.5
+
+itsdangerous==2.1.2
