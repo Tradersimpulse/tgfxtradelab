@@ -282,6 +282,28 @@ class User(UserMixin, db.Model):
             
         return False
 
+    def migrate_stream_recording_id():
+    """Add recording_id field to Stream model"""
+    try:
+        with app.app_context():
+            # Add recording_id column if it doesn't exist
+            try:
+                db.session.execute('ALTER TABLE streams ADD COLUMN recording_id VARCHAR(100)')
+                db.session.commit()
+                print("✅ Added recording_id column to streams table")
+            except Exception as e:
+                if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                    print("ℹ️ recording_id column already exists")
+                else:
+                    print(f"⚠️ Error adding recording_id column: {e}")
+                db.session.rollback()
+        
+        return True
+    except Exception as e:
+        print(f"❌ Migration failed: {e}")
+        db.session.rollback()
+        return False
+        
     def get_subscription_status_display(self):
         """Get human-readable subscription status - updated for lifetime"""
         if not self.has_subscription:
