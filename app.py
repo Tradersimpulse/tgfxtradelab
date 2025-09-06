@@ -1870,7 +1870,8 @@ def send_discord_webhook(title, description, color=5814783, fields=None, thumbna
     Send Discord webhook with simplified, public-friendly messaging
     """
     try:
-        webhook_url = current_app.config.get('APP_UPDATE_DISCORD_WEBHOOK_URL')
+        # FIXED: Use app.config instead of current_app.config
+        webhook_url = app.config.get('APP_UPDATE_DISCORD_WEBHOOK_URL')
         if not webhook_url:
             print("⚠️ Discord webhook URL not configured")
             return False
@@ -7738,7 +7739,7 @@ def create_checkout_session():
 
 def start_livekit_egress_recording(room_name, stream_id, streamer_name):
     """
-    Start LiveKit Egress recording with proper recording_id tracking
+    Start LiveKit Egress recording with corrected JSON format
     """
     try:
         print(f"🎬 Starting LiveKit recording for {streamer_name} in room {room_name}")
@@ -7781,28 +7782,25 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
             "Content-Type": "application/json"
         }
         
-        # Create Egress request with enhanced settings
+        # FIXED: Corrected Egress request format based on LiveKit API spec
         egress_request = {
             "room_name": room_name,
-            "file": {
-                "filepath": s3_key,
-                "s3": {
-                    "access_key": aws_access_key,
-                    "secret": aws_secret_key,
-                    "region": aws_region,
-                    "bucket": s3_bucket
-                }
+            "output": {
+                "file_outputs": [{
+                    "file_type": "MP4",
+                    "filepath": s3_key,
+                    "output": {
+                        "s3": {
+                            "access_key": aws_access_key,
+                            "secret": aws_secret_key,
+                            "region": aws_region,
+                            "bucket": s3_bucket
+                        }
+                    }
+                }]
             },
-            "preset": "H264_1080P_30",  # High quality preset
-            "advanced": {
-                "video": {
-                    "codec": "H264_MAIN",
-                    "profile": "main"
-                },
-                "audio": {
-                    "codec": "OPUS",
-                    "bitrate": 128000
-                }
+            "options": {
+                "preset": "H264_720P_30"  # Use a standard preset
             }
         }
         
@@ -7810,6 +7808,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
         endpoint = f"{api_url}/twirp/livekit.Egress/StartRoomCompositeEgress"
         
         print(f"🔗 Calling LiveKit Egress API: {endpoint}")
+        print(f"📋 Request payload: {json.dumps(egress_request, indent=2)}")
         
         response = requests.post(
             endpoint,
@@ -7819,6 +7818,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
         )
         
         print(f"📡 Response Status: {response.status_code}")
+        print(f"📋 Response Body: {response.text}")
         
         if response.status_code == 200:
             data = response.json()
