@@ -3943,7 +3943,7 @@ def handle_join_stream(data):
 # Add new event handler for media ready
 @socketio.on('media_published')
 def handle_media_published(data):
-    """Handle notification that media is being published"""
+    """Handle notification that media is being published - with fallback strategy"""
     try:
         client_id = request.sid
         stream_id = data.get('stream_id')
@@ -3958,15 +3958,25 @@ def handle_media_published(data):
         if room_id in stream_rooms:
             stream_rooms[room_id]['media_published'] = True
         
-        # NOW start recording since media is being published
+        # Try recording if not already started
         if not stream.is_recording:
             print(f"🔴 Starting recording now that media is published...")
             
+            # Strategy 1: Try main function with preset
             recording_result = start_livekit_egress_recording(
                 room_name=stream.room_name,
                 stream_id=stream_id,
                 streamer_name=stream.streamer_name
             )
+            
+            # Strategy 2: If that fails, try minimal version without preset
+            if not recording_result or not recording_result.get('success'):
+                print("🔄 Main recording failed, trying minimal version...")
+                recording_result = start_livekit_egress_recording_minimal(
+                    room_name=stream.room_name,
+                    stream_id=stream_id,
+                    streamer_name=stream.streamer_name
+                )
             
             if recording_result and recording_result.get('success'):
                 stream.is_recording = True
@@ -3982,10 +3992,20 @@ def handle_media_published(data):
                     'egress_id': recording_result.get('egress_id')
                 }, room=room_id)
             else:
-                print(f"⚠️ Failed to start recording: {recording_result.get('error')}")
+                error_msg = recording_result.get('error', 'Unknown error') if recording_result else 'Unknown error'
+                print(f"⚠️ All recording strategies failed: {error_msg}")
+                
+                # Optionally notify that recording failed
+                socketio.emit('recording_failed', {
+                    'stream_id': stream_id,
+                    'message': 'Recording failed to start',
+                    'error': error_msg
+                }, room=room_id)
                 
     except Exception as e:
         print(f"❌ Error handling media published: {e}")
+        import traceback
+        traceback.print_exc()
     
     @socketio.on('screen_frame')
     def handle_screen_frame(data):
@@ -7739,7 +7759,7 @@ def create_checkout_session():
 
 def start_livekit_egress_recording(room_name, stream_id, streamer_name):
     """
-    Start LiveKit Egress recording with corrected JSON format
+    Start LiveKit Egress recording with CORRECT API format
     """
     try:
         print(f"🎬 Starting LiveKit recording for {streamer_name} in room {room_name}")
@@ -7762,7 +7782,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
             print("❌ AWS credentials missing")
             return {'success': False, 'error': 'AWS credentials not configured'}
         
-        # Generate S3 path with date-based folder structure
+        # Generate S3 path
         timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
         date_folder = datetime.utcnow().strftime('%Y/%m/%d')
         filename = f"{streamer_name}-stream-{stream_id}-{timestamp}.mp4"
@@ -7782,33 +7802,26 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
             "Content-Type": "application/json"
         }
         
-        # FIXED: Corrected Egress request format based on LiveKit API spec
+        # CORRECT: This is the exact format LiveKit expects
         egress_request = {
             "room_name": room_name,
-            "output": {
-                "file_outputs": [{
-                    "file_type": "MP4",
-                    "filepath": s3_key,
-                    "output": {
-                        "s3": {
-                            "access_key": aws_access_key,
-                            "secret": aws_secret_key,
-                            "region": aws_region,
-                            "bucket": s3_bucket
-                        }
-                    }
-                }]
+            "file": {
+                "filepath": s3_key,
+                "s3": {
+                    "access_key": aws_access_key,
+                    "secret": aws_secret_key,
+                    "region": aws_region,
+                    "bucket": s3_bucket
+                }
             },
-            "options": {
-                "preset": "H264_720P_30"  # Use a standard preset
-            }
+            "preset": "H264_720P_30"
         }
         
         # Make API request
         endpoint = f"{api_url}/twirp/livekit.Egress/StartRoomCompositeEgress"
         
         print(f"🔗 Calling LiveKit Egress API: {endpoint}")
-        print(f"📋 Request payload: {json.dumps(egress_request, indent=2)}")
+        print(f"📋 Correct request payload: {json.dumps(egress_request, indent=2)}")
         
         response = requests.post(
             endpoint,
@@ -7853,7 +7866,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
         import traceback
         traceback.print_exc()
         return {'success': False, 'error': str(e)}
-
+        
 def stop_livekit_egress_recording(egress_id):
     """
     Stop LiveKit Egress recording and get final file information
