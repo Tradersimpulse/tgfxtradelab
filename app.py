@@ -282,7 +282,7 @@ class User(UserMixin, db.Model):
             
         return False
 
-    def migrate_stream_recording_id():
+def migrate_stream_recording_id():
     """Add recording_id field to Stream model"""
     try:
         with app.app_context():
