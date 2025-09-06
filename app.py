@@ -4685,50 +4685,22 @@ def api_start_stream():
         room_name=room_name,
         room_sid=getattr(room_info, 'sid', f"RM_{uuid.uuid4().hex[:12]}"),
         is_active=True,
-        is_recording=False,  # Will be updated if recording starts
+        is_recording=False,  # Will start when first participant joins
         started_at=datetime.utcnow(),
         created_by=current_user.id,
         streamer_name=streamer_name,
-        stream_type=stream_type
+        stream_type=stream_type,
+        recording_id=None  # Will be set when recording starts
     )
     
     db.session.add(stream)
     db.session.commit()
     
-    # Try to start auto-recording for admin streams
-    recording_started = False
-    recording_info = None
-    
-    if current_user.is_admin:
-        try:
-            print(f"🎬 Attempting auto-recording for {streamer_name}'s stream...")
-            
-            recording_info = start_livekit_cloud_recording(
-                room_name=room_name,
-                stream_id=stream.id,
-                streamer_name=streamer_name
-            )
-            
-            if recording_info and recording_info.get('recording_id'):
-                stream.is_recording = True
-                stream.recording_id = recording_info.get('recording_id')
-                db.session.commit()
-                recording_started = True
-                print(f"✅ Auto-recording started for {streamer_name}'s stream")
-            else:
-                print("⚠️ Recording function returned None or no recording_id")
-                
-        except Exception as e:
-            print(f"⚠️ Auto-recording failed: {e}")
-            # Continue with stream even if recording fails
-    
-    # 🆕 DISCORD WEBHOOK: Send Discord notification for live stream start
+    # Send Discord notification for live stream start
     try:
         webhook_success = send_live_stream_webhook(stream, action="started")
         if webhook_success:
             print(f"✅ Discord notified about live stream: {stream.title}")
-        else:
-            print(f"⚠️ Failed to notify Discord about live stream: {stream.title}")
     except Exception as e:
         print(f"❌ Discord webhook error for live stream: {e}")
     
@@ -4739,13 +4711,13 @@ def api_start_stream():
             'title': stream.title,
             'streamer_name': stream.streamer_name,
             'message': f'{streamer_name} is now live!',
-            'is_recording': recording_started
+            'is_recording': False
         })
     
-    # Also send traditional notification
+    # Send traditional notification
     broadcast_notification(
         'Live Stream Started!',
-        f'{streamer_name} is now live: "{title}"' + (' 🔴 Recording' if recording_started else ''),
+        f'{streamer_name} is now live: "{title}"',
         'live_stream'
     )
     
@@ -4760,7 +4732,7 @@ def api_start_stream():
             'livekit_token': streamer_token,
             'livekit_url': app.config.get('LIVEKIT_URL'),
             'participant_identity': participant_identity,
-            'is_recording': recording_started
+            'is_recording': False
         }
     })
 
@@ -4796,57 +4768,46 @@ def api_stop_stream():
     recording_saved = False
     video_created = False
     
-    # Get recording URL before stopping
+    # Stop recording if active
     if stream.is_recording and stream.recording_id:
-        print(f"🔴 Getting recording info for egress {stream.recording_id}...")
+        print(f"🔴 Stopping recording for egress {stream.recording_id}...")
         
-        # First, get the recording URL from egress info
-        recording_info = get_egress_info(stream.recording_id)
-        if recording_info and recording_info.get('recording_url'):
-            recording_url = recording_info['recording_url']
-            print(f"📁 Retrieved recording URL: {recording_url}")
-        
-        # Now stop the recording
-        print(f"⏹️ Stopping recording {stream.recording_id}...")
         stop_result = stop_livekit_egress_recording(stream.recording_id)
         
         if stop_result.get('success'):
-            print(f"✅ Recording stopped successfully")
+            recording_url = stop_result.get('recording_url')
+            print(f"✅ Recording stopped successfully: {recording_url}")
             
-            # Use URL from stop result if available, otherwise use the one we got earlier
-            if stop_result.get('recording_url'):
-                recording_url = stop_result['recording_url']
-            elif not recording_url and recording_info and recording_info.get('filepath'):
-                # Build URL from filepath
-                s3_key = recording_info['filepath']
-                aws_region = app.config.get('AWS_REGION', 'us-east-1')
-                s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
-                recording_url = f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}"
-            
-            # Save the recording URL to the database
-            stream.recording_url = recording_url
-            recording_saved = True
-            
-            print(f"💾 Saving recording URL to database: {recording_url}")
+            # Verify the recording file exists in S3
+            if recording_url:
+                print("⏳ Verifying recording file exists in S3...")
+                if verify_s3_recording_exists(recording_url, max_wait_time=60):
+                    stream.recording_url = recording_url
+                    recording_saved = True
+                    print("✅ Recording file verified and URL saved")
+                else:
+                    print("⚠️ Recording file not found in S3, but saving URL anyway")
+                    stream.recording_url = recording_url
+                    recording_saved = True
+        else:
+            print(f"❌ Failed to stop recording: {stop_result.get('error')}")
     
-    # Calculate stream duration before updating ended_at
+    # Calculate stream duration
     duration_minutes = 0
     if stream.started_at:
         stream.ended_at = datetime.utcnow()
         duration = stream.ended_at - stream.started_at
         duration_minutes = int(duration.total_seconds() / 60)
     
-    # 🆕 DISCORD WEBHOOK: Send Discord notification BEFORE stopping stream
+    # Send Discord notification BEFORE stopping stream
     try:
         webhook_success = send_live_stream_webhook(stream, action="ended")
         if webhook_success:
             print(f"✅ Discord notified about stream ending: {stream.title}")
-        else:
-            print(f"⚠️ Failed to notify Discord about stream ending: {stream.title}")
     except Exception as e:
         print(f"❌ Discord webhook error for stream ending: {e}")
     
-    # AUTO-ADD TO LIVE TRADING SESSIONS COURSE
+    # AUTO-SYNC TO COURSE LIBRARY with enhanced title format
     if recording_saved and recording_url:
         try:
             # Find or create the Live Trading Sessions category
@@ -4855,26 +4816,34 @@ def api_stop_stream():
             ).first()
             
             if not live_sessions_category:
-                # Create the category if it doesn't exist
                 live_sessions_category = Category(
                     name='Live Trading Sessions',
                     description='Recorded live trading sessions from our professional traders',
-                    order_index=1  # Put it at the top
+                    order_index=1
                 )
                 db.session.add(live_sessions_category)
                 db.session.flush()
-                print(f"📁 Created Live Trading Sessions category")
+                print("📁 Created Live Trading Sessions category")
             
-            # Create video title with trader name and date
-            video_date = stream.started_at.strftime('%B %d, %Y')  # August 15, 2025
-            video_title = f"{stream.streamer_name} - {video_date}"
+            # Create enhanced video title: "{Streamer Name} - {MM-DD-YY} {Stream Title}"
+            stream_date = stream.started_at.strftime('%m-%d-%y') if stream.started_at else datetime.utcnow().strftime('%m-%d-%y')
             
-            # Create description
+            # Extract the core title (remove "streamer's" prefix if it exists)
+            core_title = stream.title
+            if f"{stream.streamer_name}'s " in core_title:
+                core_title = core_title.replace(f"{stream.streamer_name}'s ", "")
+            
+            video_title = f"{stream.streamer_name} - {stream_date} {core_title}"
+            
+            # Create comprehensive description
             video_description = f"Live trading session with {stream.streamer_name}\n"
+            video_description += f"Original stream: {stream.title}\n"
             video_description += f"Duration: {duration_minutes} minutes\n"
-            video_description += f"Stream Type: {stream.stream_type}\n"
+            video_description += f"Stream Type: {stream.stream_type.replace('_', ' ').title()}\n"
+            video_description += f"Recorded: {stream.started_at.strftime('%B %d, %Y at %I:%M %p') if stream.started_at else 'Unknown'}\n"
+            
             if stream.description:
-                video_description += f"\n{stream.description}"
+                video_description += f"\nDescription: {stream.description}"
             
             # Get the next order index for this category
             max_order = db.session.query(db.func.max(Video.order_index)).filter_by(
@@ -4886,43 +4855,38 @@ def api_stop_stream():
                 title=video_title,
                 description=video_description,
                 s3_url=recording_url,
-                thumbnail_url=None,  # You could generate a thumbnail later
+                thumbnail_url=None,  # Could auto-generate later
                 duration=duration_minutes * 60,  # Store in seconds
-                is_free=False,  # Set to True if you want free access
+                is_free=False,  # Premium content
                 order_index=max_order + 1,
                 category_id=live_sessions_category.id,
-                created_at=datetime.utcnow()
+                created_at=stream.started_at or datetime.utcnow()
             )
             db.session.add(new_video)
             db.session.flush()
             
-            # Add tags for the video
-            trader_tag = get_or_create_tag(stream.streamer_name)
-            live_tag = get_or_create_tag('Live Session')
-            trading_tag = get_or_create_tag('Live Trading')
+            # Add comprehensive tags
+            tags_to_add = [
+                stream.streamer_name,
+                'Live Session',
+                'Live Trading',
+                stream.started_at.strftime('%B %Y') if stream.started_at else datetime.utcnow().strftime('%B %Y'),
+                stream.stream_type.replace('_', ' ').title()
+            ]
             
-            new_video.tags.append(trader_tag)
-            new_video.tags.append(live_tag)
-            new_video.tags.append(trading_tag)
-            
-            # Add date tag (e.g., "August 2025")
-            month_year_tag = get_or_create_tag(stream.started_at.strftime('%B %Y'))
-            new_video.tags.append(month_year_tag)
-            
-            # Add stream type tag
-            if stream.stream_type:
-                type_tag = get_or_create_tag(stream.stream_type.replace('_', ' ').title())
-                new_video.tags.append(type_tag)
+            for tag_name in tags_to_add:
+                tag = get_or_create_tag(tag_name)
+                if tag and tag not in new_video.tags:
+                    new_video.tags.append(tag)
             
             video_created = True
-            print(f"📹 Created video entry: {video_title}")
-            print(f"📺 Video ID: {new_video.id}")
-            print(f"🔗 Video URL: {recording_url}")
+            print(f"🎥 Created video entry: {video_title}")
+            print(f"🆔 Video ID: {new_video.id}")
             
-            # Create notification for users
+            # Send notification about new recording
             broadcast_notification(
                 'New Live Session Recording Available!',
-                f"{stream.streamer_name}'s live trading session from {video_date} is now available to watch.",
+                f"{stream.streamer_name}'s live trading session is now available in the course library.",
                 'new_video',
                 target_users='all'
             )
@@ -4932,7 +4896,7 @@ def api_stop_stream():
             db.session.rollback()
             video_created = False
     
-    # Notify all viewers BEFORE stopping the stream
+    # Notify viewers via WebSocket
     room_id = f"stream_{stream.id}"
     if socketio and room_id in stream_rooms:
         end_message = {
@@ -4942,8 +4906,7 @@ def api_stop_stream():
         }
         
         if recording_url:
-            end_message['recording_url'] = recording_url
-            end_message['recording_message'] = 'Recording has been saved and added to courses'
+            end_message['recording_message'] = 'Recording has been saved and will be available in the course library shortly'
         
         socketio.emit('stream_ending', {
             'stream_id': stream.id,
@@ -4951,13 +4914,12 @@ def api_stop_stream():
         }, room=room_id)
         
         time.sleep(1)
-        
         socketio.emit('stream_ended', end_message, room=room_id)
         
         if room_id in stream_rooms:
             del stream_rooms[room_id]
     
-    # Delete LiveKit room
+    # Clean up LiveKit room
     if stream.room_name:
         delete_livekit_room(stream.room_name)
     
@@ -4965,7 +4927,7 @@ def api_stop_stream():
     stream.is_active = False
     stream.is_recording = False
     
-    # Update all viewer records
+    # Update viewer records
     StreamViewer.query.filter_by(stream_id=stream.id, is_active=True).update({
         'is_active': False,
         'left_at': datetime.utcnow()
@@ -4973,24 +4935,22 @@ def api_stop_stream():
     
     # Commit all changes
     db.session.commit()
-    print(f"✅ Stream {stream.id} ended. Recording URL saved: {recording_url}")
+    print(f"✅ Stream {stream.id} ended and synced to course library")
     
     response_data = {
         'success': True,
         'message': f'{stream.streamer_name}\'s stream ended',
-        'duration_minutes': duration_minutes
+        'duration_minutes': duration_minutes,
+        'recording': {
+            'saved': recording_saved,
+            'url': recording_url if recording_saved else None,
+            'video_created': video_created,
+            'message': f'Recording saved and added to course library' if video_created else 'Recording saved but not added to courses'
+        }
     }
     
-    if recording_saved and recording_url:
-        response_data['recording'] = {
-            'saved': True,
-            'url': recording_url,
-            'message': f'Recording saved and added to course library (Duration: {duration_minutes} minutes)',
-            'video_created': video_created
-        }
-    
     return jsonify(response_data)
-
+    
 # ==============================================================================
 # 4. UPDATE YOUR EXISTING admin_add_trading_signal ROUTE - ADD DISCORD WEBHOOK:
 # ==============================================================================
@@ -7778,7 +7738,7 @@ def create_checkout_session():
 
 def start_livekit_egress_recording(room_name, stream_id, streamer_name):
     """
-    Start LiveKit Egress recording with improved error handling and S3 path tracking
+    Start LiveKit Egress recording with proper recording_id tracking
     """
     try:
         print(f"🎬 Starting LiveKit recording for {streamer_name} in room {room_name}")
@@ -7801,7 +7761,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
             print("❌ AWS credentials missing")
             return {'success': False, 'error': 'AWS credentials not configured'}
         
-        # Generate S3 path with consistent naming
+        # Generate S3 path with date-based folder structure
         timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
         date_folder = datetime.utcnow().strftime('%Y/%m/%d')
         filename = f"{streamer_name}-stream-{stream_id}-{timestamp}.mp4"
@@ -7855,7 +7815,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
             endpoint,
             json=egress_request,
             headers=headers,
-            timeout=30  # Increased timeout
+            timeout=30
         )
         
         print(f"📡 Response Status: {response.status_code}")
@@ -7893,7 +7853,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
         import traceback
         traceback.print_exc()
         return {'success': False, 'error': str(e)}
-        
+
 def stop_livekit_egress_recording(egress_id):
     """
     Stop LiveKit Egress recording and get final file information
@@ -7964,7 +7924,7 @@ def stop_livekit_egress_recording(egress_id):
                 aws_region = app.config.get('AWS_REGION', 'us-east-1')
                 s3_bucket = app.config.get('STREAM_RECORDINGS_BUCKET', 'tgfx-tradelab')
                 recording_url = f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}"
-                print(f"📁 Recording URL: {recording_url}")
+                print(f"🔗 Recording URL: {recording_url}")
             
             return {
                 'success': True, 
@@ -7980,21 +7940,21 @@ def stop_livekit_egress_recording(egress_id):
         print(f"❌ Error stopping recording: {e}")
         return {'success': False, 'error': str(e)}
 
-def wait_for_recording_file(s3_url, max_wait_time=120, check_interval=10):
+def verify_s3_recording_exists(s3_url, max_wait_time=60):
     """
-    Wait for recording file to be available in S3 before syncing to database
+    Verify that the recording file exists in S3 before syncing
     """
-    print(f"⏳ Waiting for recording file to be available: {s3_url}")
+    print(f"⏳ Verifying recording file exists: {s3_url}")
     
     if not s3_url:
         return False
     
-    # Extract bucket and key from URL
     try:
-        # Parse S3 URL: https://bucket.s3.region.amazonaws.com/key
-        parts = s3_url.replace('https://', '').split('/')
-        bucket_and_region = parts[0]
-        s3_key = '/'.join(parts[1:])
+        # Parse S3 URL to get bucket and key
+        # Format: https://bucket.s3.region.amazonaws.com/key
+        url_parts = s3_url.replace('https://', '').split('/')
+        bucket_and_region = url_parts[0]
+        s3_key = '/'.join(url_parts[1:])
         bucket = bucket_and_region.split('.s3.')[0]
         
         # Initialize S3 client
@@ -8008,28 +7968,28 @@ def wait_for_recording_file(s3_url, max_wait_time=120, check_interval=10):
         start_time = time.time()
         while time.time() - start_time < max_wait_time:
             try:
-                # Check if file exists
+                # Check if file exists and has content
                 response = s3_client.head_object(Bucket=bucket, Key=s3_key)
                 file_size = response.get('ContentLength', 0)
                 
-                if file_size > 0:
-                    print(f"✅ Recording file found! Size: {file_size} bytes")
+                if file_size > 1000:  # At least 1KB to ensure it's not empty
+                    print(f"✅ Recording file verified! Size: {file_size} bytes")
                     return True
                 else:
-                    print(f"⏳ File exists but empty, waiting...")
+                    print(f"⏳ File exists but too small ({file_size} bytes), waiting...")
                     
             except s3_client.exceptions.NoSuchKey:
-                print(f"⏳ File not yet available, waiting {check_interval}s...")
+                print(f"⏳ File not yet available, waiting...")
             except Exception as e:
                 print(f"⚠️ Error checking file: {e}")
             
-            time.sleep(check_interval)
+            time.sleep(5)  # Check every 5 seconds
         
         print(f"⚠️ Timeout waiting for recording file after {max_wait_time}s")
         return False
         
     except Exception as e:
-        print(f"❌ Error waiting for recording file: {e}")
+        print(f"❌ Error verifying recording file: {e}")
         return False
 
 def get_egress_info(egress_id):
@@ -9973,6 +9933,314 @@ def api_delete_video(video_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+def initialize_enhanced_livestream():
+    """Initialize enhanced livestream recording functionality"""
+    try:
+        with app.app_context():
+            # Run the migration
+            print("🔄 Running livestream recording migration...")
+            if migrate_stream_recording_id():
+                print("✅ Stream recording_id migration completed")
+            else:
+                print("❌ Stream recording_id migration failed")
+                return False
+            
+            # Verify LiveKit configuration
+            print("🔄 Verifying LiveKit configuration...")
+            required_config = [
+                'LIVEKIT_URL',
+                'LIVEKIT_API_KEY', 
+                'LIVEKIT_API_SECRET',
+                'AWS_ACCESS_KEY_ID',
+                'AWS_SECRET_ACCESS_KEY',
+                'STREAM_RECORDINGS_BUCKET'
+            ]
+            
+            missing_config = []
+            for config_var in required_config:
+                if not app.config.get(config_var):
+                    missing_config.append(config_var)
+            
+            if missing_config:
+                print(f"❌ Missing required configuration: {', '.join(missing_config)}")
+                return False
+            
+            print("✅ LiveKit configuration verified")
+            
+            # Test API token generation
+            try:
+                test_token = generate_livekit_api_token()
+                if test_token:
+                    print("✅ LiveKit API token generation working")
+                else:
+                    print("❌ LiveKit API token generation failed")
+                    return False
+            except Exception as e:
+                print(f"❌ LiveKit API token test failed: {e}")
+                return False
+            
+            print("🎬 Enhanced livestream recording autosync initialized successfully!")
+            print("📋 Features enabled:")
+            print("   • Automatic recording start/stop")
+            print("   • S3 file verification") 
+            print("   • Auto-sync to course library")
+            print("   • Enhanced video titles with date format")
+            print("   • Comprehensive tagging")
+            print("   • Discord notifications")
+            
+            return True
+            
+    except Exception as e:
+        print(f"❌ Enhanced livestream initialization failed: {e}")
+        return False
+
+def cleanup_old_streams():
+    """Clean up old inactive streams (run periodically)"""
+    try:
+        with app.app_context():
+            # Find streams that are marked as active but are old (>12 hours)
+            cutoff_time = datetime.utcnow() - timedelta(hours=12)
+            
+            old_active_streams = Stream.query.filter(
+                Stream.is_active == True,
+                Stream.started_at < cutoff_time
+            ).all()
+            
+            cleaned_count = 0
+            for stream in old_active_streams:
+                print(f"🧹 Cleaning up old stream: {stream.title} (ID: {stream.id})")
+                
+                # Mark as inactive
+                stream.is_active = False
+                stream.is_recording = False
+                if not stream.ended_at:
+                    stream.ended_at = datetime.utcnow()
+                
+                # Update viewer records
+                StreamViewer.query.filter_by(stream_id=stream.id, is_active=True).update({
+                    'is_active': False,
+                    'left_at': datetime.utcnow()
+                })
+                
+                cleaned_count += 1
+            
+            if cleaned_count > 0:
+                db.session.commit()
+                print(f"✅ Cleaned up {cleaned_count} old streams")
+            else:
+                print("ℹ️ No old streams to clean up")
+            
+            return cleaned_count
+            
+    except Exception as e:
+        print(f"❌ Error cleaning up old streams: {e}")
+        db.session.rollback()
+        return 0
+
+def get_recording_status(stream_id):
+    """Get current recording status for a stream"""
+    try:
+        stream = Stream.query.get(stream_id)
+        if not stream:
+            return {'error': 'Stream not found'}
+        
+        if not stream.recording_id:
+            return {
+                'is_recording': False,
+                'status': 'no_recording',
+                'message': 'No recording active'
+            }
+        
+        # Check with LiveKit API
+        api_token = generate_livekit_api_token()
+        if not api_token:
+            return {'error': 'Failed to generate API token'}
+        
+        livekit_url = app.config.get('LIVEKIT_URL')
+        if '.livekit.cloud' in livekit_url:
+            api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'https://')
+        else:
+            api_url = livekit_url.replace('wss://', 'https://').replace('ws://', 'http://')
+        
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.post(
+            f"{api_url}/twirp/livekit.Egress/ListEgress",
+            json={"egress_id": stream.recording_id},
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            egresses = data.get('items', [])
+            
+            if egresses:
+                egress = egresses[0]
+                return {
+                    'is_recording': stream.is_recording,
+                    'status': egress.get('status', 'unknown'),
+                    'egress_id': stream.recording_id,
+                    'started_at': egress.get('started_at'),
+                    'file_path': egress.get('file', {}).get('filepath')
+                }
+        
+        return {
+            'is_recording': stream.is_recording,
+            'status': 'unknown',
+            'egress_id': stream.recording_id,
+            'message': 'Could not fetch status from LiveKit'
+        }
+        
+    except Exception as e:
+        return {'error': str(e)}
+
+# API endpoint to check recording status
+@app.route('/api/stream/<int:stream_id>/recording-status')
+@login_required
+def api_get_recording_status(stream_id):
+    """Get recording status for a specific stream"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    status = get_recording_status(stream_id)
+    return jsonify(status)
+
+# API endpoint to manually sync a completed recording
+@app.route('/api/stream/<int:stream_id>/sync-recording', methods=['POST'])
+@login_required
+def api_manual_sync_recording(stream_id):
+    """Manually sync a stream recording to the course library"""
+    if not current_user.is_admin:
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        stream = Stream.query.get_or_404(stream_id)
+        
+        if not stream.recording_url:
+            return jsonify({'error': 'No recording URL found for this stream'}), 400
+        
+        # Check if already synced
+        existing_video = Video.query.filter_by(s3_url=stream.recording_url).first()
+        if existing_video:
+            return jsonify({
+                'success': False,
+                'message': 'Recording already synced to course library',
+                'video_id': existing_video.id,
+                'video_title': existing_video.title
+            })
+        
+        # Verify recording exists in S3
+        if not verify_s3_recording_exists(stream.recording_url, max_wait_time=10):
+            return jsonify({'error': 'Recording file not found in S3'}), 400
+        
+        # Sync to course library (reuse logic from api_stop_stream)
+        live_sessions_category = Category.query.filter_by(
+            name='Live Trading Sessions'
+        ).first()
+        
+        if not live_sessions_category:
+            live_sessions_category = Category(
+                name='Live Trading Sessions',
+                description='Recorded live trading sessions from our professional traders',
+                order_index=1
+            )
+            db.session.add(live_sessions_category)
+            db.session.flush()
+        
+        # Create video title
+        stream_date = stream.started_at.strftime('%m-%d-%y') if stream.started_at else datetime.utcnow().strftime('%m-%d-%y')
+        core_title = stream.title
+        if f"{stream.streamer_name}'s " in core_title:
+            core_title = core_title.replace(f"{stream.streamer_name}'s ", "")
+        
+        video_title = f"{stream.streamer_name} - {stream_date} {core_title}"
+        
+        # Calculate duration
+        duration_seconds = 0
+        if stream.started_at and stream.ended_at:
+            duration = stream.ended_at - stream.started_at
+            duration_seconds = int(duration.total_seconds())
+        
+        # Create video entry
+        new_video = Video(
+            title=video_title,
+            description=f"Live trading session with {stream.streamer_name}\nManually synced recording",
+            s3_url=stream.recording_url,
+            duration=duration_seconds,
+            is_free=False,
+            category_id=live_sessions_category.id,
+            created_at=stream.started_at or datetime.utcnow()
+        )
+        db.session.add(new_video)
+        db.session.flush()
+        
+        # Add tags
+        tags_to_add = [stream.streamer_name, 'Live Session', 'Live Trading']
+        for tag_name in tags_to_add:
+            tag = get_or_create_tag(tag_name)
+            if tag:
+                new_video.tags.append(tag)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Recording successfully synced to course library',
+            'video_id': new_video.id,
+            'video_title': new_video.title
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+def initialize_complete_app():
+    """Complete app initialization including livestream enhancements"""
+    try:
+        with app.app_context():
+            # Your existing initialization
+            db.create_all()
+            print("✅ Database tables created successfully")
+            
+            # Existing migrations
+            migrate_user_timezones()
+            
+            # NEW: Enhanced livestream initialization
+            if not initialize_enhanced_livestream():
+                print("⚠️ Enhanced livestream initialization had issues, but continuing...")
+            
+            # Your existing admin user creation, etc.
+            admin_user = User.query.filter_by(username='admin').first()
+            if not admin_user:
+                admin_user = User(
+                    username='admin',
+                    email='ray@tgfx-academy.com',
+                    password_hash=generate_password_hash('admin123!345gdfb3f35'),
+                    is_admin=True,
+                    display_name='Ray',
+                    can_stream=True,
+                    stream_color='#10B981',
+                    timezone='America/Chicago'
+                )
+                db.session.add(admin_user)
+                db.session.commit()
+                print("✅ Admin user created")
+            
+            # Your existing streamer initialization
+            initialize_streamers()
+            
+            print("🎉 Complete app initialization finished!")
+            
+    except Exception as e:
+        print(f"❌ Complete app initialization error: {e}")
+        return False
+    
+    return True
     
 def start_livekit_cloud_recording(room_name, stream_id, streamer_name):
     """Actually start LiveKit Cloud Recording with S3 output"""
@@ -10308,7 +10576,8 @@ def api_stream_status():
 
 @app.route('/api/stream/recording/start', methods=['POST'])
 @login_required
-def api_start_recording():
+def api_start_stream_recording():
+    """Start recording for an active stream"""
     if not current_user.is_admin:
         return jsonify({'error': 'Access denied'}), 403
     
@@ -10330,22 +10599,42 @@ def api_start_recording():
     if not stream:
         return jsonify({'error': 'No active stream found or access denied'}), 400
     
-    # Start LiveKit recording
-    if stream.room_name:
-        recording_info = start_livekit_recording(stream.room_name)
-        if recording_info:
-            stream.is_recording = True
-            # You might want to store recording_info.id for later stopping
-            db.session.commit()
-            
-            return jsonify({
-                'success': True, 
-                'message': f'Recording started for {stream.streamer_name}\'s stream',
-                'recording_id': recording_info.id if recording_info else None
-            })
+    if stream.is_recording:
+        return jsonify({'error': 'Recording already active'}), 400
     
-    return jsonify({'error': 'Failed to start recording'}), 500
-
+    # Start recording
+    recording_result = start_livekit_egress_recording(
+        room_name=stream.room_name,
+        stream_id=stream.id,
+        streamer_name=stream.streamer_name
+    )
+    
+    if recording_result and recording_result.get('success'):
+        stream.is_recording = True
+        stream.recording_id = recording_result.get('egress_id')
+        db.session.commit()
+        
+        print(f"✅ Recording started for stream {stream.id}")
+        
+        # Notify via WebSocket
+        if socketio:
+            socketio.emit('recording_started', {
+                'stream_id': stream.id,
+                'message': 'Recording has started',
+                'egress_id': recording_result.get('egress_id')
+            }, room=f"stream_{stream.id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Recording started successfully',
+            'egress_id': recording_result.get('egress_id')
+        })
+    else:
+        return jsonify({
+            'error': 'Failed to start recording',
+            'details': recording_result.get('error') if recording_result else 'Unknown error'
+        }), 500
+        
 @app.route('/api/stream/recording/stop', methods=['POST'])
 @login_required
 def api_stop_recording():
@@ -10564,9 +10853,9 @@ def inject_datetime():
 config_class.init_app(app)
 
 if __name__ == '__main__':
-    # Initialize the application
-    if not initialize_app():
-        print("❌ Application initialization failed, exiting...")
+    # Replace your existing initialize_app() call with:
+    if not initialize_complete_app():
+        print("Application initialization failed, exiting...")
         sys.exit(1)
     
     # Get port from environment (for Heroku deployment)
