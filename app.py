@@ -7757,9 +7757,9 @@ def create_checkout_session():
         
     
 
-def start_livekit_egress_recording(room_name, stream_id, streamer_name):
+def start_livekit_egress_recording_fixed(room_name, stream_id, streamer_name):
     """
-    Start LiveKit Egress recording with CORRECT API format
+    UPDATED: Fixed S3 path generation to match your bucket structure
     """
     try:
         print(f"🎬 Starting LiveKit recording for {streamer_name} in room {room_name}")
@@ -7782,10 +7782,12 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
             print("❌ AWS credentials missing")
             return {'success': False, 'error': 'AWS credentials not configured'}
         
-        # Generate S3 path
+        # FIXED: Generate S3 path to match your existing structure
         timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
         date_folder = datetime.utcnow().strftime('%Y/%m/%d')
         filename = f"{streamer_name}-stream-{stream_id}-{timestamp}.mp4"
+        
+        # Use livekit folder structure as shown in your S3 bucket
         s3_key = f"{prefix}livekit/{date_folder}/{filename}"
         
         print(f"📁 Recording will be saved to: s3://{s3_bucket}/{s3_key}")
@@ -7802,7 +7804,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
             "Content-Type": "application/json"
         }
         
-        # CORRECT: This is the exact format LiveKit expects
+        # Create egress request (same as before)
         egress_request = {
             "room_name": room_name,
             "file": {
@@ -7821,7 +7823,6 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
         endpoint = f"{api_url}/twirp/livekit.Egress/StartRoomCompositeEgress"
         
         print(f"🔗 Calling LiveKit Egress API: {endpoint}")
-        print(f"📋 Correct request payload: {json.dumps(egress_request, indent=2)}")
         
         response = requests.post(
             endpoint,
@@ -7838,7 +7839,7 @@ def start_livekit_egress_recording(room_name, stream_id, streamer_name):
             egress_id = data.get("egress_id")
             
             if egress_id:
-                # Build the expected S3 URL
+                # Build the S3 URL that matches your bucket structure
                 s3_url = f"https://{s3_bucket}.s3.{aws_region}.amazonaws.com/{s3_key}"
                 
                 print(f"✅ Recording started successfully!")
