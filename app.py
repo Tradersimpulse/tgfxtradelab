@@ -10,7 +10,6 @@ except ImportError:
     print("⚠ Gevent not available, using default threading")
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
-from flask_mail import Mail, Message  # Flask-Mail handles email sending
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_wtf import FlaskForm
@@ -39,6 +38,8 @@ import base64
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import textwrap
+
+from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer
 
 
@@ -59,7 +60,16 @@ app = Flask(__name__)
 
 APP_UPDATE_DISCORD_WEBHOOK_URL = app.config.get('APP_UPDATE_DISCORD_WEBHOOK_URL')
 
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
+serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True').lower() == 'true'
+app.config['MAIL_USE_SSL'] = os.environ.get('MAIL_USE_SSL', 'False').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
 # FIXED: Load configuration with better error handling
 try:
     config_class = get_config()
